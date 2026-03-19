@@ -87,6 +87,24 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current
     project.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
+@router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
+def list_project_members(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_project(db, project_id)
+    # Verify user is a member
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id,
+        ProjectMember.deleted_at.is_(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not a project member")
+    
+    members = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.deleted_at.is_(None),
+    ).all()
+    return members
+
 @router.post("/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED)
 def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _get_project(db, project_id)
