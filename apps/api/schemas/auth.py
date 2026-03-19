@@ -32,5 +32,3 @@ class InviteRequest(BaseModel):
     email: EmailStr
     name: str
 
-class DeactivateRequest(BaseModel):
-    pass

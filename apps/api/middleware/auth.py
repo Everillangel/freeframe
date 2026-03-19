@@ -21,5 +21,3 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated")
     return user
 
-def get_current_active_user(user: User = Depends(get_current_user)) -> User:
-    return user

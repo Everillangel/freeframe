@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from ..database import get_db
 from ..schemas.auth import UserResponse, InviteRequest
 from ..models.user import User, UserStatus
-from ..middleware.auth import get_current_active_user
+from ..middleware.auth import get_current_user
 from ..services.auth_service import hash_password, get_user_by_email
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-def require_admin(current_user: User = Depends(get_current_active_user)) -> User:
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
     # For now, any active user can invite (org-level admin check added in Step 4)
     return current_user
 

@@ -12,7 +12,7 @@ from ..services.auth_service import (
     get_user_by_email, get_user_by_id,
 )
 from ..models.user import User, UserStatus
-from ..middleware.auth import get_current_active_user
+from ..middleware.auth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,10 +34,13 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = get_user_by_email(db, body.email)
-    if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
+    if (
+        not user
+        or not user.password_hash
+        or not verify_password(body.password, user.password_hash)
+        or user.status == UserStatus.deactivated
+    ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if user.status == UserStatus.deactivated:
-        raise HTTPException(status_code=403, detail="Account deactivated")
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
@@ -57,5 +60,5 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
     )
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_active_user)):
+def get_me(current_user: User = Depends(get_current_user)):
     return current_user
