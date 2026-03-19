@@ -48,12 +48,21 @@ class PresignPartResponse(BaseModel):
     presigned_url: str
     part_number: int
 
+class UploadPart(BaseModel):
+    PartNumber: int
+    ETag: str
+
 class CompleteUploadRequest(BaseModel):
     s3_key: str
     upload_id: str
     asset_id: uuid.UUID
     version_id: uuid.UUID
-    parts: list[dict]  # [{"PartNumber": int, "ETag": str}, ...]
+    parts: list[UploadPart]
+
+class CompleteUploadResponse(BaseModel):
+    status: str
+    asset_id: uuid.UUID
+    version_id: uuid.UUID
 
 class AbortUploadRequest(BaseModel):
     s3_key: str

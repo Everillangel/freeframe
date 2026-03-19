@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
@@ -16,7 +17,7 @@ from ..models.project import ProjectRole
 from ..schemas.upload import (
     InitiateUploadRequest, InitiateUploadResponse,
     PresignPartRequest, PresignPartResponse,
-    CompleteUploadRequest, AbortUploadRequest,
+    CompleteUploadRequest, CompleteUploadResponse, AbortUploadRequest,
     ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type,
 )
 
@@ -45,6 +46,8 @@ def initiate_upload(
         asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.deleted_at.is_(None)).first()
         if not asset:
             raise HTTPException(status_code=404, detail="Asset not found")
+        if asset.project_id != body.project_id:
+            raise HTTPException(status_code=400, detail="Asset does not belong to the specified project")
     else:
         asset_type = mime_to_asset_type(body.mime_type)
         asset = Asset(
@@ -73,7 +76,6 @@ def initiate_upload(
     db.add(version)
     db.flush()
 
-    import os
     ext = os.path.splitext(body.original_filename)[1].lower()
     s3_key = f"raw/{body.project_id}/{asset.id}/{version.id}/original{ext}"
 
@@ -112,29 +114,31 @@ def presign_part(
     return PresignPartResponse(presigned_url=url, part_number=body.part_number)
 
 
-@router.post("/complete")
+@router.post("/complete", response_model=CompleteUploadResponse)
 def complete_upload(
     body: CompleteUploadRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Complete the S3 multipart upload
-    complete_multipart_upload(body.s3_key, body.upload_id, body.parts)
-
-    # Update version status to processing
+    # Validate DB first
     version = db.query(AssetVersion).filter(
         AssetVersion.id == body.version_id,
         AssetVersion.deleted_at.is_(None),
     ).first()
-    if version:
-        version.processing_status = ProcessingStatus.processing
-        db.commit()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    # Then complete S3 multipart
+    complete_multipart_upload(body.s3_key, body.upload_id, [p.model_dump() for p in body.parts])
+
+    version.processing_status = ProcessingStatus.processing
+    db.commit()
 
     # Trigger transcoding in background (task dispatched in Step 7)
     background_tasks.add_task(_trigger_processing, body.asset_id, body.version_id)
 
-    return {"status": "processing", "asset_id": str(body.asset_id), "version_id": str(body.version_id)}
+    return CompleteUploadResponse(status="processing", asset_id=body.asset_id, version_id=body.version_id)
 
 
 def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
@@ -148,12 +152,13 @@ def abort_upload(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    abort_multipart_upload(body.s3_key, body.upload_id)
-    # Mark version as failed
     version = db.query(AssetVersion).filter(
         AssetVersion.id == body.version_id,
         AssetVersion.deleted_at.is_(None),
     ).first()
-    if version:
-        version.processing_status = ProcessingStatus.failed
-        db.commit()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    abort_multipart_upload(body.s3_key, body.upload_id)
+    version.processing_status = ProcessingStatus.failed
+    db.commit()

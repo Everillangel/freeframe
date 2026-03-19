@@ -1,13 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import auth, users, organizations, teams, projects, upload
 from .services.s3_service import ensure_bucket_exists
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_bucket_exists()
+    yield
+
 app = FastAPI(
     title="FreeFrame API",
     description="Media review platform API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -24,10 +31,6 @@ app.include_router(organizations.router)
 app.include_router(teams.router)
 app.include_router(projects.router)
 app.include_router(upload.router)
-
-@app.on_event("startup")
-def startup_event():
-    ensure_bucket_exists()
 
 @app.get("/health")
 def health():
