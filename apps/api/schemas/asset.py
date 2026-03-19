@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from ..models.asset import AssetType, AssetStatus, ProcessingStatus, FileType
+from ..models.activity import NotificationType
 
 class MediaFileResponse(BaseModel):
     id: uuid.UUID
@@ -61,3 +62,12 @@ class StreamUrlResponse(BaseModel):
     url: str
     asset_type: AssetType
     expires_in: int = 3600
+
+class NotificationResponse(BaseModel):
+    id: uuid.UUID
+    type: NotificationType
+    asset_id: uuid.UUID
+    comment_id: Optional[uuid.UUID]
+    read: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}

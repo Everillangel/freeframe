@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
-from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus
+from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, FileType, ProcessingStatus
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.share import AssetShare
 from ..models.activity import Mention
@@ -29,14 +31,58 @@ def _build_asset_response(asset: Asset, db: Session) -> AssetResponse:
     version_response = None
     if latest_version:
         files = db.query(MediaFile).filter(MediaFile.version_id == latest_version.id).all()
-        version_response = AssetVersionResponse(
-            **{k: v for k, v in latest_version.__dict__.items() if not k.startswith("_")},
-            files=[MediaFileResponse.model_validate(f) for f in files],
-        )
+        version_response = AssetVersionResponse.model_validate(latest_version)
+        version_response.files = [MediaFileResponse.model_validate(f) for f in files]
 
     resp = AssetResponse.model_validate(asset)
     resp.latest_version = version_response
     return resp
+
+
+def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetResponse]:
+    """Build AssetResponse list with bulk-loaded versions and files (no N+1)."""
+    if not assets:
+        return []
+
+    asset_ids = [a.id for a in assets]
+
+    # Bulk load latest version per asset using a subquery
+    latest_version_subq = (
+        db.query(
+            AssetVersion.asset_id,
+            func.max(AssetVersion.version_number).label("max_version"),
+        )
+        .filter(AssetVersion.asset_id.in_(asset_ids), AssetVersion.deleted_at.is_(None))
+        .group_by(AssetVersion.asset_id)
+        .subquery()
+    )
+    latest_versions = (
+        db.query(AssetVersion)
+        .join(latest_version_subq, (AssetVersion.asset_id == latest_version_subq.c.asset_id) & (AssetVersion.version_number == latest_version_subq.c.max_version))
+        .all()
+    )
+    version_by_asset = {v.asset_id: v for v in latest_versions}
+
+    # Bulk load media files for all those versions
+    version_ids = [v.id for v in latest_versions]
+    all_files = db.query(MediaFile).filter(MediaFile.version_id.in_(version_ids)).all() if version_ids else []
+    files_by_version: dict = {}
+    for f in all_files:
+        files_by_version.setdefault(f.version_id, []).append(f)
+
+    result = []
+    for asset in assets:
+        version = version_by_asset.get(asset.id)
+        version_response = None
+        if version:
+            files = files_by_version.get(version.id, [])
+            version_response = AssetVersionResponse.model_validate(version)
+            version_response.files = [MediaFileResponse.model_validate(f) for f in files]
+
+        asset_resp = AssetResponse.model_validate(asset)
+        asset_resp.latest_version = version_response
+        result.append(asset_resp)
+    return result
 
 
 @router.get("/projects/{project_id}/assets", response_model=list[AssetResponse])
@@ -50,7 +96,7 @@ def list_assets(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
     ).all()
-    return [_build_asset_response(a, db) for a in assets]
+    return _build_asset_responses_bulk(assets, db)
 
 
 @router.get("/assets/{asset_id}", response_model=AssetResponse)
@@ -150,7 +196,6 @@ def initiate_new_version(
     current_user: User = Depends(get_current_user),
 ):
     """Initiate upload of a new version for an existing asset."""
-    import os
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -180,7 +225,6 @@ def initiate_new_version(
     s3_key = f"raw/{asset.project_id}/{asset_id}/{version.id}/original{ext}"
     upload_id = create_multipart_upload(s3_key, body.mime_type)
 
-    from ..models.asset import FileType
     file_type_map = {AssetType.image: FileType.image, AssetType.audio: FileType.audio, AssetType.video: FileType.video, AssetType.image_carousel: FileType.image}
     media_file = MediaFile(
         version_id=version.id,

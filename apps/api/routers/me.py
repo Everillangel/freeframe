@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 import uuid
@@ -11,8 +11,9 @@ from ..models.asset import Asset
 from ..models.project import ProjectMember
 from ..models.share import AssetShare
 from ..models.activity import Mention, Notification
-from ..schemas.asset import AssetResponse
-from ..routers.assets import _build_asset_response
+from ..models.comment import Comment
+from ..schemas.asset import AssetResponse, NotificationResponse
+from ..routers.assets import _build_asset_response, _build_asset_responses_bulk
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -42,8 +43,13 @@ def list_my_assets(
     elif filter == "mentioned":
         mentioned_asset_ids = (
             db.query(Asset.id)
-            .join(Mention, Mention.mentioned_user_id == current_user.id)
-            .filter(Asset.deleted_at.is_(None))
+            .join(Comment, Comment.asset_id == Asset.id)
+            .join(Mention, Mention.comment_id == Comment.id)
+            .filter(
+                Mention.mentioned_user_id == current_user.id,
+                Asset.deleted_at.is_(None),
+                Comment.deleted_at.is_(None),
+            )
             .distinct()
             .all()
         )
@@ -85,10 +91,10 @@ def list_my_assets(
             )
         ).all()
 
-    return [_build_asset_response(a, db) for a in assets]
+    return _build_asset_responses_bulk(assets, db)
 
 
-@router.get("/notifications", response_model=list[dict])
+@router.get("/notifications", response_model=list[NotificationResponse])
 def list_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -96,17 +102,7 @@ def list_notifications(
     notifications = db.query(Notification).filter(
         Notification.user_id == current_user.id,
     ).order_by(Notification.created_at.desc()).limit(50).all()
-    return [
-        {
-            "id": str(n.id),
-            "type": n.type,
-            "asset_id": str(n.asset_id),
-            "comment_id": str(n.comment_id) if n.comment_id else None,
-            "read": n.read,
-            "created_at": n.created_at.isoformat(),
-        }
-        for n in notifications
-    ]
+    return notifications
 
 
 @router.patch("/notifications/{notification_id}/read")
@@ -119,9 +115,10 @@ def mark_notification_read(
         Notification.id == notification_id,
         Notification.user_id == current_user.id,
     ).first()
-    if notif:
-        notif.read = True
-        db.commit()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.read = True
+    db.commit()
     return {"status": "ok"}
 
 
@@ -132,7 +129,7 @@ def mark_all_notifications_read(
 ):
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
-        Notification.read == False,
+        Notification.read.is_(False),
     ).update({"read": True})
     db.commit()
     return {"status": "ok"}
