@@ -4,8 +4,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 import uuid
 from passlib.context import CryptContext
+from apps.api.models.user import User, UserStatus
+from apps.api.models.organization import Organization, OrgMember, OrgRole
+from apps.api.models.project import Project, ProjectMember, ProjectType, ProjectRole
 from apps.api.database import SessionLocal
-from apps.api.models import *
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
