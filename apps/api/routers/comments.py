@@ -30,6 +30,7 @@ from ..schemas.comment import (
 )
 from ..services import s3_service
 from ..services.permissions import require_asset_access, validate_share_link
+from ..tasks.email_tasks import send_mention_email, send_comment_email
 
 router = APIRouter(tags=["comments"])
 
@@ -127,9 +128,11 @@ def _parse_mentions(body: str) -> list[str]:
     return re.findall(r"@([\w.+-]+@[\w.-]+\.\w+)", body)
 
 
-def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str) -> None:
-    """Parse @mentions, create Mention + Notification records."""
+def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, author_name: str) -> None:
+    """Parse @mentions, create Mention + Notification records, and send emails."""
     from ..services.auth_service import get_user_by_email
+    from ..config import settings
+    
     emails = _parse_mentions(body)
     for email in set(emails):
         user = get_user_by_email(db, email)
@@ -143,6 +146,16 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str) -> 
                 comment_id=comment.id,
             )
             db.add(notif)
+            
+            # Send mention email
+            asset_link = f"{settings.frontend_url}/assets/{asset.id}"
+            send_mention_email.delay(
+                to_email=user.email,
+                mentioner_name=author_name,
+                asset_name=asset.name,
+                comment_preview=body[:200],
+                asset_link=asset_link,
+            )
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -195,7 +208,7 @@ def create_comment(
         )
         db.add(annotation)
 
-    _create_mentions(db, comment, asset, body.body)
+    _create_mentions(db, comment, asset, body.body, current_user.name)
 
     # Activity log
     activity = ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.commented)
@@ -230,7 +243,7 @@ def reply_to_comment(
     )
     db.add(reply)
     db.flush()
-    _create_mentions(db, reply, asset, body.body)
+    _create_mentions(db, reply, asset, body.body, current_user.name)
     db.commit()
     db.refresh(reply)
     return _build_comment_response(reply, db, current_user_id=current_user.id)

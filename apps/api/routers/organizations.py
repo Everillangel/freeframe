@@ -11,6 +11,8 @@ from ..models.project import Project, ProjectMember, ProjectRole
 from ..schemas.organization import OrgCreate, OrgResponse, OrgMemberResponse, AddOrgMemberRequest
 from ..schemas.activity import ActivityLogResponse
 from ..services.permissions import require_org_admin
+from ..tasks.email_tasks import send_invite_email
+from ..config import settings
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -25,6 +27,10 @@ def _require_org_admin(db: Session, org_id: uuid.UUID, user: User) -> OrgMember:
 
 @router.post("", response_model=OrgResponse, status_code=status.HTTP_201_CREATED)
 def create_org(body: OrgCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only super admins can create organizations
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Only super admins can create organizations")
+    
     if db.query(Organization).filter(Organization.slug == body.slug, Organization.deleted_at.is_(None)).first():
         raise HTTPException(status_code=400, detail="Slug already taken")
     org = Organization(name=body.name, slug=body.slug)
@@ -68,6 +74,19 @@ def add_org_member(org_id: uuid.UUID, body: AddOrgMemberRequest, db: Session = D
     db.add(member)
     db.commit()
     db.refresh(member)
+    
+    # Send invite email
+    org = _get_org(db, org_id)
+    invited_user = db.query(User).filter(User.id == body.user_id).first()
+    if invited_user:
+        invite_link = f"{settings.frontend_url}/organizations/{org_id}"
+        send_invite_email.delay(
+            to_email=invited_user.email,
+            inviter_name=current_user.name,
+            org_name=org.name,
+            invite_link=invite_link,
+        )
+    
     return member
 
 @router.delete("/{org_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

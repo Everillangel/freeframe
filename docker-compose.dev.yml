@@ -93,6 +93,23 @@ services:
       - ./packages/transcoder:/workspace/packages/transcoder
     command: celery -A apps.api.tasks.celery_app worker -Q transcoding -c 2 --loglevel=info
 
+  email_worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://freeframe:freeframe@postgres:5432/freeframe
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/workspace/apps/api
+      - ./packages/transcoder:/workspace/packages/transcoder
+    command: celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c 2 --loglevel=info
+
 volumes:
   pgdata:
   miniodata:

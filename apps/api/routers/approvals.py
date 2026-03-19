@@ -12,6 +12,8 @@ from ..models.activity import ActivityLog, ActivityAction, Notification, Notific
 from ..models.project import ProjectRole
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..services.permissions import require_asset_access, require_project_role
+from ..tasks.email_tasks import send_approval_email
+from ..config import settings
 
 router = APIRouter(tags=["approvals"])
 
@@ -76,6 +78,18 @@ def approve_asset(
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.approved))
     if asset.created_by != current_user.id:
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
+        # Send approval email
+        creator = db.query(User).filter(User.id == asset.created_by).first()
+        if creator:
+            asset_link = f"{settings.frontend_url}/assets/{asset_id}"
+            send_approval_email.delay(
+                to_email=creator.email,
+                reviewer_name=current_user.name,
+                asset_name=asset.name,
+                status="approved",
+                asset_link=asset_link,
+                note=body.note,
+            )
     db.commit()
 
     return approval
@@ -96,6 +110,18 @@ def reject_asset(
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.rejected))
     if asset.created_by != current_user.id:
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
+        # Send rejection email
+        creator = db.query(User).filter(User.id == asset.created_by).first()
+        if creator:
+            asset_link = f"{settings.frontend_url}/assets/{asset_id}"
+            send_approval_email.delay(
+                to_email=creator.email,
+                reviewer_name=current_user.name,
+                asset_name=asset.name,
+                status="rejected",
+                asset_link=asset_link,
+                note=body.note,
+            )
     db.commit()
 
     return approval

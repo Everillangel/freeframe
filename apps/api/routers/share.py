@@ -22,6 +22,8 @@ from ..schemas.share import (
 )
 from ..services.permissions import require_project_role, validate_share_link
 from ..models.project import ProjectRole
+from ..tasks.email_tasks import send_share_email
+from ..config import settings
 
 router = APIRouter(tags=["sharing"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -161,6 +163,19 @@ def share_with_user(
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.shared))
     db.commit()
     db.refresh(share)
+    
+    # Send share email
+    shared_user = db.query(User).filter(User.id == body.user_id).first()
+    if shared_user:
+        asset_link = f"{settings.frontend_url}/assets/{asset_id}"
+        send_share_email.delay(
+            to_email=shared_user.email,
+            sharer_name=current_user.name,
+            asset_name=asset.name,
+            asset_link=asset_link,
+            permission=body.permission.value if body.permission else None,
+        )
+    
     return share
 
 

@@ -37,5 +37,24 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     frontend_url: str = "http://localhost:3000"
     transcoder_engine: str = "ffmpeg"
+    
+    # Email settings - supports AWS SES or any SMTP server
+    # If mail_provider is "ses", uses AWS SES with aws_mail_* credentials
+    # If mail_provider is "smtp", uses standard SMTP with smtp_* settings
+    mail_provider: str = "ses"  # "ses" or "smtp"
+    mail_from_address: str = "noreply@example.com"
+    mail_from_name: str = "FreeFrame"
+    
+    # AWS SES settings
+    aws_mail_access_key_id: str | None = None
+    aws_mail_secret_access_key: str | None = None
+    aws_mail_region: str = "ap-south-1"
+    
+    # SMTP settings (for non-SES providers like SendGrid, Mailgun, self-hosted)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
 
 settings = Settings()

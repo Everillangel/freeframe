@@ -8,6 +8,8 @@ from ..models.user import User
 from ..models.organization import OrgMember
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
+from ..tasks.email_tasks import send_project_added_email
+from ..config import settings
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -106,6 +108,20 @@ def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db:
     db.add(member)
     db.commit()
     db.refresh(member)
+    
+    # Send project added email
+    project = _get_project(db, project_id)
+    added_user = db.query(User).filter(User.id == body.user_id).first()
+    if added_user:
+        project_link = f"{settings.frontend_url}/projects/{project_id}"
+        send_project_added_email.delay(
+            to_email=added_user.email,
+            adder_name=current_user.name,
+            project_name=project.name,
+            project_link=project_link,
+            role=body.role.value if body.role else None,
+        )
+    
     return member
 
 @router.patch("/{project_id}/members/{user_id}", response_model=ProjectMemberResponse)

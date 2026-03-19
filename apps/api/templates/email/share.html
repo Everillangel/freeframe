@@ -1,0 +1,15 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+<h2>{{ sharer_name }} shared something with you</h2>
+<p><strong>{{ sharer_name }}</strong> has shared <strong>{{ asset_name }}</strong> with you.</p>
+{% if message %}
+<div class="quote">{{ message }}</div>
+{% endif %}
+<p>
+    <a href="{{ asset_link }}" class="button">View Asset</a>
+</p>
+{% if permission %}
+<p class="muted">You have <strong>{{ permission }}</strong> access.</p>
+{% endif %}
+{% endblock %}
