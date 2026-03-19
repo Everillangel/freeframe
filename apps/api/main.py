@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .routers import auth, users
+from .routers import auth, users, organizations, teams, projects
 
 app = FastAPI(
     title="FreeFrame API",
@@ -19,6 +19,9 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(organizations.router)
+app.include_router(teams.router)
+app.include_router(projects.router)
 
 @app.get("/health")
 def health():
