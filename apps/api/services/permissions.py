@@ -103,7 +103,7 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
 
     # 5. Org admin
     project = db.query(Project).filter(Project.id == asset.project_id).first()
-    if project and get_org_member(db, project.org_id, user.id):
+    if project:
         org_member = get_org_member(db, project.org_id, user.id)
         if org_member and org_member.role in (OrgRole.owner, OrgRole.admin):
             return True
