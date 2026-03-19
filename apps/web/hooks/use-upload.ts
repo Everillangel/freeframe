@@ -21,6 +21,7 @@ export interface UploadFile {
 
 interface InitiateResponse {
   upload_id: string
+  s3_key: string
   asset_id: string
   version_id: string
 }
@@ -74,14 +75,14 @@ export function useUpload(): UploadState {
           updateFile(id, { status: 'uploading' })
 
           // 1. Initiate multipart upload
-          const { upload_id, asset_id, version_id } = await api.post<InitiateResponse>(
+          const { upload_id, s3_key, asset_id, version_id } = await api.post<InitiateResponse>(
             '/upload/initiate',
             {
               project_id: projectId,
               asset_name: assetName,
-              file_name: file.name,
-              file_size: file.size,
-              content_type: file.type,
+              original_filename: file.name,
+              file_size_bytes: file.size,
+              mime_type: file.type,
             },
           )
 
@@ -101,14 +102,14 @@ export function useUpload(): UploadState {
             const chunk = file.slice(start, end)
 
             // Get presigned URL for this part
-            const { url } = await api.post<PresignPartResponse>('/upload/presign-part', {
+            const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
+              s3_key,
               upload_id,
-              version_id,
               part_number: partNumber,
             })
 
             // PUT chunk to S3
-            const putResponse = await fetch(url, {
+            const putResponse = await fetch(presigned_url, {
               method: 'PUT',
               body: chunk,
               signal: controller.signal,
@@ -127,7 +128,9 @@ export function useUpload(): UploadState {
 
           // 3. Complete upload
           await api.post('/upload/complete', {
+            s3_key,
             upload_id,
+            asset_id,
             version_id,
             parts,
           })
@@ -159,19 +162,9 @@ export function useUpload(): UploadState {
         controller.abort()
       }
 
-      // Also notify the server if we have an upload_id
-      const entry = files.find((f) => f.id === fileId)
-      if (entry?.uploadId) {
-        try {
-          await api.post('/upload/abort', { upload_id: entry.uploadId })
-        } catch {
-          // best effort
-        }
-      }
-
       updateFile(fileId, { status: 'cancelled', progress: 0 })
     },
-    [files, updateFile],
+    [updateFile],
   )
 
   const removeFile = React.useCallback((fileId: string) => {
