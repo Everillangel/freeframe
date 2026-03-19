@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import * as Tabs from '@radix-ui/react-tabs'
 import {
   Bell,
   AtSign,
@@ -15,14 +14,6 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
 import type { Notification, NotificationType } from '@/types'
-
-const tabConfig: { value: string; label: string; types?: NotificationType[] }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'mention', label: 'Mentions', types: ['mention'] },
-  { value: 'assignment', label: 'Assignments', types: ['assignment', 'due_soon'] },
-  { value: 'comment', label: 'Comments', types: ['comment'] },
-  { value: 'approval', label: 'Approvals', types: ['approval'] },
-]
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
   mention: AtSign,
@@ -85,17 +76,9 @@ export default function NotificationsPage() {
   const { notifications, isLoading, fetchNotifications, markAllRead, unreadCount } =
     useNotificationStore()
 
-  const [activeTab, setActiveTab] = React.useState('all')
-
   React.useEffect(() => {
     fetchNotifications()
   }, [fetchNotifications])
-
-  const filteredNotifications = React.useMemo(() => {
-    const tab = tabConfig.find((t) => t.value === activeTab)
-    if (!tab?.types) return notifications
-    return notifications.filter((n) => tab.types!.includes(n.type))
-  }, [notifications, activeTab])
 
   return (
     <div className="p-6 max-w-3xl space-y-6">
@@ -116,55 +99,32 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {/* Tabs */}
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
-        <Tabs.List className="flex gap-1 border-b border-border">
-          {tabConfig.map((tab) => (
-            <Tabs.Trigger
-              key={tab.value}
-              value={tab.value}
-              className={cn(
-                'px-3 py-2 text-sm transition-colors border-b-2 -mb-px',
-                'text-text-secondary hover:text-text-primary',
-                'data-[state=active]:border-accent data-[state=active]:text-text-primary',
-                'data-[state=inactive]:border-transparent',
-              )}
-            >
-              {tab.label}
-            </Tabs.Trigger>
+      {/* Notifications List */}
+      {isLoading ? (
+        <div className="space-y-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-lg bg-bg-secondary"
+            />
           ))}
-        </Tabs.List>
-
-        {tabConfig.map((tab) => (
-          <Tabs.Content key={tab.value} value={tab.value} className="mt-2 focus:outline-none">
-            {isLoading ? (
-              <div className="space-y-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-16 animate-pulse rounded-lg bg-bg-secondary"
-                  />
-                ))}
-              </div>
-            ) : filteredNotifications.length === 0 ? (
-              <EmptyState
-                icon={Bell}
-                title="No notifications"
-                description="You're all caught up."
-              />
-            ) : (
-              <div className="space-y-0.5">
-                {filteredNotifications.map((notification) => (
-                  <NotificationItem
-                    key={notification.id}
-                    notification={notification}
-                  />
-                ))}
-              </div>
-            )}
-          </Tabs.Content>
-        ))}
-      </Tabs.Root>
+        </div>
+      ) : notifications.length === 0 ? (
+        <EmptyState
+          icon={Bell}
+          title="No Updates Yet"
+          description="New activity on your account will show here."
+        />
+      ) : (
+        <div className="space-y-0.5">
+          {notifications.map((notification) => (
+            <NotificationItem
+              key={notification.id}
+              notification={notification}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

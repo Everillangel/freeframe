@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Select from '@radix-ui/react-select'
-import { Plus, LayoutGrid, List, FolderOpen, ChevronDown, X, Check, Filter, ArrowUpDown, Users } from 'lucide-react'
+import { Plus, LayoutGrid, List, FolderOpen, ChevronDown, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -209,19 +209,6 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-3 text-sm">
-        <button className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2.5 py-1.5 text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
-          <Filter className="h-3.5 w-3.5" />
-          <span>Filtered by</span>
-          <span className="text-accent">Active Projects</span>
-        </button>
-        <button className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2.5 py-1.5 text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
-          <ArrowUpDown className="h-3.5 w-3.5" />
-          <span>Sorted by</span>
-          <span className="text-text-primary">Name</span>
-        </button>
-      </div>
 
       {/* Content */}
       {isLoading ? (
@@ -270,7 +257,7 @@ export default function ProjectsPage() {
         <div className="rounded-xl border border-border overflow-hidden bg-bg-secondary">
           {/* Table header */}
           <div className="grid grid-cols-[1fr_180px_120px_140px_100px] gap-4 px-4 py-2.5 border-b border-border bg-bg-tertiary/50 text-xs font-medium text-text-secondary">
-            <span className="flex items-center gap-1">Project <ArrowUpDown className="h-3 w-3" /></span>
+            <span>Project</span>
             <span>Workspace</span>
             <span>Storage</span>
             <span>Creation Date</span>
