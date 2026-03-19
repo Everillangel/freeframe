@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timezone
@@ -6,7 +6,10 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.organization import Organization, OrgMember, OrgRole
+from ..models.activity import ActivityLog
+from ..models.project import Project, ProjectMember, ProjectRole
 from ..schemas.organization import OrgCreate, OrgResponse, OrgMemberResponse, AddOrgMemberRequest
+from ..schemas.activity import ActivityLogResponse
 from ..services.permissions import require_org_admin
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -76,3 +79,67 @@ def remove_org_member(org_id: uuid.UUID, user_id: uuid.UUID, db: Session = Depen
         raise HTTPException(status_code=404, detail="Member not found")
     member.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+
+@router.get("/{org_id}/activity", response_model=list[ActivityLogResponse])
+def get_org_activity(
+    org_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List activity log entries for an org. Requires org admin or owner."""
+    _get_org(db, org_id)
+    _require_org_admin(db, org_id, current_user)
+    entries = (
+        db.query(ActivityLog)
+        .filter(ActivityLog.org_id == org_id)
+        .order_by(ActivityLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return entries
+
+
+# ── Project activity (placed here to avoid circular router imports) ────────────
+
+_project_activity_router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@_project_activity_router.get("/{project_id}/activity", response_model=list[ActivityLogResponse])
+def get_project_activity(
+    project_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List activity log entries for a project. Requires project viewer or higher."""
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id,
+        ProjectMember.deleted_at.is_(None),
+    ).first()
+    if not member:
+        # Org admin also has access
+        org_member = db.query(OrgMember).filter(
+            OrgMember.org_id == project.org_id,
+            OrgMember.user_id == current_user.id,
+            OrgMember.deleted_at.is_(None),
+        ).first()
+        if not org_member or org_member.role not in (OrgRole.owner, OrgRole.admin):
+            raise HTTPException(status_code=403, detail="Project access required")
+    entries = (
+        db.query(ActivityLog)
+        .filter(ActivityLog.project_id == project_id)
+        .order_by(ActivityLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return entries
