@@ -15,6 +15,8 @@ app = FastAPI(
     description="Media review platform API",
     version="1.0.0",
     lifespan=lifespan,
+    contact={"name": "FreeFrame", "url": "https://github.com/freeframe/freeframe"},
+    license_info={"name": "MIT"},
 )
 
 app.add_middleware(
