@@ -10,6 +10,7 @@ import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
 import { ApprovalBar } from '@/components/review/approval-bar'
 import { VersionSwitcher } from '@/components/review/version-switcher'
+import { ShareDialog } from '@/components/review/share-dialog'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
@@ -116,7 +117,10 @@ function ReviewScreenInner() {
           </Link>
           <h1 className="text-sm font-medium">{asset.name}</h1>
         </div>
-        <VersionSwitcher versions={versions} />
+        <div className="flex items-center gap-2">
+          <ShareDialog assetId={asset.id} assetName={asset.name} />
+          <VersionSwitcher versions={versions} />
+        </div>
       </div>
 
       {/* Approval bar */}
