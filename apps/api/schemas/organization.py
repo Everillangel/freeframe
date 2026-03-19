@@ -25,6 +25,16 @@ class OrgResponse(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+class OrgListResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    logo_url: str | None = None
+    created_at: datetime
+    member_count: int = 0
+    project_count: int = 0
+    model_config = {"from_attributes": True}
+
 class OrgMemberResponse(BaseModel):
     id: uuid.UUID
     org_id: uuid.UUID

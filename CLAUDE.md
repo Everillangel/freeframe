@@ -524,6 +524,92 @@ NEXTAUTH_URL=http://localhost:3000
 14. Assignments & notifications (due dates, notification API, due-date reminders)
 15. Soft delete middleware + activity logging + cascade delete
 16. Tests (pytest) + OpenAPI docs + README
+17. **Email service (SES + SMTP) with async Celery queues**
+18. **Magic code auth flow with Redis storage**
+19. **Super admin role + first-time setup onboarding**
+20. **Streaming video transcoding (presigned URLs, no full download)**
+
+---
+
+## Recent Additions (Post v1 Core)
+
+### Email Service
+
+- **Provider support**: AWS SES or any SMTP server (configurable via `MAIL_PROVIDER`)
+- **Async queues**: Celery workers with `email_high` (magic codes, invites) and `email_low` (notifications)
+- **Templates**: Jinja2 HTML templates for all email types
+- **Rate limiting**: 10 emails/second to avoid SES throttling
+
+### Magic Code Authentication
+
+- **Flow**: Email → 6-digit code → Verify → Set password (if new user)
+- **Storage**: Redis with 10-minute TTL
+- **Endpoints**: `/auth/send-magic-code`, `/auth/verify-magic-code`, `/auth/set-password`
+
+### Super Admin & Setup
+
+- **First user**: Automatically becomes super admin via `/setup/create-superadmin`
+- **Org creation**: Restricted to super admins only
+- **Setup check**: `GET /setup/status` returns `needs_setup: true/false`
+
+### Streaming Transcoding
+
+- **No full download**: FFmpeg reads directly from presigned S3 URL
+- **Disk usage**: Reduced from 3x to 1x file size
+- **Large files**: Supports 10GB+ videos with 4-hour timeout
+- **Configurable**: `TRANSCODING_CONCURRENCY` and `EMAIL_CONCURRENCY` env vars
+
+---
+
+## Frontend Development Guide
+
+### Priority 1: Setup & Auth
+
+| Page | Route | API Endpoints |
+|------|-------|---------------|
+| Setup Wizard | `/setup` | `GET /setup/status`, `POST /setup/create-superadmin` |
+| Login | `/login` | `POST /auth/send-magic-code`, `POST /auth/verify-magic-code` |
+| Set Password | `/login` (step 3) | `POST /auth/set-password` |
+| Accept Invite | `/invite/[token]` | `GET /auth/invite/{token}`, `POST /auth/accept-invite` |
+
+### Priority 2: Admin & Org
+
+| Page | Route | API Endpoints |
+|------|-------|---------------|
+| Super Admin | `/admin` | `POST /organizations`, user management |
+| Org Dashboard | `/org/[id]` | `GET /organizations/{id}`, member management |
+| Projects | `/org/[id]/projects` | `GET /projects`, `POST /projects` |
+
+### User Model (Frontend)
+
+```typescript
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+  status: "active" | "deactivated" | "pending_invite" | "pending_verification";
+  is_superadmin: boolean;
+  email_verified: boolean;
+}
+```
+
+### Auth Flow Logic
+
+```typescript
+// On app load
+const { needs_setup } = await fetch('/setup/status');
+if (needs_setup) redirect('/setup');
+
+// Login flow
+const { needs_password } = await verifyMagicCode(email, code);
+if (needs_password) showSetPasswordForm();
+else redirect('/dashboard');
+
+// Protected routes
+const user = await fetch('/auth/me');
+if (user.is_superadmin) showAdminMenu();
+```
 
 ---
 

@@ -49,7 +49,7 @@ def create_share_link(
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
 
     token = secrets.token_urlsafe(32)
-    password_hash = pwd_context.hash(body.password) if body.password else None
+    password_hash = pwd_context.hash(body.password[:72]) if body.password else None
 
     link = ShareLink(
         asset_id=asset_id,
@@ -98,7 +98,7 @@ def validate_share_link_endpoint(
                 allow_download=link.allow_download,
                 requires_password=True,
             )
-        if not pwd_context.verify(password, link.password_hash):
+        if not pwd_context.verify(password[:72], link.password_hash):
             raise HTTPException(status_code=403, detail="Incorrect password")
 
     return ShareLinkValidateResponse(

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
-from ..models.user import User
+from ..models.user import User, UserStatus
 from ..models.organization import Organization, OrgMember, OrgRole
 from ..models.project import Project, ProjectMember
 from ..models.asset import Asset, AssetVersion, MediaFile
@@ -47,6 +47,24 @@ class UpdateMemberRoleRequest(BaseModel):
     role: OrgRole
 
 
+class AdminUserResponse(BaseModel):
+    id: uuid.UUID
+    email: str
+    name: Optional[str]
+    avatar_url: Optional[str] = None
+    status: str
+    is_superadmin: bool = False
+    email_verified: bool = False
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AdminUsersListResponse(BaseModel):
+    items: list[AdminUserResponse]
+    total: int
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _get_org(db: Session, org_id: uuid.UUID) -> Organization:
@@ -71,6 +89,39 @@ def _require_org_owner(db: Session, org_id: uuid.UUID, user: User) -> OrgMember:
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
+@router.get("/admin/users", response_model=AdminUsersListResponse)
+def list_all_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all platform users. Requires super admin."""
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
+
+    users = (
+        db.query(User)
+        .filter(User.deleted_at.is_(None))
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+    items = [
+        AdminUserResponse(
+            id=u.id,
+            email=u.email,
+            name=u.name,
+            avatar_url=u.avatar_url,
+            status=u.status.value if isinstance(u.status, UserStatus) else str(u.status),
+            is_superadmin=u.is_superadmin,
+            email_verified=u.email_verified,
+            created_at=u.created_at,
+        )
+        for u in users
+    ]
+
+    return AdminUsersListResponse(items=items, total=len(items))
+
 
 @router.get("/organizations/{org_id}/admin/dashboard", response_model=OrgDashboardResponse)
 def org_admin_dashboard(

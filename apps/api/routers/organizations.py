@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 from datetime import datetime, timezone
 from ..database import get_db
@@ -8,7 +9,7 @@ from ..models.user import User
 from ..models.organization import Organization, OrgMember, OrgRole
 from ..models.activity import ActivityLog
 from ..models.project import Project, ProjectMember, ProjectRole
-from ..schemas.organization import OrgCreate, OrgResponse, OrgMemberResponse, AddOrgMemberRequest
+from ..schemas.organization import OrgCreate, OrgResponse, OrgMemberResponse, AddOrgMemberRequest, OrgListResponse
 from ..schemas.activity import ActivityLogResponse
 from ..services.permissions import require_org_admin
 from ..tasks.email_tasks import send_invite_email
@@ -24,6 +25,38 @@ def _get_org(db: Session, org_id: uuid.UUID) -> Organization:
 
 def _require_org_admin(db: Session, org_id: uuid.UUID, user: User) -> OrgMember:
     return require_org_admin(db, org_id, user)
+
+@router.get("", response_model=list[OrgListResponse])
+def list_orgs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """List all organizations. Super admins see all; regular users see only their orgs."""
+    if current_user.is_superadmin:
+        orgs = db.query(Organization).filter(Organization.deleted_at.is_(None)).order_by(Organization.created_at.desc()).all()
+    else:
+        org_ids = (
+            db.query(OrgMember.org_id)
+            .filter(OrgMember.user_id == current_user.id, OrgMember.deleted_at.is_(None))
+            .subquery()
+        )
+        orgs = db.query(Organization).filter(
+            Organization.id.in_(org_ids),
+            Organization.deleted_at.is_(None),
+        ).order_by(Organization.created_at.desc()).all()
+
+    result = []
+    for org in orgs:
+        member_count = db.query(func.count(OrgMember.id)).filter(
+            OrgMember.org_id == org.id, OrgMember.deleted_at.is_(None)
+        ).scalar() or 0
+        project_count = db.query(func.count(Project.id)).filter(
+            Project.org_id == org.id, Project.deleted_at.is_(None)
+        ).scalar() or 0
+        result.append(OrgListResponse(
+            id=org.id, name=org.name, slug=org.slug,
+            logo_url=org.logo_url, created_at=org.created_at,
+            member_count=member_count, project_count=project_count,
+        ))
+    return result
+
 
 @router.post("", response_model=OrgResponse, status_code=status.HTTP_201_CREATED)
 def create_org(body: OrgCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
