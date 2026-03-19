@@ -1,6 +1,8 @@
 import uuid
 import sys
 import os
+import asyncio
+import json
 
 # Ensure the workspace root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -11,8 +13,6 @@ from ..models.asset import AssetVersion, MediaFile, ProcessingStatus, AssetType
 from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
-
-import asyncio
 
 
 def _run_async(coro):
@@ -30,15 +30,24 @@ def process_asset(self, asset_id: str, version_id: str):
     try:
         version = db.query(AssetVersion).filter(AssetVersion.id == uuid.UUID(version_id)).first()
         if not version:
-            return
+            return  # version already cleaned up
 
         asset = db.query(Asset).filter(Asset.id == uuid.UUID(asset_id)).first()
         if not asset:
+            if version:
+                version.processing_status = ProcessingStatus.failed
+                db.commit()
             return
 
         media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
         if not media_file:
+            version.processing_status = ProcessingStatus.failed
+            db.commit()
             return
+
+        # Reset to processing status before each attempt
+        version.processing_status = ProcessingStatus.processing
+        db.commit()
 
         output_prefix = f"processed/{asset.project_id}/{asset_id}/{version_id}"
         s3 = get_s3_client()
@@ -113,12 +122,12 @@ def _process_image(db, asset, version, media_file, s3, output_prefix):
 
 
 def _publish_event(project_id: str, event_type: str, payload: dict):
-    """Fire-and-forget SSE event publish from Celery worker context."""
+    """Publish SSE event via Redis from Celery worker context."""
     try:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        from apps.api.services.event_service import publish
-        loop.run_until_complete(publish(project_id, event_type, payload))
-        loop.close()
+        import redis as sync_redis
+        r = sync_redis.from_url(settings.redis_url, decode_responses=True)
+        message = json.dumps({"type": event_type, "payload": payload})
+        r.publish(f"project:{project_id}", message)
+        r.close()
     except Exception:
         pass  # SSE publish is best-effort

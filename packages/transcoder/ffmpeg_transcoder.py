@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -51,9 +52,10 @@ class FFmpegTranscoder(BaseTranscoder):
                 f"{thumb_dir}/thumb_%04d.jpg",
             ]
             subprocess.run(cmd, capture_output=True, check=True)
-            return sorted(Path(thumb_dir).glob("thumb_*.jpg"))
+            return [str(p) for p in sorted(Path(thumb_dir).glob("thumb_*.jpg"))]
         finally:
             os.unlink(tmp_path)
+            shutil.rmtree(thumb_dir, ignore_errors=True)
 
     async def generate_waveform(self, s3_key: str) -> dict:
         """Generate waveform data for audio visualization."""
@@ -143,7 +145,7 @@ class FFmpegTranscoder(BaseTranscoder):
             for q in qualities:
                 (hls_dir / q).mkdir(exist_ok=True)
 
-            subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=3600)
 
             # 4. Upload HLS files to S3
             uploaded_keys = []
@@ -182,7 +184,6 @@ class FFmpegTranscoder(BaseTranscoder):
         except Exception as e:
             return TranscodeResult(success=False, error=str(e))
         finally:
-            import shutil
             shutil.rmtree(work_dir, ignore_errors=True)
 
     @staticmethod

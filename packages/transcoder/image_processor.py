@@ -1,4 +1,6 @@
+import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -35,7 +37,6 @@ def process_image(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
 
     finally:
         os.unlink(tmp_input)
-        import shutil
         shutil.rmtree(work_dir, ignore_errors=True)
     return result
 
@@ -66,7 +67,6 @@ def process_audio(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
 
         # Waveform as JSON (simplified peak data)
         waveform_data = {"peaks": [], "duration": 0, "sample_rate": 44100}
-        import json
         waveform_path = os.path.join(work_dir, "waveform.json")
         with open(waveform_path, "w") as wf:
             json.dump(waveform_data, wf)
@@ -76,6 +76,5 @@ def process_audio(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
 
     finally:
         os.unlink(tmp_input)
-        import shutil
         shutil.rmtree(work_dir, ignore_errors=True)
     return result
