@@ -5,7 +5,7 @@ celery_app = Celery(
     "freeframe",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["apps.api.tasks.transcode_tasks"],
+    include=["apps.api.tasks.transcode_tasks", "apps.api.tasks.watermark_tasks"],
 )
 
 celery_app.conf.update(
