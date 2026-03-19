@@ -1,7 +1,28 @@
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Find .env file - check current dir, then project root
+# __file__ = apps/api/config.py, so parent.parent = project root
+def _find_env_file() -> str:
+    project_root = Path(__file__).parent.parent.parent  # freeframe/
+    candidates = [
+        Path(".env"),
+        Path(".env.local"),
+        project_root / ".env",
+        project_root / ".env.local",
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p.resolve())
+    return ".env"
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=_find_env_file(),
+        env_file_encoding="utf-8",
+        extra="ignore"  # Ignore extra env vars not in model
+    )
 
     database_url: str
     redis_url: str

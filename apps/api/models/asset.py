@@ -5,7 +5,10 @@ from typing import Optional
 from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, Float, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from ..database import Base
+try:
+    from ..database import Base
+except ImportError:
+    from database import Base
 
 class AssetType(str, PyEnum):
     image = "image"

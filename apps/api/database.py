@@ -1,6 +1,12 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from .config import settings
+
+# Import settings - handle both package and direct execution
+try:
+    from .config import settings
+except ImportError:
+    from config import settings
 
 engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

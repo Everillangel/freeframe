@@ -135,7 +135,8 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+.env*
+!.env.example
 .envrc
 .venv
 env/
@@ -214,4 +215,4 @@ __marimo__/
 skills-lock.json
 
 .DS_Store
-
+.worktrees/

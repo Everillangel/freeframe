@@ -14,14 +14,33 @@ CONTENT_TYPE_MAP = {
     ".png": ("image/png", "max-age=86400"),
 }
 
+def _is_aws_credentials() -> bool:
+    """Check if credentials look like real AWS (start with AKIA) vs MinIO."""
+    return settings.s3_access_key.startswith("AKIA")
+
 def get_s3_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.s3_endpoint,
-        aws_access_key_id=settings.s3_access_key,
-        aws_secret_access_key=settings.s3_secret_key,
-        region_name=settings.s3_region,
-    )
+    """
+    Create S3 client. Auto-detects AWS vs MinIO:
+    - If access_key starts with 'AKIA' -> use AWS S3 (no endpoint_url)
+    - Otherwise -> use custom endpoint (MinIO or S3-compatible)
+    """
+    if _is_aws_credentials():
+        # Real AWS S3 - don't pass endpoint_url
+        return boto3.client(
+            "s3",
+            aws_access_key_id=settings.s3_access_key,
+            aws_secret_access_key=settings.s3_secret_key,
+            region_name=settings.s3_region,
+        )
+    else:
+        # MinIO or S3-compatible storage
+        return boto3.client(
+            "s3",
+            endpoint_url=settings.s3_endpoint,
+            aws_access_key_id=settings.s3_access_key,
+            aws_secret_access_key=settings.s3_secret_key,
+            region_name=settings.s3_region,
+        )
 
 def ensure_bucket_exists():
     """Create the S3 bucket if it does not exist. Called on app startup."""
@@ -29,8 +48,23 @@ def ensure_bucket_exists():
     try:
         s3.head_bucket(Bucket=settings.s3_bucket)
     except ClientError as e:
-        if e.response["Error"]["Code"] in ("404", "NoSuchBucket"):
-            s3.create_bucket(Bucket=settings.s3_bucket)
+        error_code = e.response["Error"]["Code"]
+        if error_code in ("404", "NoSuchBucket"):
+            # For AWS S3 in non-us-east-1 regions, need LocationConstraint
+            if _is_aws_credentials() and settings.s3_region != "us-east-1":
+                s3.create_bucket(
+                    Bucket=settings.s3_bucket,
+                    CreateBucketConfiguration={"LocationConstraint": settings.s3_region}
+                )
+            else:
+                s3.create_bucket(Bucket=settings.s3_bucket)
+        elif error_code == "403":
+            # Bucket exists but we don't have access, or using wrong credentials
+            # For AWS S3, bucket likely already exists - skip creation
+            if _is_aws_credentials():
+                pass  # Assume bucket exists, will fail on actual operations if not
+            else:
+                raise
         else:
             raise
 

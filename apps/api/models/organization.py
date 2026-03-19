@@ -5,7 +5,10 @@ from typing import Optional
 from sqlalchemy import String, Enum, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from ..database import Base
+try:
+    from ..database import Base
+except ImportError:
+    from database import Base
 
 class OrgRole(str, PyEnum):
     owner = "owner"
