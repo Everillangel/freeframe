@@ -1,0 +1,515 @@
+import re
+import uuid
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from ..config import settings
+from ..database import get_db
+from ..middleware.auth import get_current_user
+from ..middleware.share_auth import get_share_link
+from ..models.asset import Asset
+from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
+from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
+from ..models.user import User, GuestUser
+from ..models.share import ShareLink, SharePermission
+from ..schemas.comment import (
+    AnnotationResponse,
+    AttachmentResponse,
+    AttachmentUploadRequest,
+    AttachmentUploadResponse,
+    CommentCreate,
+    CommentResponse,
+    CommentUpdate,
+    GuestCommentCreate,
+    ReactionCreate,
+    ReactionResponse,
+)
+from ..services import s3_service
+from ..services.permissions import require_asset_access, validate_share_link
+
+router = APIRouter(tags=["comments"])
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _get_asset(db: Session, asset_id: uuid.UUID) -> Asset:
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return asset
+
+
+def _get_comment(db: Session, comment_id: uuid.UUID) -> Comment:
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return comment
+
+
+def _build_attachment_response(attachment: CommentAttachment) -> AttachmentResponse:
+    url = s3_service.generate_presigned_get_url(attachment.s3_key, expires_in=3600)
+    return AttachmentResponse(
+        id=attachment.id,
+        file_name=attachment.original_filename,
+        file_size=attachment.file_size_bytes,
+        content_type=attachment.file_type,
+        url=url,
+    )
+
+
+def _build_reaction_responses(
+    reactions: list[CommentReaction],
+    current_user_id: uuid.UUID | None,
+) -> list[ReactionResponse]:
+    counts: dict[str, int] = defaultdict(int)
+    reacted: dict[str, bool] = defaultdict(bool)
+    for r in reactions:
+        counts[r.emoji] += 1
+        if current_user_id and r.user_id == current_user_id:
+            reacted[r.emoji] = True
+    return [
+        ReactionResponse(emoji=emoji, count=cnt, reacted=reacted[emoji])
+        for emoji, cnt in counts.items()
+    ]
+
+
+def _build_comment_response(
+    comment: Comment,
+    db: Session,
+    current_user_id: uuid.UUID | None = None,
+    depth: int = 5,
+) -> CommentResponse:
+    annotation = db.query(Annotation).filter(Annotation.comment_id == comment.id).first()
+    replies_raw = []
+    if depth > 0:
+        replies_raw = db.query(Comment).filter(
+            Comment.parent_id == comment.id,
+            Comment.deleted_at.is_(None),
+        ).order_by(Comment.created_at).all()
+
+    # Load attachments
+    attachments_raw = db.query(CommentAttachment).filter(
+        CommentAttachment.comment_id == comment.id,
+    ).all()
+    attachments = [_build_attachment_response(a) for a in attachments_raw]
+
+    # Load reactions
+    reactions_raw = db.query(CommentReaction).filter(
+        CommentReaction.comment_id == comment.id,
+    ).all()
+    reactions = _build_reaction_responses(reactions_raw, current_user_id)
+
+    resp = CommentResponse.model_validate(comment)
+    resp.annotation = AnnotationResponse.model_validate(annotation) if annotation else None
+    resp.replies = [
+        _build_comment_response(r, db, current_user_id=current_user_id, depth=depth - 1)
+        for r in replies_raw
+    ]
+    resp.attachments = attachments
+    resp.reactions = reactions
+    return resp
+
+
+def _get_annotations_map(comment_ids: list[uuid.UUID], db: Session) -> dict:
+    """Batch-load annotations for a list of comment IDs."""
+    if not comment_ids:
+        return {}
+    annotations = db.query(Annotation).filter(Annotation.comment_id.in_(comment_ids)).all()
+    return {a.comment_id: a for a in annotations}
+
+
+def _parse_mentions(body: str) -> list[str]:
+    """Extract @email mentions from comment body."""
+    return re.findall(r"@([\w.+-]+@[\w.-]+\.\w+)", body)
+
+
+def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str) -> None:
+    """Parse @mentions, create Mention + Notification records."""
+    from ..services.auth_service import get_user_by_email
+    emails = _parse_mentions(body)
+    for email in set(emails):
+        user = get_user_by_email(db, email)
+        if user and user.id != comment.author_id:
+            mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
+            db.add(mention)
+            notif = Notification(
+                user_id=user.id,
+                type=NotificationType.mention,
+                asset_id=asset.id,
+                comment_id=comment.id,
+            )
+            db.add(notif)
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+@router.get("/assets/{asset_id}/comments", response_model=list[CommentResponse])
+def list_comments(
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+    # Top-level comments only (parent_id is None)
+    top_level = db.query(Comment).filter(
+        Comment.asset_id == asset_id,
+        Comment.parent_id.is_(None),
+        Comment.deleted_at.is_(None),
+    ).order_by(Comment.created_at).all()
+    return [_build_comment_response(c, db, current_user_id=current_user.id) for c in top_level]
+
+
+@router.post("/assets/{asset_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+def create_comment(
+    asset_id: uuid.UUID,
+    body: CommentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+
+    comment = Comment(
+        asset_id=asset_id,
+        version_id=body.version_id,
+        parent_id=body.parent_id,
+        author_id=current_user.id,
+        timecode_start=body.timecode_start,
+        timecode_end=body.timecode_end,
+        body=body.body,
+    )
+    db.add(comment)
+    db.flush()
+
+    if body.annotation:
+        annotation = Annotation(
+            comment_id=comment.id,
+            drawing_data=body.annotation.drawing_data,
+            frame_number=body.annotation.frame_number,
+            carousel_position=body.annotation.carousel_position,
+        )
+        db.add(annotation)
+
+    _create_mentions(db, comment, asset, body.body)
+
+    # Activity log
+    activity = ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.commented)
+    db.add(activity)
+
+    db.commit()
+    db.refresh(comment)
+    return _build_comment_response(comment, db, current_user_id=current_user.id)
+
+
+@router.post("/assets/{asset_id}/comments/{comment_id}/replies", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+def reply_to_comment(
+    asset_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    body: CommentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+    parent = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent comment not found")
+
+    # Force body's version_id to match parent
+    reply = Comment(
+        asset_id=asset_id,
+        version_id=parent.version_id,
+        parent_id=comment_id,
+        author_id=current_user.id,
+        body=body.body,
+    )
+    db.add(reply)
+    db.flush()
+    _create_mentions(db, reply, asset, body.body)
+    db.commit()
+    db.refresh(reply)
+    return _build_comment_response(reply, db, current_user_id=current_user.id)
+
+
+@router.patch("/comments/{comment_id}", response_model=CommentResponse)
+def update_comment(
+    comment_id: uuid.UUID,
+    body: CommentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only edit your own comments")
+    comment.body = body.body
+    comment.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(comment)
+    return _build_comment_response(comment, db, current_user_id=current_user.id)
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only delete your own comments")
+    comment.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+
+@router.post("/comments/{comment_id}/resolve", response_model=CommentResponse)
+def resolve_comment(
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    asset = _get_asset(db, comment.asset_id)
+    require_asset_access(db, asset, current_user)
+    comment.resolved = True
+    db.commit()
+    db.refresh(comment)
+    return _build_comment_response(comment, db, current_user_id=current_user.id)
+
+
+# ── Attachments ────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/comments/{comment_id}/attachments",
+    response_model=AttachmentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_attachment(
+    comment_id: uuid.UUID,
+    body: AttachmentUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = _get_comment(db, comment_id)
+    asset = _get_asset(db, comment.asset_id)
+    require_asset_access(db, asset, current_user)
+
+    # Generate S3 key
+    key = f"comment-attachments/{comment_id}/{uuid.uuid4()}/{body.file_name}"
+
+    # Generate presigned PUT URL
+    s3 = s3_service.get_s3_client()
+    upload_url = s3.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": settings.s3_bucket,
+            "Key": key,
+            "ContentType": body.content_type,
+        },
+        ExpiresIn=3600,
+    )
+
+    # Save attachment record
+    attachment = CommentAttachment(
+        comment_id=comment_id,
+        file_type=body.content_type,
+        s3_key=key,
+        original_filename=body.file_name,
+        file_size_bytes=body.file_size,
+    )
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+
+    return AttachmentUploadResponse(
+        upload_url=upload_url,
+        attachment_id=attachment.id,
+        key=key,
+    )
+
+
+@router.delete(
+    "/comments/{comment_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_attachment(
+    comment_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = _get_comment(db, comment_id)
+    asset = _get_asset(db, comment.asset_id)
+
+    attachment = db.query(CommentAttachment).filter(
+        CommentAttachment.id == attachment_id,
+        CommentAttachment.comment_id == comment_id,
+    ).first()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # Must be comment author OR project owner/editor
+    from ..models.project import ProjectRole
+    from ..services.permissions import get_project_member
+    is_comment_author = comment.author_id == current_user.id
+    if not is_comment_author:
+        pm = get_project_member(db, asset.project_id, current_user.id)
+        if not pm or pm.role not in (ProjectRole.owner, ProjectRole.editor):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this attachment")
+
+    # Delete from S3
+    try:
+        s3_service.delete_object(attachment.s3_key)
+    except Exception:
+        pass  # Best-effort S3 deletion
+
+    db.delete(attachment)
+    db.commit()
+
+
+# ── Reactions ──────────────────────────────────────────────────────────────────
+
+@router.post("/comments/{comment_id}/react", status_code=status.HTTP_204_NO_CONTENT)
+def toggle_reaction(
+    comment_id: uuid.UUID,
+    body: ReactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = _get_comment(db, comment_id)
+    asset = _get_asset(db, comment.asset_id)
+    require_asset_access(db, asset, current_user)
+
+    existing = db.query(CommentReaction).filter(
+        CommentReaction.comment_id == comment_id,
+        CommentReaction.user_id == current_user.id,
+        CommentReaction.emoji == body.emoji,
+    ).first()
+
+    if existing:
+        db.delete(existing)
+    else:
+        reaction = CommentReaction(
+            comment_id=comment_id,
+            user_id=current_user.id,
+            emoji=body.emoji,
+        )
+        db.add(reaction)
+
+    db.commit()
+
+
+@router.get("/comments/{comment_id}/reactions", response_model=list[ReactionResponse])
+def list_reactions(
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = _get_comment(db, comment_id)
+    asset = _get_asset(db, comment.asset_id)
+    require_asset_access(db, asset, current_user)
+
+    reactions_raw = db.query(CommentReaction).filter(
+        CommentReaction.comment_id == comment_id,
+    ).all()
+    return _build_reaction_responses(reactions_raw, current_user.id)
+
+
+# ── Deep link ──────────────────────────────────────────────────────────────────
+
+@router.get("/assets/{asset_id}/comments/{comment_id}/link")
+def comment_deep_link(
+    asset_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+    # Verify comment belongs to this asset
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.asset_id == asset_id,
+        Comment.deleted_at.is_(None),
+    ).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    url = f"{settings.frontend_url}/assets/{asset_id}?comment={comment_id}"
+    return {"url": url}
+
+
+# ── Guest comments (via share link) ───────────────────────────────────────────
+
+@router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+def guest_comment(
+    token: str,
+    body: GuestCommentCreate,
+    db: Session = Depends(get_db),
+):
+    link = validate_share_link(db, token)
+
+    # Check share link permission allows commenting
+    if link.permission == SharePermission.view:
+        raise HTTPException(status_code=403, detail="This share link does not allow commenting")
+
+    asset = _get_asset(db, link.asset_id)
+
+    # Get or create GuestUser by email
+    guest_email = body.guest_email.lower()
+    guest = db.query(GuestUser).filter(GuestUser.email == guest_email).first()
+    if not guest:
+        guest = GuestUser(email=guest_email, name=body.guest_name)
+        db.add(guest)
+        db.flush()
+
+    comment = Comment(
+        asset_id=asset.id,
+        version_id=body.version_id,
+        parent_id=body.parent_id,
+        guest_author_id=guest.id,
+        timecode_start=body.timecode_start,
+        timecode_end=body.timecode_end,
+        body=body.body,
+    )
+    db.add(comment)
+    db.flush()
+
+    # Parse mentions (guest can mention registered users)
+    emails = _parse_mentions(body.body)
+    for email in set(emails):
+        from ..services.auth_service import get_user_by_email
+        user = get_user_by_email(db, email)
+        if user:
+            mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
+            db.add(mention)
+            notif = Notification(
+                user_id=user.id,
+                type=NotificationType.mention,
+                asset_id=asset.id,
+                comment_id=comment.id,
+            )
+            db.add(notif)
+
+    if body.annotation:
+        annotation = Annotation(
+            comment_id=comment.id,
+            drawing_data=body.annotation.drawing_data,
+            frame_number=body.annotation.frame_number,
+            carousel_position=body.annotation.carousel_position,
+        )
+        db.add(annotation)
+
+    db.commit()
+    db.refresh(comment)
+    return _build_comment_response(comment, db)
