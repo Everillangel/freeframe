@@ -10,7 +10,7 @@ import uuid
 router = APIRouter(tags=["notifications"])
 
 
-@router.get("/me/notifications", response_model=list[NotificationResponse])
+@router.get("/me/notifications", response_model=list[NotificationResponse], operation_id="get_my_notifications")
 def list_notifications(
     unread_only: bool = Query(default=False),
     db: Session = Depends(get_db),
