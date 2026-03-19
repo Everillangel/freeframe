@@ -138,7 +138,7 @@ export default function ProjectsPage() {
                   New Project
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  Create a personal or team project to organize your assets.
+                  Create a new project to organize your assets.
                 </Dialog.Description>
 
                 <form onSubmit={handleCreate} className="mt-5 space-y-4">
@@ -163,29 +163,6 @@ export default function ProjectsPage() {
                     />
                   </div>
 
-                  {/* Project type */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-text-secondary">
-                      Project type
-                    </label>
-                    <div className="flex gap-2">
-                      {(['personal', 'team'] as ProjectType[]).map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setForm((f) => ({ ...f, project_type: type, team_id: '' }))}
-                          className={cn(
-                            'flex-1 rounded-md border px-3 py-2 text-sm font-medium capitalize transition-colors',
-                            form.project_type === type
-                              ? 'border-accent bg-accent-muted text-accent'
-                              : 'border-border bg-bg-tertiary text-text-secondary hover:bg-bg-hover',
-                          )}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
 
 
                   {formError && (
