@@ -11,8 +11,9 @@ from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, FileType, ProcessingStatus
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.share import AssetShare
-from ..models.activity import Mention
+from ..models.activity import Mention, Notification, NotificationType
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
+from ..schemas.notification import AssignmentUpdate
 from ..services.permissions import require_project_role, require_asset_access, can_access_asset
 from ..services.s3_service import generate_presigned_get_url
 from ..schemas.upload import InitiateUploadRequest, InitiateUploadResponse, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type
@@ -243,3 +244,49 @@ def initiate_new_version(
         asset_id=asset_id,
         version_id=version.id,
     )
+
+
+@router.patch("/assets/{asset_id}/assignment", response_model=AssetResponse)
+def update_assignment(
+    asset_id: uuid.UUID,
+    body: AssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
+
+    if "assignee_id" in body.model_fields_set:
+        asset.assignee_id = body.assignee_id
+    if "due_date" in body.model_fields_set:
+        asset.due_date = body.due_date
+
+    if "assignee_id" in body.model_fields_set and body.assignee_id is not None:
+        notification = Notification(
+            user_id=body.assignee_id,
+            type=NotificationType.assignment,
+            asset_id=asset.id,
+        )
+        db.add(notification)
+
+    db.commit()
+    db.refresh(asset)
+    return _build_asset_response(asset, db)
+
+
+@router.get("/assets/{asset_id}/assignment")
+def get_assignment(
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    require_project_role(db, asset.project_id, current_user, ProjectRole.viewer)
+    return {
+        "assignee_id": str(asset.assignee_id) if asset.assignee_id else None,
+        "due_date": asset.due_date.isoformat() if asset.due_date else None,
+    }
