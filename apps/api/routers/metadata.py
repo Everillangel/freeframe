@@ -50,10 +50,26 @@ def _apply_smart_filter(db: Session, project_id: uuid.UUID, rules: dict):
     return q
 
 
+def _is_smart(collection: Collection) -> bool:
+    return bool(collection.filter_rules)
+
+
 def _collection_asset_count(db: Session, collection: Collection) -> int:
-    if not collection.is_smart:
+    if not _is_smart(collection):
         return 0
     return _apply_smart_filter(db, collection.project_id, collection.filter_rules or {}).count()
+
+
+def _collection_to_response(db: Session, collection: Collection) -> CollectionResponse:
+    asset_count = _collection_asset_count(db, collection)
+    return CollectionResponse(
+        id=collection.id,
+        project_id=collection.project_id,
+        name=collection.name,
+        filter_rules=collection.filter_rules or None,
+        is_smart=_is_smart(collection),
+        asset_count=asset_count,
+    )
 
 
 # ── Metadata Fields ────────────────────────────────────────────────────────────
@@ -237,12 +253,7 @@ def create_collection(
     db.add(collection)
     db.commit()
     db.refresh(collection)
-    asset_count = _collection_asset_count(db, collection)
-    resp = CollectionResponse.model_validate(collection)
-    resp.asset_count = asset_count
-    resp.is_smart = bool(body.is_smart)
-    resp.filter_rules = collection.filter_rules
-    return resp
+    return _collection_to_response(db, collection)
 
 
 @router.get(
@@ -260,13 +271,7 @@ def list_collections(
         Collection.deleted_at.is_(None),
     ).all()
 
-    result = []
-    for col in collections:
-        asset_count = _collection_asset_count(db, col)
-        resp = CollectionResponse.model_validate(col)
-        resp.asset_count = asset_count
-        result.append(resp)
-    return result
+    return [_collection_to_response(db, col) for col in collections]
 
 
 @router.get(
@@ -288,10 +293,7 @@ def get_collection(
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    asset_count = _collection_asset_count(db, collection)
-    resp = CollectionResponse.model_validate(collection)
-    resp.asset_count = asset_count
-    return resp
+    return _collection_to_response(db, collection)
 
 
 @router.delete(
