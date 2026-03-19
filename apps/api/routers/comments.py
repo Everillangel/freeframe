@@ -35,17 +35,27 @@ def _get_asset(db: Session, asset_id: uuid.UUID) -> Asset:
     return asset
 
 
-def _build_comment_response(comment: Comment, db: Session) -> CommentResponse:
+def _build_comment_response(comment: Comment, db: Session, depth: int = 5) -> CommentResponse:
     annotation = db.query(Annotation).filter(Annotation.comment_id == comment.id).first()
-    replies_raw = db.query(Comment).filter(
-        Comment.parent_id == comment.id,
-        Comment.deleted_at.is_(None),
-    ).order_by(Comment.created_at).all()
+    replies_raw = []
+    if depth > 0:
+        replies_raw = db.query(Comment).filter(
+            Comment.parent_id == comment.id,
+            Comment.deleted_at.is_(None),
+        ).order_by(Comment.created_at).all()
 
     resp = CommentResponse.model_validate(comment)
     resp.annotation = AnnotationResponse.model_validate(annotation) if annotation else None
-    resp.replies = [_build_comment_response(r, db) for r in replies_raw]
+    resp.replies = [_build_comment_response(r, db, depth=depth - 1) for r in replies_raw]
     return resp
+
+
+def _get_annotations_map(comment_ids: list[uuid.UUID], db: Session) -> dict:
+    """Batch-load annotations for a list of comment IDs."""
+    if not comment_ids:
+        return {}
+    annotations = db.query(Annotation).filter(Annotation.comment_id.in_(comment_ids)).all()
+    return {a.comment_id: a for a in annotations}
 
 
 def _parse_mentions(body: str) -> list[str]:
@@ -230,9 +240,10 @@ def guest_comment(
     asset = _get_asset(db, link.asset_id)
 
     # Get or create GuestUser by email
-    guest = db.query(GuestUser).filter(GuestUser.email == body.guest_email).first()
+    guest_email = body.guest_email.lower()
+    guest = db.query(GuestUser).filter(GuestUser.email == guest_email).first()
     if not guest:
-        guest = GuestUser(email=body.guest_email, name=body.guest_name)
+        guest = GuestUser(email=guest_email, name=body.guest_name)
         db.add(guest)
         db.flush()
 
@@ -247,6 +258,22 @@ def guest_comment(
     )
     db.add(comment)
     db.flush()
+
+    # Parse mentions (guest can mention registered users)
+    emails = _parse_mentions(body.body)
+    for email in set(emails):
+        from ..services.auth_service import get_user_by_email
+        user = get_user_by_email(db, email)
+        if user:
+            mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
+            db.add(mention)
+            notif = Notification(
+                user_id=user.id,
+                type=NotificationType.mention,
+                asset_id=asset.id,
+                comment_id=comment.id,
+            )
+            db.add(notif)
 
     if body.annotation:
         annotation = Annotation(
