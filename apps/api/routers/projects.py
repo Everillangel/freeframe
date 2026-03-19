@@ -59,7 +59,15 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return _get_project(db, project_id)
+    project = _get_project(db, project_id)
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id,
+        ProjectMember.deleted_at.is_(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not a project member")
+    return project
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -84,9 +92,16 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current
 def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _get_project(db, project_id)
     _require_project_owner(db, project_id, current_user)
-    existing = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == body.user_id, ProjectMember.deleted_at.is_(None)).first()
+    existing = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == body.user_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="User already a project member")
+        if existing.deleted_at is None:
+            raise HTTPException(status_code=400, detail="User already a project member")
+        # Reactivate soft-deleted membership
+        existing.deleted_at = None
+        existing.role = body.role
+        db.commit()
+        db.refresh(existing)
+        return existing
     member = ProjectMember(project_id=project_id, user_id=body.user_id, role=body.role, invited_by=current_user.id)
     db.add(member)
     db.commit()

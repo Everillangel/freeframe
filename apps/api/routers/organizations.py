@@ -7,6 +7,7 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.organization import Organization, OrgMember, OrgRole
 from ..schemas.organization import OrgCreate, OrgResponse, OrgMemberResponse, AddOrgMemberRequest
+from ..services.permissions import require_org_admin
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -17,14 +18,7 @@ def _get_org(db: Session, org_id: uuid.UUID) -> Organization:
     return org
 
 def _require_org_admin(db: Session, org_id: uuid.UUID, user: User) -> OrgMember:
-    member = db.query(OrgMember).filter(
-        OrgMember.org_id == org_id,
-        OrgMember.user_id == user.id,
-        OrgMember.deleted_at.is_(None),
-    ).first()
-    if not member or member.role not in (OrgRole.owner, OrgRole.admin):
-        raise HTTPException(status_code=403, detail="Org admin access required")
-    return member
+    return require_org_admin(db, org_id, user)
 
 @router.post("", response_model=OrgResponse, status_code=status.HTTP_201_CREATED)
 def create_org(body: OrgCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -41,15 +35,32 @@ def create_org(body: OrgCreate, db: Session = Depends(get_db), current_user: Use
 
 @router.get("/{org_id}", response_model=OrgResponse)
 def get_org(org_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return _get_org(db, org_id)
+    org = _get_org(db, org_id)
+    member = db.query(OrgMember).filter(
+        OrgMember.org_id == org_id,
+        OrgMember.user_id == current_user.id,
+        OrgMember.deleted_at.is_(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not an org member")
+    return org
 
 @router.post("/{org_id}/members", response_model=OrgMemberResponse, status_code=status.HTTP_201_CREATED)
 def add_org_member(org_id: uuid.UUID, body: AddOrgMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _get_org(db, org_id)
     _require_org_admin(db, org_id, current_user)
-    existing = db.query(OrgMember).filter(OrgMember.org_id == org_id, OrgMember.user_id == body.user_id, OrgMember.deleted_at.is_(None)).first()
+    # Check including soft-deleted
+    existing = db.query(OrgMember).filter(OrgMember.org_id == org_id, OrgMember.user_id == body.user_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="User already a member")
+        if existing.deleted_at is None:
+            raise HTTPException(status_code=400, detail="User already a member")
+        # Reactivate soft-deleted membership
+        existing.deleted_at = None
+        existing.role = body.role
+        existing.joined_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(existing)
+        return existing
     member = OrgMember(org_id=org_id, user_id=body.user_id, role=body.role, joined_at=datetime.now(timezone.utc))
     db.add(member)
     db.commit()
