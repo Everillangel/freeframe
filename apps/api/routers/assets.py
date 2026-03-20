@@ -30,13 +30,20 @@ def _build_asset_response(asset: Asset, db: Session) -> AssetResponse:
     ).order_by(AssetVersion.version_number.desc()).first()
 
     version_response = None
+    thumbnail_url = None
     if latest_version:
         files = db.query(MediaFile).filter(MediaFile.version_id == latest_version.id).all()
         version_response = AssetVersionResponse.model_validate(latest_version)
         version_response.files = [MediaFileResponse.model_validate(f) for f in files]
+        # Get thumbnail from first file that has one
+        for f in files:
+            if f.s3_key_thumbnail:
+                thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
+                break
 
     resp = AssetResponse.model_validate(asset)
     resp.latest_version = version_response
+    resp.thumbnail_url = thumbnail_url
     return resp
 
 
@@ -75,13 +82,19 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
     for asset in assets:
         version = version_by_asset.get(asset.id)
         version_response = None
+        thumbnail_url = None
         if version:
             files = files_by_version.get(version.id, [])
             version_response = AssetVersionResponse.model_validate(version)
             version_response.files = [MediaFileResponse.model_validate(f) for f in files]
+            for f in files:
+                if f.s3_key_thumbnail:
+                    thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
+                    break
 
         asset_resp = AssetResponse.model_validate(asset)
         asset_resp.latest_version = version_response
+        asset_resp.thumbnail_url = thumbnail_url
         result.append(asset_resp)
     return result
 
@@ -89,6 +102,7 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
 @router.get("/projects/{project_id}/assets", response_model=list[AssetResponse])
 def list_assets(
     project_id: uuid.UUID,
+    include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -97,6 +111,28 @@ def list_assets(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
     ).all()
+
+    if not include_failed:
+        # Exclude assets where the only version is failed or still uploading
+        asset_ids = [a.id for a in assets]
+        if asset_ids:
+            # Find assets that have at least one non-failed, non-uploading version
+            usable = set(
+                row[0] for row in db.query(AssetVersion.asset_id).filter(
+                    AssetVersion.asset_id.in_(asset_ids),
+                    AssetVersion.deleted_at.is_(None),
+                    AssetVersion.processing_status.notin_([ProcessingStatus.failed, ProcessingStatus.uploading]),
+                ).distinct().all()
+            )
+            # Also include assets with no versions yet (just created)
+            has_any_version = set(
+                row[0] for row in db.query(AssetVersion.asset_id).filter(
+                    AssetVersion.asset_id.in_(asset_ids),
+                    AssetVersion.deleted_at.is_(None),
+                ).distinct().all()
+            )
+            assets = [a for a in assets if a.id in usable or a.id not in has_any_version]
+
     return _build_asset_responses_bulk(assets, db)
 
 
@@ -143,6 +179,36 @@ def delete_asset(
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
     asset.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+
+@router.get("/assets/{asset_id}/versions", response_model=list[AssetVersionResponse])
+def list_asset_versions(
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    require_asset_access(db, asset, current_user)
+
+    versions = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None),
+    ).order_by(AssetVersion.version_number.desc()).all()
+
+    result = []
+    version_ids = [v.id for v in versions]
+    all_files = db.query(MediaFile).filter(MediaFile.version_id.in_(version_ids)).all() if version_ids else []
+    files_by_version: dict = {}
+    for f in all_files:
+        files_by_version.setdefault(f.version_id, []).append(f)
+
+    for v in versions:
+        vr = AssetVersionResponse.model_validate(v)
+        vr.files = [MediaFileResponse.model_validate(f) for f in files_by_version.get(v.id, [])]
+        result.append(vr)
+    return result
 
 
 @router.get("/assets/{asset_id}/stream", response_model=StreamUrlResponse)

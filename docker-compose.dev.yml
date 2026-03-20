@@ -147,15 +147,21 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXTAUTH_SECRET: dev-secret
-      NEXTAUTH_URL: http://localhost:3000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
     volumes:
-      - /Users/ravirajsinh45/Work/Techiebutler/freeframe/.worktrees/feature/frontend/apps/web:/app
+      - ./apps/web:/app
       - web_node_modules:/app/node_modules
-    command: sh -c "npm install && npm run dev"
+    command: sh -c "npm install && npm run dev --hostname 0.0.0.0"
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 volumes:
   pgdata:

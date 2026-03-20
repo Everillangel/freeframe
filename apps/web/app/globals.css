@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Background — dark theme */
+  --bg-primary: #0d0d10;
+  --bg-secondary: #16161a;
+  --bg-tertiary: #1e1e24;
+  --bg-elevated: #24242c;
+  --bg-hover: #2a2a34;
+
+  /* Borders */
+  --border-primary: #2e2e3a;
+  --border-secondary: #222230;
+  --border-focus: #5b8def;
+
+  /* Text */
+  --text-primary: #eaeaed;
+  --text-secondary: #94949e;
+  --text-tertiary: #5e5e6e;
+  --text-inverse: #0d0d10;
+
+  /* Accent — blue */
+  --accent: #5b8def;
+  --accent-hover: #7aa3f5;
+  --accent-muted: #253556;
+
+  /* Status */
+  --status-success: #34d399;
+  --status-warning: #fbbf24;
+  --status-error: #f87171;
+  --status-info: #60a5fa;
+
+  /* Fonts */
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Spacing rhythm */
+  --space-unit: 4px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+@layer base {
+  * {
+    border-color: var(--border-primary);
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: var(--accent-muted);
+    color: var(--text-primary);
+  }
+}
+
+@layer components {
+  /* Smooth focus ring for interactive elements */
+  .focus-ring {
+    @apply outline-none ring-0 transition-shadow duration-150;
+  }
+  .focus-ring:focus-visible {
+    @apply ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-primary)];
+  }
+
+  /* Glass card effect */
+  .glass-card {
+    @apply rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] backdrop-blur-md shadow-lg;
+  }
+
+  /* Skeleton shimmer gradient */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-secondary) 0%,
+      var(--bg-tertiary) 50%,
+      var(--bg-secondary) 100%
+    );
+    background-size: 200% 100%;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

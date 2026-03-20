@@ -14,6 +14,7 @@ class CommentCreate(BaseModel):
     timecode_start: Optional[float] = None
     timecode_end: Optional[float] = None
     body: str
+    visibility: Optional[str] = "public"  # "public" or "internal"
     annotation: Optional[AnnotationData] = None
 
 class GuestCommentCreate(BaseModel):
@@ -73,6 +74,18 @@ class ReactionResponse(BaseModel):
     count: int
     reacted: bool  # whether the current user has reacted with this emoji
 
+# ── Author info ────────────────────────────────────────────────────────────────
+
+class AuthorInfo(BaseModel):
+    id: uuid.UUID
+    name: str
+    avatar_url: Optional[str] = None
+
+class GuestAuthorInfo(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+
 # ── Comments ───────────────────────────────────────────────────────────────────
 
 class CommentResponse(BaseModel):
@@ -86,8 +99,11 @@ class CommentResponse(BaseModel):
     timecode_end: Optional[float]
     body: str
     resolved: bool
+    visibility: str = "public"
     created_at: datetime
     updated_at: datetime
+    author: Optional[AuthorInfo] = None
+    guest_author: Optional[GuestAuthorInfo] = None
     annotation: Optional[AnnotationResponse] = None
     replies: list["CommentResponse"] = []
     attachments: list[AttachmentResponse] = []

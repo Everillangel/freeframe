@@ -21,6 +21,8 @@ from ..schemas.comment import (
     AttachmentResponse,
     AttachmentUploadRequest,
     AttachmentUploadResponse,
+    AuthorInfo,
+    GuestAuthorInfo,
     CommentCreate,
     CommentResponse,
     CommentUpdate,
@@ -104,7 +106,22 @@ def _build_comment_response(
     ).all()
     reactions = _build_reaction_responses(reactions_raw, current_user_id)
 
+    # Load author info
+    author_info = None
+    if comment.author_id:
+        author = db.query(User).filter(User.id == comment.author_id).first()
+        if author:
+            author_info = AuthorInfo(id=author.id, name=author.name, avatar_url=author.avatar_url)
+
+    guest_author_info = None
+    if comment.guest_author_id:
+        guest = db.query(GuestUser).filter(GuestUser.id == comment.guest_author_id).first()
+        if guest:
+            guest_author_info = GuestAuthorInfo(id=guest.id, name=guest.name, email=guest.email)
+
     resp = CommentResponse.model_validate(comment)
+    resp.author = author_info
+    resp.guest_author = guest_author_info
     resp.annotation = AnnotationResponse.model_validate(annotation) if annotation else None
     resp.replies = [
         _build_comment_response(r, db, current_user_id=current_user_id, depth=depth - 1)
@@ -163,17 +180,21 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
 @router.get("/assets/{asset_id}/comments", response_model=list[CommentResponse])
 def list_comments(
     asset_id: uuid.UUID,
+    visibility: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
     # Top-level comments only (parent_id is None)
-    top_level = db.query(Comment).filter(
+    query = db.query(Comment).filter(
         Comment.asset_id == asset_id,
         Comment.parent_id.is_(None),
         Comment.deleted_at.is_(None),
-    ).order_by(Comment.created_at).all()
+    )
+    if visibility and visibility in ("public", "internal"):
+        query = query.filter(Comment.visibility == visibility)
+    top_level = query.order_by(Comment.created_at).all()
     return [_build_comment_response(c, db, current_user_id=current_user.id) for c in top_level]
 
 
@@ -195,6 +216,7 @@ def create_comment(
         timecode_start=body.timecode_start,
         timecode_end=body.timecode_end,
         body=body.body,
+        visibility=body.visibility or "public",
     )
     db.add(comment)
     db.flush()
@@ -294,7 +316,7 @@ def resolve_comment(
         raise HTTPException(status_code=404, detail="Comment not found")
     asset = _get_asset(db, comment.asset_id)
     require_asset_access(db, asset, current_user)
-    comment.resolved = True
+    comment.resolved = not comment.resolved
     db.commit()
     db.refresh(comment)
     return _build_comment_response(comment, db, current_user_id=current_user.id)

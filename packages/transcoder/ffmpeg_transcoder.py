@@ -97,10 +97,12 @@ class FFmpegTranscoder(BaseTranscoder):
             hls_dir.mkdir()
 
             # Build filter_complex and map args
+            # Use force_original_aspect_ratio=decrease to preserve aspect ratio,
+            # then pad to even dimensions required by libx264
             split_outputs = "".join(f"[v{i}]" for i in range(len(qualities)))
             filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
             filter_complex += ";".join(
-                f"[v{i}]scale={QUALITY_MAP[q][0]}[{q}]"
+                f"[v{i}]scale={QUALITY_MAP[q][0]}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2[{q}]"
                 for i, q in enumerate(qualities)
             )
 

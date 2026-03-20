@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
-from ..models.organization import OrgMember
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
@@ -32,8 +31,6 @@ def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> Pr
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = Project(
-        org_id=body.org_id,
-        team_id=body.team_id,
         name=body.name,
         description=body.description,
         project_type=body.project_type,
@@ -89,6 +86,24 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current
     _require_project_owner(db, project_id, current_user)
     project.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+@router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])
+def list_project_members(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_project(db, project_id)
+    # Verify user is a member
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id,
+        ProjectMember.deleted_at.is_(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not a project member")
+    
+    members = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.deleted_at.is_(None),
+    ).all()
+    return members
 
 @router.post("/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED)
 def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
