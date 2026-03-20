@@ -1,18 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { LayoutGrid, List, ArrowUpDown, Search, Plus, X, Copy, Download, MoreHorizontal } from 'lucide-react'
-import { cn, formatRelativeTime } from '@/lib/utils'
+import { X, Copy, Download, MoreHorizontal, Layers } from 'lucide-react'
+import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AssetCard } from './asset-card'
 import { FolderCard } from './folder-card'
-import type { Asset, AssetStatus, AssetType, User, Folder } from '@/types'
-import { Layers } from 'lucide-react'
-
-type SortKey = 'date' | 'name' | 'status'
-type ViewMode = 'grid' | 'list'
+import { AppearancePopover } from './appearance-popover'
+import { SortPopover } from './sort-popover'
+import { useViewStore } from '@/stores/view-store'
+import type { Asset, AssetStatus, User, Folder } from '@/types'
 
 const statusOrder: Record<AssetStatus, number> = {
   in_review: 0,
@@ -30,18 +29,33 @@ interface AssetGridProps {
   thumbnails?: Record<string, string>
   versionCounts?: Record<string, number>
   authorNames?: Record<string, string>
+  fileSizes?: Record<string, number>
   selectedAssetId?: string | null
   onUpload?: () => void
-  onAssetSelect?: (asset: Asset) => void
+  onAssetSelect?: (asset: Asset, e?: React.MouseEvent) => void
   onAssetOpen?: (asset: Asset) => void
-  /** @deprecated use onAssetSelect + onAssetOpen */
-  onAssetClick?: (asset: Asset) => void
   folders?: Folder[]
   currentFolderId?: string | null
   onFolderOpen?: (folder: Folder) => void
   onFolderRename?: (folderId: string, name: string) => Promise<void>
   onFolderDelete?: (folderId: string) => Promise<void>
   onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
+  /** Actions rendered on the right side of the navigator bar */
+  actions?: React.ReactNode
+}
+
+// Grid column classes based on card size
+const gridColsMap = {
+  S: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+  M: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  L: 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2',
+}
+
+// Aspect ratio classes
+const aspectMap = {
+  landscape: 'aspect-[16/10]',
+  square: 'aspect-square',
+  portrait: 'aspect-[3/4]',
 }
 
 export function AssetGrid({
@@ -52,33 +66,33 @@ export function AssetGrid({
   thumbnails = {},
   versionCounts = {},
   authorNames = {},
+  fileSizes = {},
   selectedAssetId,
   onUpload,
   onAssetSelect,
   onAssetOpen,
-  onAssetClick,
   folders,
   currentFolderId,
   onFolderOpen,
   onFolderRename,
   onFolderDelete,
   onDropToFolder,
+  actions,
 }: AssetGridProps) {
-  const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
-  const [sortKey, setSortKey] = React.useState<SortKey>('date')
-  const [sortAsc, setSortAsc] = React.useState(false)
-  const [searchQuery, setSearchQuery] = React.useState('')
-  const [showSearch, setShowSearch] = React.useState(false)
+  const [searchQuery] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortAsc((a) => !a)
-    } else {
-      setSortKey(key)
-      setSortAsc(true)
-    }
-  }
+  const {
+    layout,
+    cardSize,
+    aspectRatio,
+    thumbnailScale,
+    showCardInfo,
+    titleLines,
+    flattenFolders,
+    sortKey,
+    sortDirection,
+  } = useViewStore()
 
   const toggleSelect = (assetId: string) => {
     setSelectedIds((prev) => {
@@ -94,33 +108,38 @@ export function AssetGrid({
   const filtered = React.useMemo(() => {
     let result = [...assets]
 
-    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter((a) => a.name.toLowerCase().includes(q))
     }
 
-    result.sort((a, b) => {
-      let cmp = 0
-      if (sortKey === 'date') {
-        cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-      } else if (sortKey === 'name') {
-        cmp = a.name.localeCompare(b.name)
-      } else if (sortKey === 'status') {
-        cmp = statusOrder[a.status] - statusOrder[b.status]
-      }
-      return sortAsc ? cmp : -cmp
-    })
+    if (sortKey !== 'custom') {
+      result.sort((a, b) => {
+        let cmp = 0
+        if (sortKey === 'date') {
+          cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+        } else if (sortKey === 'name') {
+          cmp = a.name.localeCompare(b.name)
+        } else if (sortKey === 'status') {
+          cmp = statusOrder[a.status] - statusOrder[b.status]
+        } else if (sortKey === 'type') {
+          cmp = a.asset_type.localeCompare(b.asset_type)
+        }
+        return sortDirection === 'asc' ? cmp : -cmp
+      })
+    }
 
     return result
-  }, [assets, searchQuery, sortKey, sortAsc])
+  }, [assets, searchQuery, sortKey, sortDirection])
+
+  const showFolders = !flattenFolders && folders && folders.length > 0
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className={cn('grid gap-4', gridColsMap[cardSize])}>
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-2">
-            <div className="aspect-[4/3] animate-pulse rounded-lg bg-bg-tertiary" />
+            <div className={cn('animate-pulse rounded-lg bg-bg-tertiary', aspectMap[aspectRatio])} />
             <div className="h-4 w-3/4 animate-pulse rounded bg-bg-tertiary" />
             <div className="h-3 w-1/2 animate-pulse rounded bg-bg-tertiary" />
           </div>
@@ -131,104 +150,35 @@ export function AssetGrid({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar — clean, Frame.io-style */}
-      <div className="flex items-center gap-2">
-        {/* Sort dropdown */}
-        <div className="flex items-center gap-1 rounded-md border border-border bg-bg-secondary px-2 py-1">
-          <span className="text-2xs text-text-tertiary">Sorted by</span>
-          {(['date', 'name', 'status'] as SortKey[]).map((key) => (
-            <button
-              key={key}
-              onClick={() => toggleSort(key)}
-              className={cn(
-                'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors',
-                sortKey === key
-                  ? 'text-text-primary font-medium'
-                  : 'text-text-tertiary hover:text-text-secondary',
-              )}
-            >
-              {key.charAt(0).toUpperCase() + key.slice(1)}
-              {sortKey === key && (
-                <ArrowUpDown className={cn('h-3 w-3', sortAsc && 'rotate-180')} />
-              )}
-            </button>
-          ))}
-        </div>
+      {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
+      <div className="flex items-center gap-1 border-b border-border pb-2.5">
+        {/* Left group: Appearance + Fields + Sort */}
+        <AppearancePopover />
+
+        <div className="h-4 w-px bg-border mx-0.5" />
+
+        <SortPopover />
 
         <div className="flex-1" />
 
-        {/* Search */}
-        {showSearch ? (
-          <div className="flex items-center gap-1 rounded-md border border-border bg-bg-secondary px-2 py-1">
-            <Search className="h-3.5 w-3.5 text-text-tertiary" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter assets..."
-              className="bg-transparent text-sm text-text-primary placeholder:text-text-tertiary outline-none w-40"
-              autoFocus
-            />
-            <button
-              onClick={() => { setShowSearch(false); setSearchQuery('') }}
-              className="text-text-tertiary hover:text-text-primary"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        {/* Right group: action buttons passed from parent */}
+        {actions && (
+          <div className="flex items-center gap-2">
+            {actions}
           </div>
-        ) : (
-          <button
-            onClick={() => setShowSearch(true)}
-            className="h-7 w-7 flex items-center justify-center rounded text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            <Search className="h-4 w-4" />
-          </button>
         )}
-
-        {/* Add button */}
-        {onUpload && (
-          <button
-            onClick={onUpload}
-            className="h-7 w-7 flex items-center justify-center rounded text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
-
-        {/* View toggle */}
-        <div className="flex items-center rounded border border-border overflow-hidden">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={cn(
-              'p-1 transition-colors',
-              viewMode === 'grid' ? 'bg-bg-hover text-text-primary' : 'text-text-tertiary hover:text-text-secondary',
-            )}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'p-1 transition-colors',
-              viewMode === 'list' ? 'bg-bg-hover text-text-primary' : 'text-text-tertiary hover:text-text-secondary',
-            )}
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-        </div>
       </div>
 
-      {/* Grid / List */}
-      {/* Folders section */}
-      {folders && folders.length > 0 && (
+      {/* ─── Folders section ────────────────────────────────────────────── */}
+      {showFolders && (
         <>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-text-tertiary">
-              {folders.length} {folders.length === 1 ? 'Folder' : 'Folders'}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
+              {folders!.length} {folders!.length === 1 ? 'Folder' : 'Folders'}
             </span>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
-            {folders.map((folder) => (
+          <div className={cn('grid gap-3', gridColsMap[cardSize])}>
+            {folders!.map((folder) => (
               <FolderCard
                 key={folder.id}
                 folder={folder}
@@ -240,15 +190,17 @@ export function AssetGrid({
             ))}
           </div>
           {filtered.length > 0 && (
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs text-text-tertiary">
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
                 {filtered.length} {filtered.length === 1 ? 'Asset' : 'Assets'}
               </span>
             </div>
           )}
         </>
       )}
-      {filtered.length === 0 ? (
+
+      {/* ─── Assets ─────────────────────────────────────────────────────── */}
+      {filtered.length === 0 && !showFolders ? (
         <div className="rounded-lg border border-border bg-bg-secondary">
           <EmptyState
             icon={Layers}
@@ -257,8 +209,8 @@ export function AssetGrid({
             action={!searchQuery && onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
           />
         </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      ) : filtered.length === 0 ? null : layout === 'grid' ? (
+        <div className={cn('grid gap-3', gridColsMap[cardSize])}>
           {filtered.map((asset) => (
             <div
               key={asset.id}
@@ -266,7 +218,7 @@ export function AssetGrid({
                 'rounded-lg transition-all cursor-pointer',
                 selectedAssetId === asset.id && 'ring-2 ring-accent ring-offset-1 ring-offset-bg-primary',
               )}
-              onClick={() => onAssetSelect?.(asset)}
+              onClick={(e) => onAssetSelect?.(asset, e)}
               onDoubleClick={() => onAssetOpen?.(asset)}
             >
               <AssetCard
@@ -278,6 +230,10 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 selected={selectedIds.has(asset.id)}
                 onSelect={() => toggleSelect(asset.id)}
+                showInfo={showCardInfo}
+                titleLines={titleLines}
+                aspectRatio={aspectRatio}
+                thumbnailScale={thumbnailScale}
                 onDragStart={(e: React.DragEvent) => {
                   const ids = selectedIds.has(asset.id)
                     ? Array.from(selectedIds)
@@ -295,16 +251,31 @@ export function AssetGrid({
       ) : (
         /* List view */
         <div className="rounded-lg border border-border overflow-hidden">
+          {/* Column headers */}
+          <div className="flex items-center gap-3 px-3 py-2 border-b border-border bg-bg-secondary/50 text-2xs text-text-tertiary font-medium uppercase tracking-wider">
+            <div className="w-16 shrink-0" />
+            <div className="flex-1 min-w-0">Name</div>
+            <div className="hidden sm:block w-24 text-right">Size</div>
+            <div className="hidden md:block w-20 text-center">Type</div>
+            <div className="hidden md:block w-16 text-center">Ver.</div>
+            <div className="hidden lg:block w-32">Added by</div>
+            <div className="hidden sm:block w-28">Date</div>
+            <div className="w-8 shrink-0" />
+          </div>
           {filtered.map((asset, i) => {
             const thumb = thumbnails[asset.id]
             const assignee = asset.assignee_id ? assignees[asset.assignee_id] : null
+            const fileSize = fileSizes[asset.id]
+            const versionCount = versionCounts[asset.id]
+            const author = authorNames[asset.created_by]
+            const typeLabel = asset.asset_type === 'image_carousel' ? 'Carousel' : asset.asset_type.charAt(0).toUpperCase() + asset.asset_type.slice(1)
             return (
               <div
                 key={asset.id}
-                onClick={() => onAssetSelect?.(asset)}
+                onClick={(e) => onAssetSelect?.(asset, e)}
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-bg-hover cursor-pointer',
+                  'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
                   i !== filtered.length - 1 && 'border-b border-border',
                   selectedAssetId === asset.id ? 'bg-accent/10' : selectedIds.has(asset.id) && 'bg-accent/5',
                 )}
@@ -318,15 +289,52 @@ export function AssetGrid({
                     <span className="text-2xs text-text-tertiary uppercase font-bold">{asset.asset_type}</span>
                   )}
                 </div>
-                {/* Name + meta */}
+                {/* Name + status */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary truncate">{asset.name}</p>
-                  <p className="text-2xs text-text-tertiary">
-                    {authorNames[asset.created_by] && <>{authorNames[asset.created_by]} &bull; </>}
-                    {formatRelativeTime(asset.created_at)}
-                  </p>
+                  <span className={cn(
+                    'inline-block text-[10px] font-medium capitalize mt-0.5 rounded px-1.5 py-0.5',
+                    asset.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400'
+                      : asset.status === 'rejected' ? 'bg-red-500/10 text-red-400'
+                      : asset.status === 'in_review' ? 'bg-amber-500/10 text-amber-400'
+                      : 'bg-bg-tertiary text-text-tertiary',
+                  )}>
+                    {asset.status.replace('_', ' ')}
+                  </span>
                 </div>
-                {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
+                {/* File size */}
+                <div className="hidden sm:block w-24 text-right text-xs text-text-tertiary tabular-nums">
+                  {fileSize ? formatBytes(fileSize) : '—'}
+                </div>
+                {/* Type */}
+                <div className="hidden md:block w-20 text-center">
+                  <span className="text-[10px] font-medium text-text-tertiary uppercase bg-bg-tertiary rounded px-1.5 py-0.5">
+                    {typeLabel}
+                  </span>
+                </div>
+                {/* Version */}
+                <div className="hidden md:block w-16 text-center text-xs text-text-tertiary tabular-nums">
+                  {versionCount ? `v${versionCount}` : 'v1'}
+                </div>
+                {/* Author */}
+                <div className="hidden lg:flex items-center gap-1.5 w-32">
+                  {author ? (
+                    <>
+                      <Avatar name={author} size="sm" />
+                      <span className="text-xs text-text-secondary truncate">{author}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-text-tertiary">—</span>
+                  )}
+                </div>
+                {/* Date */}
+                <div className="hidden sm:block w-28 text-xs text-text-tertiary">
+                  {new Date(asset.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+                {/* Assignee */}
+                <div className="w-8 shrink-0 flex justify-center">
+                  {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
+                </div>
               </div>
             )
           })}

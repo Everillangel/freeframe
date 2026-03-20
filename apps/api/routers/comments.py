@@ -12,6 +12,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..middleware.share_auth import get_share_link
 from ..models.asset import Asset
+from ..models.project import ProjectMember, ProjectRole
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
 from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
 from ..models.user import User, GuestUser
@@ -281,8 +282,17 @@ def update_comment(
     comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
+    # Allow comment owner or project owner to edit
     if comment.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Can only edit your own comments")
+        asset = _get_asset(db, comment.asset_id)
+        member = db.query(ProjectMember).filter(
+            ProjectMember.project_id == asset.project_id,
+            ProjectMember.user_id == current_user.id,
+            ProjectMember.role == ProjectRole.owner,
+            ProjectMember.deleted_at.is_(None),
+        ).first()
+        if not member:
+            raise HTTPException(status_code=403, detail="Can only edit your own comments")
     comment.body = body.body
     comment.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -299,8 +309,17 @@ def delete_comment(
     comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
+    # Allow comment owner or project owner to delete
     if comment.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Can only delete your own comments")
+        asset = _get_asset(db, comment.asset_id)
+        member = db.query(ProjectMember).filter(
+            ProjectMember.project_id == asset.project_id,
+            ProjectMember.user_id == current_user.id,
+            ProjectMember.role == ProjectRole.owner,
+            ProjectMember.deleted_at.is_(None),
+        ).first()
+        if not member:
+            raise HTTPException(status_code=403, detail="Can only delete your own comments")
     comment.deleted_at = datetime.now(timezone.utc)
     db.commit()
 

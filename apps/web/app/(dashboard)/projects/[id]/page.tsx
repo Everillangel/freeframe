@@ -6,9 +6,9 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
-  Upload, Users, ChevronRight, X, FolderOpen,
-  Link as LinkIcon, Download, Filter, Share2, Plus,
-  Trash2, ChevronDown, MessageSquare, Info, Settings,
+  Upload, X, FolderOpen,
+  Link as LinkIcon, Download, Share2, Plus,
+  Trash2, ChevronDown, MessageSquare,
   FolderPlus, Folder as FolderIcon,
 } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
@@ -21,10 +21,11 @@ import { CommentPanel } from '@/components/review/comment-panel'
 import { UploadZone } from '@/components/upload/upload-zone'
 import { useUploadStore } from '@/stores/upload-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { useViewStore } from '@/stores/view-store'
+import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { useComments } from '@/hooks/use-comments'
 import { useFolders, useTrash } from '@/hooks/use-folders'
 import { FolderTree } from '@/components/projects/folder-tree'
-import { FolderBreadcrumb } from '@/components/projects/folder-breadcrumb'
 import { NameDialog } from '@/components/projects/name-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
 
@@ -58,6 +59,7 @@ export default function ProjectDetailPage() {
   const [collectionsExpanded, setCollectionsExpanded] = React.useState(true)
   const [shareLinksExpanded, setShareLinksExpanded] = React.useState(true)
   const [rightTab, setRightTab] = React.useState<'comments' | 'fields'>('comments')
+  const { rightPanelOpen } = useViewStore()
 
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(
     searchParams.get('folder') || null
@@ -99,6 +101,12 @@ export default function ProjectDetailPage() {
     () => api.get<Project>(`/projects/${projectId}`),
   )
 
+  // Register project name for header breadcrumb
+  const setLabel = useBreadcrumbStore((s) => s.setLabel)
+  React.useEffect(() => {
+    if (project?.name) setLabel(projectId, project.name)
+  }, [project?.name, projectId, setLabel])
+
   const folderParam = currentFolderId ? `folder_id=${currentFolderId}` : 'folder_id=root'
   const { data: assets, isLoading: loadingAssets, mutate: mutateAssets } = useSWR<AssetResponse[]>(
     showTrash ? null : `/projects/${projectId}/assets?${folderParam}`,
@@ -133,6 +141,38 @@ export default function ProjectDetailPage() {
     }
     return map
   }, [assets])
+
+  const fileSizes = React.useMemo(() => {
+    if (!assets) return {}
+    const map: Record<string, number> = {}
+    for (const a of assets) {
+      if (a.latest_version?.files?.length) {
+        map[a.id] = a.latest_version.files.reduce((sum, f) => sum + (f.file_size_bytes || 0), 0)
+      }
+    }
+    return map
+  }, [assets])
+
+  // Fetch user info for asset authors
+  const authorIds = React.useMemo(() => {
+    if (!assets) return []
+    return Array.from(new Set(assets.map((a) => a.created_by)))
+  }, [assets])
+
+  const { data: authorUsers } = useSWR<User[]>(
+    authorIds.length > 0 ? `/users?ids=${authorIds.join(',')}` : null,
+    () => api.get<User[]>(`/users?ids=${authorIds.join(',')}`),
+  )
+
+  const authorNames = React.useMemo(() => {
+    const map: Record<string, string> = {}
+    if (authorUsers) {
+      for (const u of authorUsers) map[u.id] = u.name
+    }
+    // Fallback: current user
+    if (user) map[user.id] = user.name
+    return map
+  }, [authorUsers, user])
 
   const { data: members } = useSWR<ProjectMember[]>(
     `/projects/${projectId}/members`,
@@ -313,114 +353,14 @@ export default function ProjectDetailPage() {
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Storage */}
-        <div className="p-3 border-t border-border">
-          <div className="flex items-center justify-between text-2xs text-text-tertiary mb-1.5">
-            <span>Storage</span>
-            <span>{assets ? formatBytes(assets.length * 1024 * 1024 * 5) : '0 B'}</span>
-          </div>
-          <div className="h-1 w-full bg-bg-tertiary rounded-full overflow-hidden">
-            <div className="h-full bg-accent w-1/12" />
-          </div>
-        </div>
       </div>
 
       {/* ─── Main Content ───────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-bg-primary h-full overflow-y-auto">
-        <div className="px-6 pt-4 pb-6 space-y-4">
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-xs text-text-tertiary">
-            <Link href="/projects" className="hover:text-text-primary transition-colors">Projects</Link>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-text-secondary">{loadingProject ? '...' : project?.name}</span>
-          </nav>
-
-          {/* Header row: project name + members + actions */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-semibold text-text-primary">
-                {loadingProject ? '...' : project?.name}
-              </h1>
-              {/* Member avatars */}
-              {members && members.length > 0 && (
-                <button className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 hover:bg-bg-hover transition-colors">
-                  <Users className="h-3 w-3 text-text-tertiary" />
-                  <span className="text-2xs text-text-secondary">{members.length}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm">
-                <Share2 className="h-4 w-4" />
-                Share
-              </Button>
-
-              <button
-                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
-                onClick={() => {
-                  setFolderDialogParentId(currentFolderId)
-                  setFolderDialogOpen(true)
-                }}
-              >
-                <FolderPlus className="h-4 w-4" />
-                New Folder
-              </button>
-
-              <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>
-                <Dialog.Trigger asChild>
-                  <Button size="sm">
-                    <Upload className="h-4 w-4" />
-                    Upload
-                  </Button>
-                </Dialog.Trigger>
-
-                <Dialog.Portal>
-                  <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-                    <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
-                      <X className="h-4 w-4" />
-                    </Dialog.Close>
-                    <Dialog.Title className="text-base font-semibold text-text-primary">Upload asset</Dialog.Title>
-                    <Dialog.Description className="mt-1 text-sm text-text-secondary">Add new media to this project.</Dialog.Description>
-                    <div className="mt-4 space-y-4">
-                      {pendingFiles.length === 0 ? (
-                        <UploadZone onFilesSelected={handleFilesSelected} />
-                      ) : (
-                        <>
-                          <div className="rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-secondary">
-                            {pendingFiles.length} file{pendingFiles.length !== 1 ? 's' : ''} selected:{' '}
-                            {pendingFiles.map((f) => f.name).join(', ')}
-                          </div>
-                          {pendingFiles.length === 1 && (
-                            <Input label="Asset name" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g. Hero Video Final" />
-                          )}
-                          <div className="flex justify-end gap-2">
-                            <Button type="button" variant="secondary" size="sm" onClick={() => setPendingFiles([])}>Change files</Button>
-                            <Button size="sm" onClick={handleStartUpload}>Start upload</Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </Dialog.Content>
-                </Dialog.Portal>
-              </Dialog.Root>
-            </div>
-          </div>
-
-          {/* Folder breadcrumb */}
-          <FolderBreadcrumb
-            projectName={project?.name || 'Project'}
-            currentFolderId={currentFolderId}
-            tree={tree}
-            onNavigate={handleSelectFolder}
-            onDropItems={async (targetFolderId, assetIds, folderIds) => {
-              await bulkMove(assetIds, folderIds, targetFolderId)
-              mutateAssets()
-            }}
-          />
-
+      <div
+        className="flex-1 flex flex-col min-w-0 bg-bg-primary h-full overflow-y-auto"
+        onClick={() => setSelectedAsset(null)}
+      >
+        <div className="px-5 pt-3 pb-6 space-y-3">
           {/* Asset grid or Trash view */}
           {showTrash ? (
             <div className="flex-1 overflow-y-auto">
@@ -479,9 +419,11 @@ export default function ProjectDetailPage() {
               assignees={assigneesMap}
               thumbnails={thumbnails}
               versionCounts={versionCounts}
+              authorNames={authorNames}
+              fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
               onUpload={() => setUploadOpen(true)}
-              onAssetSelect={(asset) => setSelectedAsset(asset as AssetResponse)}
+              onAssetSelect={(asset, e) => { e?.stopPropagation(); setSelectedAsset(asset as AssetResponse) }}
               onAssetOpen={(asset) => router.push(`/projects/${projectId}/assets/${asset.id}`)}
               onFolderOpen={(folder) => handleSelectFolder(folder.id)}
               onFolderRename={renameFolder}
@@ -493,12 +435,68 @@ export default function ProjectDetailPage() {
                 await bulkMove(assetIds, folderIds, targetFolderId)
                 mutateAssets()
               }}
+              actions={
+                <>
+                  <Button variant="secondary" size="sm">
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </Button>
+                  <button
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
+                    onClick={() => {
+                      setFolderDialogParentId(currentFolderId)
+                      setFolderDialogOpen(true)
+                    }}
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    New Folder
+                  </button>
+                  <Button size="sm" onClick={() => setUploadOpen(true)}>
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </Button>
+                </>
+              }
             />
           )}
+
+          {/* Upload dialog */}
+          <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+                <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
+                  <X className="h-4 w-4" />
+                </Dialog.Close>
+                <Dialog.Title className="text-base font-semibold text-text-primary">Upload asset</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-text-secondary">Add new media to this project.</Dialog.Description>
+                <div className="mt-4 space-y-4">
+                  {pendingFiles.length === 0 ? (
+                    <UploadZone onFilesSelected={handleFilesSelected} />
+                  ) : (
+                    <>
+                      <div className="rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-secondary">
+                        {pendingFiles.length} file{pendingFiles.length !== 1 ? 's' : ''} selected:{' '}
+                        {pendingFiles.map((f) => f.name).join(', ')}
+                      </div>
+                      {pendingFiles.length === 1 && (
+                        <Input label="Asset name" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g. Hero Video Final" />
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="secondary" size="sm" onClick={() => setPendingFiles([])}>Change files</Button>
+                        <Button size="sm" onClick={handleStartUpload}>Start upload</Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </div>
       </div>
 
       {/* ─── Right Panel (Comments + Fields tabs) ───────────────────────── */}
+      {rightPanelOpen && (
       <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
         {/* Tabs */}
         <div className="flex items-center border-b border-border">
@@ -636,6 +634,7 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Create folder dialog */}
       <NameDialog

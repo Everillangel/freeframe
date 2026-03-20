@@ -4,12 +4,19 @@ import * as React from 'react'
 import { Film, Music, Image as ImageIcon, Images, MessageSquare, MoreHorizontal, Check, Clock } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import type { Asset, AssetType, User } from '@/types'
+import type { AspectRatio, ThumbnailScale, TitleLines } from '@/stores/view-store'
 
 const assetTypeIcons: Record<AssetType, React.ElementType> = {
   video: Film,
   audio: Music,
   image: ImageIcon,
   image_carousel: Images,
+}
+
+const aspectMap = {
+  landscape: 'aspect-[16/10]',
+  square: 'aspect-square',
+  portrait: 'aspect-[3/4]',
 }
 
 interface AssetCardProps {
@@ -25,6 +32,11 @@ interface AssetCardProps {
   onSelect?: (e: React.MouseEvent) => void
   onContextMenu?: (e: React.MouseEvent) => void
   onDragStart?: (e: React.DragEvent) => void
+  // Appearance settings
+  showInfo?: boolean
+  titleLines?: TitleLines
+  aspectRatio?: AspectRatio
+  thumbnailScale?: ThumbnailScale
   className?: string
 }
 
@@ -52,9 +64,14 @@ export function AssetCard({
   onSelect,
   onContextMenu,
   onDragStart,
+  showInfo = true,
+  titleLines = '1',
+  aspectRatio = 'landscape',
+  thumbnailScale = 'fit',
   className,
 }: AssetCardProps) {
   const TypeIcon = assetTypeIcons[asset.asset_type]
+  const lineClamp = titleLines === '1' ? 'line-clamp-1' : titleLines === '2' ? 'line-clamp-2' : 'line-clamp-3'
 
   return (
     <div
@@ -69,14 +86,20 @@ export function AssetCard({
         className,
       )}
     >
-      {/* Thumbnail area — taller like Frame.io */}
-      <div className="relative aspect-[4/3] w-full bg-bg-tertiary overflow-hidden flex items-center justify-center">
+      {/* Thumbnail area */}
+      <div className={cn(
+        'relative w-full bg-bg-tertiary overflow-hidden flex items-center justify-center',
+        aspectMap[aspectRatio],
+      )}>
         {thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumbnailUrl}
             alt={asset.name}
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            className={cn(
+              'h-full w-full transition-transform duration-200 group-hover:scale-[1.02]',
+              thumbnailScale === 'fill' ? 'object-cover' : 'object-contain',
+            )}
           />
         ) : (
           <TypeIcon className="h-12 w-12 text-text-tertiary/50" />
@@ -114,27 +137,28 @@ export function AssetCard({
       </div>
 
       {/* Info section */}
-      <div className="flex flex-col gap-1 px-2 pt-2 pb-1.5">
-        {/* Title + context menu */}
-        <div className="flex items-start justify-between gap-1">
-          <p className="text-sm font-medium text-text-primary line-clamp-1 leading-tight">
-            {asset.name}
+      {showInfo && (
+        <div className="flex flex-col gap-1 px-2 pt-2 pb-1.5">
+          {/* Title + context menu */}
+          <div className="flex items-start justify-between gap-1">
+            <p className={cn('text-sm font-medium text-text-primary leading-tight', lineClamp)}>
+              {asset.name}
+            </p>
+            <button
+              onClick={(e) => { e.stopPropagation(); onContextMenu?.(e) }}
+              className="shrink-0 h-5 w-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:bg-bg-hover hover:text-text-primary transition-all"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Author + date row */}
+          <p className="text-2xs text-text-tertiary line-clamp-1">
+            {authorName && <span>{authorName} &bull; </span>}
+            {formatRelativeTime(asset.created_at)}
           </p>
-          <button
-            onClick={(e) => { e.stopPropagation(); onContextMenu?.(e) }}
-            className="shrink-0 h-5 w-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:bg-bg-hover hover:text-text-primary transition-all"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
         </div>
-
-        {/* Author + date row */}
-        <p className="text-2xs text-text-tertiary line-clamp-1">
-          {authorName && <span>{authorName} &bull; </span>}
-          {formatRelativeTime(asset.created_at)}
-        </p>
-      </div>
-
+      )}
     </div>
   )
 }

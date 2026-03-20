@@ -28,6 +28,7 @@ class UserResponse(BaseModel):
     status: UserStatus
     email_verified: bool = False
     is_superadmin: bool = False
+    invite_token: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +60,10 @@ class InviteInfoResponse(BaseModel):
     email: str
     name: str
     org_name: str | None = None
+
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+    avatar_url: str | None = None
 
 class UpdateUserRoleRequest(BaseModel):
     is_admin: bool

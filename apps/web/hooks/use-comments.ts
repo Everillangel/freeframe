@@ -100,12 +100,12 @@ export function useComments(assetId: string | null, versionId: string | null) {
   // ─── Reactions ───────────────────────────────────────────────────────────────
 
   async function addReaction(commentId: string, emoji: string): Promise<void> {
-    await api.post(`/comments/${commentId}/reactions`, { emoji })
+    await api.post(`/comments/${commentId}/react`, { emoji })
     await mutate()
   }
 
   async function removeReaction(commentId: string, emoji: string): Promise<void> {
-    await api.delete(`/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`)
+    await api.post(`/comments/${commentId}/react`, { emoji })
     await mutate()
   }
 

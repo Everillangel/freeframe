@@ -46,6 +46,15 @@ def require_project_role(
 
 # ── Asset-level ────────────────────────────────────────────────────────────────
 
+def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
+    """Check if a project is public."""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.deleted_at.is_(None),
+    ).first()
+    return project is not None and project.is_public
+
+
 def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     """Check if user can access the asset via any path."""
     # 1. Asset creator
@@ -63,6 +72,10 @@ def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
         AssetShare.deleted_at.is_(None),
     ).first()
     if direct:
+        return True
+
+    # 4. Public project — any authenticated user can view
+    if is_public_project(db, asset.project_id):
         return True
 
     return False

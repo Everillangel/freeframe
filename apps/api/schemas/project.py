@@ -11,6 +11,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    is_public: bool | None = None
 
 class ProjectResponse(BaseModel):
     id: uuid.UUID
@@ -19,6 +20,12 @@ class ProjectResponse(BaseModel):
     project_type: ProjectType
     created_by: uuid.UUID
     created_at: datetime
+    poster_url: str | None = None
+    is_public: bool = False
+    asset_count: int = 0
+    storage_bytes: int = 0
+    member_count: int = 0
+    role: ProjectRole | None = None
     model_config = {"from_attributes": True}
 
 class ProjectMemberResponse(BaseModel):

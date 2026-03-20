@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import type { FolderTreeNode } from '@/types'
 
@@ -10,13 +11,14 @@ interface FolderBreadcrumbProps {
   tree: FolderTreeNode[]
   onNavigate: (folderId: string | null) => void
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
+  /** Show "Projects >" prefix link */
+  showProjectsLink?: boolean
 }
 
 function buildBreadcrumb(
   tree: FolderTreeNode[],
   targetId: string,
 ): FolderTreeNode[] {
-  // BFS to find path from root to target
   const path: FolderTreeNode[] = []
 
   function search(nodes: FolderTreeNode[], trail: FolderTreeNode[]): boolean {
@@ -41,15 +43,32 @@ export function FolderBreadcrumb({
   tree,
   onNavigate,
   onDropItems,
+  showProjectsLink = false,
 }: FolderBreadcrumbProps) {
-  if (!currentFolderId) return null
-
-  const crumbs = buildBreadcrumb(tree, currentFolderId)
+  const crumbs = currentFolderId ? buildBreadcrumb(tree, currentFolderId) : []
 
   return (
-    <nav className="flex items-center gap-1 text-[13px] text-text-tertiary mb-3 min-w-0">
+    <nav className="flex items-center gap-1 text-sm min-w-0">
+      {/* Optional "Projects" link */}
+      {showProjectsLink && (
+        <>
+          <Link
+            href="/projects"
+            className="text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+          >
+            Projects
+          </Link>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
+        </>
+      )}
+
+      {/* Project root */}
       <button
-        className="hover:text-text-primary transition-colors shrink-0"
+        className={`transition-colors shrink-0 ${
+          !currentFolderId
+            ? 'text-text-primary font-semibold'
+            : 'text-text-tertiary hover:text-text-primary'
+        }`}
         onClick={() => onNavigate(null)}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
         onDrop={(e) => {
@@ -62,12 +81,16 @@ export function FolderBreadcrumb({
       >
         {projectName}
       </button>
+
+      {/* Folder crumbs */}
       {crumbs.map((crumb) => (
         <React.Fragment key={crumb.id}>
-          <ChevronRight className="h-3 w-3 shrink-0 text-text-quaternary" />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
           <button
-            className={`hover:text-text-primary transition-colors truncate ${
-              crumb.id === currentFolderId ? 'text-text-primary font-medium' : ''
+            className={`transition-colors truncate ${
+              crumb.id === currentFolderId
+                ? 'text-text-primary font-semibold'
+                : 'text-text-tertiary hover:text-text-primary'
             }`}
             onClick={() => onNavigate(crumb.id)}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}

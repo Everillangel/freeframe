@@ -3,7 +3,7 @@
 import * as React from 'react'
 import useSWR, { mutate } from 'swr'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Users, Plus, X, Shield } from 'lucide-react'
+import { Users, Plus, X, Shield, Link2, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -31,17 +31,38 @@ function BulkInviteDialog() {
     setLoading(true)
     setError('')
     setSuccess('')
+    let sent = 0
+    const skipped: string[] = []
+    const failed: string[] = []
     try {
-      let sent = 0
       for (const email of emailList) {
-        // Extract name from email (before @) or use email as name
-        const name = email.split('@')[0]
-        await api.post('/users/invite', { email, name })
-        sent++
+        try {
+          const name = email.split('@')[0]
+          await api.post('/users/invite', { email, name })
+          sent++
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : ''
+          if (msg.toLowerCase().includes('already registered')) {
+            skipped.push(email)
+          } else {
+            failed.push(email)
+          }
+        }
       }
-      setSuccess(`${sent} invite(s) sent successfully.`)
-      setEmails('')
-      setTimeout(() => setOpen(false), 1500)
+      const parts: string[] = []
+      if (sent > 0) parts.push(`${sent} invite(s) sent`)
+      if (skipped.length > 0) parts.push(`${skipped.length} already registered`)
+      if (failed.length > 0) parts.push(`${failed.length} failed`)
+      if (sent > 0 || skipped.length > 0) {
+        setSuccess(parts.join(', '))
+        if (failed.length === 0) {
+          setEmails('')
+          setTimeout(() => setOpen(false), 1500)
+        }
+      }
+      if (failed.length > 0) {
+        setError(`Failed to invite: ${failed.join(', ')}`)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send invites')
     } finally {
@@ -150,6 +171,16 @@ export default function AdminPage() {
     }
   }
 
+  const [copiedId, setCopiedId] = React.useState<string | null>(null)
+
+  const handleCopyInviteLink = (u: User) => {
+    if (!u.invite_token) return
+    const link = `${window.location.origin}/invite/${u.invite_token}`
+    navigator.clipboard.writeText(link)
+    setCopiedId(u.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
   const handleToggleAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
     try {
       await api.patch(`/admin/users/${userId}/role`, { is_admin: !isCurrentlyAdmin })
@@ -238,6 +269,20 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
+                        {u.status === 'pending_invite' && u.invite_token && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyInviteLink(u)}
+                            className="gap-1"
+                          >
+                            {copiedId === u.id ? (
+                              <><Check className="h-3.5 w-3.5 text-status-success" /> Copied</>
+                            ) : (
+                              <><Link2 className="h-3.5 w-3.5" /> Copy Invite Link</>
+                            )}
+                          </Button>
+                        )}
                         {u.id !== user?.id && (
                           <Button
                             variant="ghost"

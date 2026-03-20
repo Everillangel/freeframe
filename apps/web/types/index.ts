@@ -51,6 +51,7 @@ export interface User {
   status: UserStatus;
   is_superadmin: boolean;
   email_verified: boolean;
+  invite_token?: string | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -78,11 +79,17 @@ export interface Project {
   name: string;
   description: string | null;
   created_by: string;
-  org_id: string;
+  org_id?: string;
   project_type: ProjectType;
-  team_id: string | null;
+  team_id?: string | null;
+  poster_url?: string | null;
+  is_public?: boolean;
   created_at: string;
   deleted_at: string | null;
+  asset_count?: number;
+  storage_bytes?: number;
+  member_count?: number;
+  role?: string | null;
 }
 
 export interface ProjectMember {

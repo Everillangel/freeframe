@@ -2,35 +2,42 @@
 
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
-import { Bell, Search, ChevronRight } from 'lucide-react'
+import { Search, ChevronRight, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { useNotificationStore } from '@/stores/notification-store'
+import { useViewStore } from '@/stores/view-store'
+import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 
 interface HeaderProps {
   onSearchOpen: () => void
 }
 
-function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
-  const segments = pathname.split('/').filter(Boolean)
-  const crumbs: { label: string; href: string }[] = [
-    { label: 'Home', href: '/' },
-  ]
+const LABEL_MAP: Record<string, string> = {
+  assets: 'My Assets',
+  projects: 'Projects',
+  notifications: 'Notifications',
+  settings: 'Settings',
+  new: 'New',
+  upload: 'Upload',
+}
 
-  const labelMap: Record<string, string> = {
-    assets: 'My Assets',
-    projects: 'Projects',
-    notifications: 'Notifications',
-    settings: 'Settings',
-    new: 'New',
-    upload: 'Upload',
-  }
+/** Looks like a UUID (8-4-4-4-12 hex) */
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+}
+
+function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string>): { label: string; href: string }[] {
+  const segments = pathname.split('/').filter(Boolean)
+  const crumbs: { label: string; href: string }[] = []
 
   let path = ''
   for (const segment of segments) {
     path += `/${segment}`
+    // Skip UUID segments that don't have a label registered
+    if (isUuid(segment) && !dynamicLabels[segment]) continue
     const label =
-      labelMap[segment] ??
+      dynamicLabels[segment] ??
+      LABEL_MAP[segment] ??
       segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ')
     crumbs.push({ label, href: path })
   }
@@ -40,8 +47,9 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
 
 export function Header({ onSearchOpen }: HeaderProps) {
   const pathname = usePathname()
-  const { unreadCount } = useNotificationStore()
-  const breadcrumbs = buildBreadcrumbs(pathname)
+  const { rightPanelOpen, toggleRightPanel } = useViewStore()
+  const { labels } = useBreadcrumbStore()
+  const breadcrumbs = buildBreadcrumbs(pathname, labels)
 
   return (
     <header className="sticky top-0 z-20 flex h-11 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4">
@@ -83,19 +91,23 @@ export function Header({ onSearchOpen }: HeaderProps) {
           </kbd>
         </button>
 
-        {/* Notification bell */}
-        <Link
-          href="/notifications"
-          className="relative flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          title="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
+        {/* Panel toggle */}
+        <button
+          onClick={toggleRightPanel}
+          className={cn(
+            'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+            rightPanelOpen
+              ? 'text-accent bg-accent-muted'
+              : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
           )}
-        </Link>
+          title={rightPanelOpen ? 'Hide panel' : 'Show panel'}
+        >
+          {rightPanelOpen ? (
+            <PanelRightClose className="h-4 w-4" />
+          ) : (
+            <PanelRightOpen className="h-4 w-4" />
+          )}
+        </button>
       </div>
     </header>
   )

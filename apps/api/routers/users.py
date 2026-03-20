@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
 from ..database import get_db
-from ..schemas.auth import UserResponse, InviteRequest
+from ..schemas.auth import UserResponse, InviteRequest, UpdateProfileRequest
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services.auth_service import hash_password, get_user_by_email
@@ -12,6 +12,23 @@ from ..tasks.email_tasks import send_invite_email
 from ..config import settings
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("", response_model=list[UserResponse])
+def get_users_batch(
+    ids: str = Query(..., description="Comma-separated user IDs"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get basic user info for a batch of user IDs. Any authenticated user can call this."""
+    try:
+        user_ids = [uuid.UUID(uid.strip()) for uid in ids.split(",") if uid.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    if len(user_ids) > 100:
+        raise HTTPException(status_code=400, detail="Max 100 user IDs per request")
+    users = db.query(User).filter(User.id.in_(user_ids), User.deleted_at.is_(None)).all()
+    return users
+
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_superadmin:
@@ -40,8 +57,24 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
     
     # Send invite email
     invite_url = f"{settings.frontend_url}/invite/{invite_token}"
-    send_invite_email.delay(user.email, user.name, invite_url)
+    send_invite_email.delay(user.email, current_user.name or "Admin", "FreeFrame", invite_url)
     
+    return user
+
+@router.patch("/{user_id}", response_model=UserResponse)
+def update_user(user_id: uuid.UUID, body: UpdateProfileRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update user profile. Users can update their own profile."""
+    if current_user.id != user_id and not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Can only update your own profile")
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.name is not None:
+        user.name = body.name.strip()
+    if body.avatar_url is not None:
+        user.avatar_url = body.avatar_url
+    db.commit()
+    db.refresh(user)
     return user
 
 @router.patch("/{user_id}/deactivate", response_model=UserResponse)

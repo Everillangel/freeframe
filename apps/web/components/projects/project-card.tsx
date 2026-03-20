@@ -2,8 +2,11 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { Bell, MoreHorizontal } from 'lucide-react'
-import { cn, formatRelativeTime } from '@/lib/utils'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { MoreHorizontal, ImagePlus, Settings, Trash2, Globe, Lock } from 'lucide-react'
+import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
+import { api } from '@/lib/api'
+import { ProjectSettingsDialog } from './project-settings-dialog'
 import type { Project } from '@/types'
 
 // Frame.io-inspired gradient presets
@@ -14,80 +17,164 @@ const GRADIENT_PRESETS = [
   'from-orange-500 via-amber-500 to-yellow-500',
   'from-rose-600 via-pink-600 to-fuchsia-500',
   'from-cyan-500 via-blue-500 to-indigo-500',
+  'from-sky-500 via-cyan-400 to-teal-400',
+  'from-pink-500 via-rose-500 to-orange-400',
 ]
 
 function getGradientForProject(projectId: string): string {
-  // Deterministic gradient based on project ID
   const hash = projectId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
   return GRADIENT_PRESETS[hash % GRADIENT_PRESETS.length]
 }
 
 interface ProjectCardProps {
   project: Project
-  workspaceName?: string
+  showRole?: boolean
+  isOwner?: boolean
   className?: string
+  onMutate?: () => void
 }
 
 export function ProjectCard({
   project,
-  workspaceName,
+  showRole,
+  isOwner,
   className,
+  onMutate,
 }: ProjectCardProps) {
   const gradient = getGradientForProject(project.id)
+  const assetCount = project.asset_count ?? 0
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [deleting, setDeleting] = React.useState(false)
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${project.name}"? This action cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.delete(`/projects/${project.id}`)
+      onMutate?.()
+    } catch {
+      // silently fail
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
-    <Link
-      href={`/projects/${project.id}`}
-      className={cn(
-        'group relative flex flex-col rounded-xl overflow-hidden',
-        'hover:ring-2 hover:ring-accent/50 transition-all duration-200 hover:shadow-xl hover:shadow-black/20',
-        className,
-      )}
-    >
-      {/* Gradient background area */}
-      <div className={cn(
-        'relative h-32 w-full bg-gradient-to-br p-4',
-        gradient,
-      )}>
-        {/* Notification bell icon (top right) */}
-        <button
-          className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/20 text-white/80 hover:bg-black/30 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
-          title="Project notifications"
+    <>
+      <div className={cn('group relative', className)}>
+        <Link
+          href={`/projects/${project.id}`}
+          className="block rounded-xl overflow-hidden bg-bg-secondary border border-border hover:border-accent/40 transition-all duration-200 hover:shadow-lg hover:shadow-black/10"
         >
-          <Bell className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Info section */}
-      <div className="flex flex-col gap-1 bg-bg-secondary p-3 border-x border-b border-border rounded-b-xl">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-text-primary line-clamp-1 group-hover:text-accent transition-colors">
-              {project.name}
-            </p>
-            {workspaceName && (
-              <p className="text-2xs text-text-tertiary line-clamp-1 mt-0.5">
-                {workspaceName}
-              </p>
+          {/* Square poster area */}
+          <div className="relative aspect-square w-full overflow-hidden">
+            {project.poster_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={project.poster_url}
+                alt={project.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className={cn('h-full w-full bg-gradient-to-br', gradient)}>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(255,255,255,0.1),transparent_60%)]" />
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Footer row */}
-        <div className="flex items-center justify-between mt-1">
-          <span className="text-2xs text-text-tertiary">
-            Created {formatRelativeTime(project.created_at)}
-          </span>
-          <button
-            className="flex h-6 w-6 items-center justify-center rounded text-text-tertiary hover:bg-bg-hover hover:text-text-secondary transition-colors opacity-0 group-hover:opacity-100"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
-            title="More options"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </div>
+            {/* Bottom gradient overlay for text */}
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+
+            {/* Project name overlay */}
+            <div className="absolute inset-x-0 bottom-0 p-3">
+              <p className="text-sm font-semibold text-white line-clamp-2 drop-shadow-sm">
+                {project.name}
+              </p>
+              {project.description && (
+                <p className="text-[11px] text-white/70 line-clamp-1 mt-0.5">
+                  {project.description}
+                </p>
+              )}
+            </div>
+
+            {/* Public/role badges */}
+            <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+              {project.is_public && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/30 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/90">
+                  <Globe className="h-2.5 w-2.5" />
+                  Public
+                </span>
+              )}
+              {showRole && project.role && project.role !== 'owner' && (
+                <span className="inline-flex items-center rounded-full bg-black/30 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/90 capitalize">
+                  {project.role}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <span className="text-2xs text-text-tertiary">
+              {assetCount > 0
+                ? `${assetCount} item${assetCount !== 1 ? 's' : ''} · ${formatBytes(project.storage_bytes ?? 0)}`
+                : `Updated ${formatRelativeTime(project.created_at)}`}
+            </span>
+          </div>
+        </Link>
+
+        {/* Context menu trigger */}
+        {(isOwner || project.role === 'owner') && (
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                className="absolute bottom-2 right-2.5 flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-all opacity-0 group-hover:opacity-100"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className="z-50 min-w-[180px] rounded-xl border border-border bg-bg-secondary p-1 shadow-xl"
+                sideOffset={4}
+                align="end"
+              >
+                <DropdownMenu.Label className="px-3 py-1.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">
+                  Project
+                </DropdownMenu.Label>
+
+                <DropdownMenu.Item
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                  onSelect={() => setSettingsOpen(true)}
+                >
+                  <Settings className="h-4 w-4 text-text-tertiary" />
+                  Project Settings
+                </DropdownMenu.Item>
+
+                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
+                <DropdownMenu.Item
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                  onSelect={handleDelete}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        )}
       </div>
-    </Link>
+
+      {/* Project Settings Dialog */}
+      <ProjectSettingsDialog
+        project={project}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onUpdated={() => onMutate?.()}
+      />
+    </>
   )
 }

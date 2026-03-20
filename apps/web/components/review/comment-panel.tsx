@@ -137,6 +137,9 @@ function CommentMenu({
 }) {
   const [open, setOpen] = React.useState(false)
 
+  // Only show menu for own comments — others only get emoji reactions
+  if (!isOwn) return null
+
   return (
     <div className="relative">
       <button
@@ -160,15 +163,13 @@ function CommentMenu({
           <Link2 className="h-3.5 w-3.5" />
           Copy Link
         </button>
-        {isOwn && (
-          <button
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/5 transition-colors"
-            onClick={() => { onDelete(commentId); setOpen(false) }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
-        )}
+        <button
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/5 transition-colors"
+          onClick={() => { onDelete(commentId); setOpen(false) }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </button>
       </Dropdown>
     </div>
   )

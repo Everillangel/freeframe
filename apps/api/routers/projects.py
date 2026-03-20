@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 from datetime import datetime, timezone
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
+from ..models.asset import Asset, AssetVersion, MediaFile
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
+from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
 from ..config import settings
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -17,6 +20,11 @@ def _get_project(db: Session, project_id: uuid.UUID) -> Project:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+def _resolve_poster_url(project: Project) -> str | None:
+    if project.poster_s3_key:
+        return generate_presigned_get_url(project.poster_s3_key)
+    return None
 
 def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> ProjectMember:
     member = db.query(ProjectMember).filter(
@@ -46,15 +54,67 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Projects where user is a member
-    member_project_ids = db.query(ProjectMember.project_id).filter(
+    from sqlalchemy import or_
+
+    # Get memberships for current user
+    memberships = db.query(ProjectMember).filter(
         ProjectMember.user_id == current_user.id,
         ProjectMember.deleted_at.is_(None),
-    ).subquery()
-    return db.query(Project).filter(
-        Project.id.in_(member_project_ids),
-        Project.deleted_at.is_(None),
     ).all()
+    membership_map = {m.project_id: m.role for m in memberships}
+    member_project_ids = list(membership_map.keys())
+
+    # Get projects: user's memberships + all public projects
+    projects = db.query(Project).filter(
+        Project.deleted_at.is_(None),
+        or_(
+            Project.id.in_(member_project_ids) if member_project_ids else False,
+            Project.is_public == True,
+        ),
+    ).all()
+
+    all_project_ids = [p.id for p in projects]
+    if not all_project_ids:
+        return []
+
+    # Batch: asset counts per project
+    asset_counts = dict(
+        db.query(Asset.project_id, func.count(Asset.id))
+        .filter(Asset.project_id.in_(all_project_ids), Asset.deleted_at.is_(None))
+        .group_by(Asset.project_id)
+        .all()
+    )
+
+    # Batch: storage bytes per project (sum of file sizes)
+    storage_query = (
+        db.query(Asset.project_id, func.coalesce(func.sum(MediaFile.file_size_bytes), 0))
+        .join(AssetVersion, AssetVersion.asset_id == Asset.id)
+        .join(MediaFile, MediaFile.version_id == AssetVersion.id)
+        .filter(Asset.project_id.in_(all_project_ids), Asset.deleted_at.is_(None))
+        .group_by(Asset.project_id)
+        .all()
+    )
+    storage_map = {pid: int(size) for pid, size in storage_query}
+
+    # Batch: member counts per project
+    member_counts = dict(
+        db.query(ProjectMember.project_id, func.count(ProjectMember.id))
+        .filter(ProjectMember.project_id.in_(all_project_ids), ProjectMember.deleted_at.is_(None))
+        .group_by(ProjectMember.project_id)
+        .all()
+    )
+
+    result = []
+    for p in projects:
+        resp = ProjectResponse.model_validate(p)
+        resp.poster_url = _resolve_poster_url(p)
+        resp.asset_count = asset_counts.get(p.id, 0)
+        resp.storage_bytes = storage_map.get(p.id, 0)
+        resp.member_count = member_counts.get(p.id, 0)
+        resp.role = membership_map.get(p.id)
+        result.append(resp)
+
+    return result
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -64,9 +124,13 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_us
         ProjectMember.user_id == current_user.id,
         ProjectMember.deleted_at.is_(None),
     ).first()
-    if not member:
+    if not member and not project.is_public:
         raise HTTPException(status_code=403, detail="Not a project member")
-    return project
+    resp = ProjectResponse.model_validate(project)
+    resp.poster_url = _resolve_poster_url(project)
+    if member:
+        resp.role = member.role
+    return resp
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -76,9 +140,13 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
         project.name = body.name
     if body.description is not None:
         project.description = body.description
+    if body.is_public is not None:
+        project.is_public = body.is_public
     db.commit()
     db.refresh(project)
-    return project
+    resp = ProjectResponse.model_validate(project)
+    resp.poster_url = _resolve_poster_url(project)
+    return resp
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -160,3 +228,59 @@ def remove_project_member(project_id: uuid.UUID, user_id: uuid.UUID, db: Session
         raise HTTPException(status_code=404, detail="Member not found")
     member.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+ALLOWED_POSTER_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_POSTER_SIZE = 10 * 1024 * 1024  # 10MB
+
+@router.post("/{project_id}/poster", response_model=ProjectResponse)
+async def upload_project_poster(
+    project_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _get_project(db, project_id)
+    _require_project_owner(db, project_id, current_user)
+
+    if file.content_type not in ALLOWED_POSTER_TYPES:
+        raise HTTPException(status_code=400, detail="File must be JPEG, PNG, WebP, or GIF")
+
+    data = await file.read()
+    if len(data) > MAX_POSTER_SIZE:
+        raise HTTPException(status_code=400, detail="File must be under 10MB")
+
+    # Delete old poster if exists
+    if project.poster_s3_key:
+        try:
+            delete_object(project.poster_s3_key)
+        except Exception:
+            pass
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
+    s3_key = f"posters/{project_id}/poster.{ext}"
+    put_object(s3_key, data, content_type=file.content_type, cache_control="max-age=86400")
+
+    project.poster_s3_key = s3_key
+    db.commit()
+    db.refresh(project)
+
+    resp = ProjectResponse.model_validate(project)
+    resp.poster_url = _resolve_poster_url(project)
+    return resp
+
+@router.delete("/{project_id}/poster", status_code=status.HTTP_204_NO_CONTENT)
+def remove_project_poster(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _get_project(db, project_id)
+    _require_project_owner(db, project_id, current_user)
+
+    if project.poster_s3_key:
+        try:
+            delete_object(project.poster_s3_key)
+        except Exception:
+            pass
+        project.poster_s3_key = None
+        db.commit()

@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Command } from 'cmdk'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import {
   LayoutDashboard,
   Layers,
@@ -12,8 +13,11 @@ import {
   Bell,
   FolderPlus,
   Upload,
+  Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
+import type { Project } from '@/types'
 
 interface CommandPaletteProps {
   open: boolean
@@ -32,8 +36,20 @@ interface CommandItem {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter()
+  const [query, setQuery] = React.useState('')
 
-  const items: CommandItem[] = [
+  // Fetch projects when palette is open
+  const { data: projects } = useSWR<Project[]>(
+    open ? '/projects' : null,
+    () => api.get<Project[]>('/projects'),
+  )
+
+  // Reset query when dialog closes
+  React.useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  const staticItems: CommandItem[] = [
     {
       id: 'home',
       label: 'Home',
@@ -99,8 +115,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
   }
 
-  const navItems = items.filter((i) => i.group === 'navigation')
-  const actionItems = items.filter((i) => i.group === 'actions')
+  function handleProjectSelect(project: Project) {
+    onOpenChange(false)
+    router.push(`/projects/${project.id}`)
+  }
+
+  const navItems = staticItems.filter((i) => i.group === 'navigation')
+  const actionItems = staticItems.filter((i) => i.group === 'actions')
+
+  const hasQuery = query.trim().length > 0
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -111,10 +134,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <Command
             className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-2xl"
             loop
+            shouldFilter={true}
           >
-            <div className="flex items-center border-b border-border px-3">
+            <div className="flex items-center border-b border-border px-3 gap-2">
+              <Search className="h-4 w-4 text-text-tertiary shrink-0" />
               <Command.Input
-                placeholder="Search or jump to..."
+                placeholder="Search projects, assets, or jump to..."
+                value={query}
+                onValueChange={setQuery}
                 className="h-12 w-full bg-transparent text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
               />
             </div>
@@ -123,6 +150,41 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 No results found
               </Command.Empty>
 
+              {/* Projects — show when searching */}
+              {hasQuery && projects && projects.length > 0 && (
+                <Command.Group
+                  heading="Projects"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                >
+                  {projects.map((project) => (
+                    <Command.Item
+                      key={`project-${project.id}`}
+                      value={`project ${project.name} ${project.description || ''}`}
+                      onSelect={() => handleProjectSelect(project)}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary',
+                        'data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary',
+                        'transition-colors',
+                      )}
+                    >
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-violet-600 to-fuchsia-500">
+                        <FolderOpen className="h-3 w-3 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block truncate">{project.name}</span>
+                        {project.description && (
+                          <span className="block text-2xs text-text-tertiary truncate">{project.description}</span>
+                        )}
+                      </div>
+                      <span className="text-2xs text-text-tertiary shrink-0">
+                        {project.asset_count ?? 0} items
+                      </span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+
+              {/* Navigation */}
               <Command.Group
                 heading="Navigation"
                 className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
