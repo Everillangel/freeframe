@@ -25,6 +25,7 @@ import { useComments } from '@/hooks/use-comments'
 import { useFolders, useTrash } from '@/hooks/use-folders'
 import { FolderTree } from '@/components/projects/folder-tree'
 import { FolderBreadcrumb } from '@/components/projects/folder-breadcrumb'
+import { NameDialog } from '@/components/projects/name-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
 
 // ─── Collection icon colors (Frame.io style) ──────────────────────────────────
@@ -62,6 +63,8 @@ export default function ProjectDetailPage() {
     searchParams.get('folder') || null
   )
   const [showTrash, setShowTrash] = React.useState(false)
+  const [folderDialogOpen, setFolderDialogOpen] = React.useState(false)
+  const [folderDialogParentId, setFolderDialogParentId] = React.useState<string | null>(null)
 
   const { files: uploadFiles, startUpload } = useUploadStore()
   const { user } = useAuthStore()
@@ -206,9 +209,9 @@ export default function ProjectDetailPage() {
             showTrash={showTrash}
             onSelectFolder={handleSelectFolder}
             onShowTrash={() => { setShowTrash(true); setCurrentFolderId(null) }}
-            onCreateFolder={async (name, parentId) => {
-              await createFolder(name, parentId)
-              mutateAssets()
+            onCreateFolder={(_name, parentId) => {
+              setFolderDialogParentId(parentId)
+              setFolderDialogOpen(true)
             }}
             onRenameFolder={renameFolder}
             onDeleteFolder={async (id) => {
@@ -356,12 +359,9 @@ export default function ProjectDetailPage() {
 
               <button
                 className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
-                onClick={async () => {
-                  const name = prompt('Folder name:')
-                  if (name) {
-                    await createFolder(name, currentFolderId)
-                    mutateAssets()
-                  }
+                onClick={() => {
+                  setFolderDialogParentId(currentFolderId)
+                  setFolderDialogOpen(true)
                 }}
               >
                 <FolderPlus className="h-4 w-4" />
@@ -636,6 +636,19 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Create folder dialog */}
+      <NameDialog
+        open={folderDialogOpen}
+        onOpenChange={setFolderDialogOpen}
+        title="New Folder"
+        placeholder="Folder name"
+        submitLabel="Create"
+        onSubmit={async (name) => {
+          await createFolder(name, folderDialogParentId)
+          mutateAssets()
+        }}
+      />
     </div>
   )
 }

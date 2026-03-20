@@ -180,10 +180,9 @@ function FolderNode({
           </button>
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-white/5 hover:text-text-primary"
-            onClick={async () => {
+            onClick={() => {
               setMenuOpen(false)
-              const name = prompt('New folder name:')
-              if (name) await onCreateFolder(name, node.id)
+              onCreateFolder('', node.id)
             }}
           >
             <FolderPlus className="h-3 w-3" /> New Subfolder
