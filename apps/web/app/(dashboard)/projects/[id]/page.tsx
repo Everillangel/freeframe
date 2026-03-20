@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -9,6 +9,7 @@ import {
   Upload, Users, ChevronRight, X, FolderOpen,
   Link as LinkIcon, Download, Filter, Share2, Plus,
   Trash2, ChevronDown, MessageSquare, Info, Settings,
+  FolderPlus, Folder as FolderIcon,
 } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -21,7 +22,10 @@ import { UploadZone } from '@/components/upload/upload-zone'
 import { useUploadStore } from '@/stores/upload-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
-import type { Project, AssetResponse, ProjectMember, User, Collection } from '@/types'
+import { useFolders, useTrash } from '@/hooks/use-folders'
+import { FolderTree } from '@/components/projects/folder-tree'
+import { FolderBreadcrumb } from '@/components/projects/folder-breadcrumb'
+import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
 
 // ─── Collection icon colors (Frame.io style) ──────────────────────────────────
 const collectionIcons: Record<string, { icon: string; color: string }> = {
@@ -43,6 +47,7 @@ function getCollectionIcon(name: string) {
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const projectId = params.id as string
 
   const [uploadOpen, setUploadOpen] = React.useState(false)
@@ -53,8 +58,28 @@ export default function ProjectDetailPage() {
   const [shareLinksExpanded, setShareLinksExpanded] = React.useState(true)
   const [rightTab, setRightTab] = React.useState<'comments' | 'fields'>('comments')
 
+  const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(
+    searchParams.get('folder') || null
+  )
+  const [showTrash, setShowTrash] = React.useState(false)
+
   const { files: uploadFiles, startUpload } = useUploadStore()
   const { user } = useAuthStore()
+
+  const {
+    tree,
+    mutateTree,
+    createFolder,
+    renameFolder,
+    moveFolder,
+    deleteFolder,
+    moveAsset,
+    bulkMove,
+    restoreAsset,
+    restoreFolder,
+  } = useFolders(projectId)
+
+  const { trash, mutateTrash } = useTrash(projectId)
 
   // Comments for the selected asset
   const selectedVersionId = selectedAsset?.latest_version?.id || null
@@ -71,9 +96,16 @@ export default function ProjectDetailPage() {
     () => api.get<Project>(`/projects/${projectId}`),
   )
 
+  const folderParam = currentFolderId ? `folder_id=${currentFolderId}` : 'folder_id=root'
   const { data: assets, isLoading: loadingAssets, mutate: mutateAssets } = useSWR<AssetResponse[]>(
-    `/projects/${projectId}/assets`,
-    () => api.get<AssetResponse[]>(`/projects/${projectId}/assets`),
+    showTrash ? null : `/projects/${projectId}/assets?${folderParam}`,
+    (key: string) => api.get<AssetResponse[]>(key),
+  )
+
+  // Subfolders for current view
+  const { data: subfolders } = useSWR<Folder[]>(
+    showTrash ? null : `/projects/${projectId}/folders?parent_id=${currentFolderId ?? 'root'}`,
+    (key: string) => api.get<Folder[]>(key),
   )
 
   const { data: collections } = useSWR<Collection[]>(
@@ -135,12 +167,23 @@ export default function ProjectDetailPage() {
   const handleStartUpload = () => {
     pendingFiles.forEach((file) => {
       const name = pendingFiles.length === 1 ? assetName || file.name : file.name
-      startUpload(file, projectId, name, project?.name)
+      // Note: startUpload does not yet accept folderId — assets will upload to root.
+      // Upload store needs to be updated in a future task to support folder placement.
+      startUpload(file, projectId, name, project?.name, currentFolderId)
     })
     setPendingFiles([])
     setAssetName('')
     setUploadOpen(false)
   }
+
+  const handleSelectFolder = React.useCallback((folderId: string | null) => {
+    setCurrentFolderId(folderId)
+    setShowTrash(false)
+    const url = folderId
+      ? `/projects/${projectId}?folder=${folderId}`
+      : `/projects/${projectId}`
+    window.history.replaceState(null, '', url)
+  }, [projectId])
 
   return (
     <div className="flex h-full flex-col lg:flex-row overflow-hidden">
@@ -156,18 +199,28 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Project folder tree */}
-          <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md bg-accent/10 text-sm text-accent font-medium">
-            <FolderOpen className="h-4 w-4" />
-            <span className="truncate">{project?.name || 'Project'}</span>
-          </button>
-
-          {/* Placeholder subfolder */}
-          <div className="ml-4 space-y-0.5">
-            <button className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-text-tertiary hover:bg-bg-hover hover:text-text-secondary transition-colors">
-              <Trash2 className="h-3.5 w-3.5" />
-              Recently Deleted
-            </button>
-          </div>
+          <FolderTree
+            tree={tree}
+            projectName={project?.name || 'Project'}
+            currentFolderId={currentFolderId}
+            showTrash={showTrash}
+            onSelectFolder={handleSelectFolder}
+            onShowTrash={() => { setShowTrash(true); setCurrentFolderId(null) }}
+            onCreateFolder={async (name, parentId) => {
+              await createFolder(name, parentId)
+              mutateAssets()
+            }}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={async (id) => {
+              await deleteFolder(id)
+              if (currentFolderId === id) handleSelectFolder(null)
+              mutateAssets()
+            }}
+            onDropItems={async (targetFolderId, assetIds, folderIds) => {
+              await bulkMove(assetIds, folderIds, targetFolderId)
+              mutateAssets()
+            }}
+          />
         </div>
 
         {/* Collections section */}
@@ -301,6 +354,20 @@ export default function ProjectDetailPage() {
                 Share
               </Button>
 
+              <button
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
+                onClick={async () => {
+                  const name = prompt('Folder name:')
+                  if (name) {
+                    await createFolder(name, currentFolderId)
+                    mutateAssets()
+                  }
+                }}
+              >
+                <FolderPlus className="h-4 w-4" />
+                New Folder
+              </button>
+
               <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>
                 <Dialog.Trigger asChild>
                   <Button size="sm">
@@ -342,19 +409,92 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Asset grid */}
-          <AssetGrid
-            assets={assets ?? []}
-            projectId={projectId}
-            isLoading={loadingAssets}
-            assignees={assigneesMap}
-            thumbnails={thumbnails}
-            versionCounts={versionCounts}
-            selectedAssetId={selectedAsset?.id}
-            onUpload={() => setUploadOpen(true)}
-            onAssetSelect={(asset) => setSelectedAsset(asset as AssetResponse)}
-            onAssetOpen={(asset) => router.push(`/projects/${projectId}/assets/${asset.id}`)}
+          {/* Folder breadcrumb */}
+          <FolderBreadcrumb
+            projectName={project?.name || 'Project'}
+            currentFolderId={currentFolderId}
+            tree={tree}
+            onNavigate={handleSelectFolder}
+            onDropItems={async (targetFolderId, assetIds, folderIds) => {
+              await bulkMove(assetIds, folderIds, targetFolderId)
+              mutateAssets()
+            }}
           />
+
+          {/* Asset grid or Trash view */}
+          {showTrash ? (
+            <div className="flex-1 overflow-y-auto">
+              <h2 className="text-sm font-medium text-text-primary mb-3">Recently Deleted</h2>
+              {trash.folders.length === 0 && trash.assets.length === 0 ? (
+                <p className="text-xs text-text-tertiary">No deleted items</p>
+              ) : (
+                <div className="space-y-1">
+                  {trash.folders.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FolderIcon className="h-4 w-4 text-text-tertiary shrink-0" />
+                        <span className="text-sm text-text-primary truncate">{item.name}</span>
+                        <span className="text-xs text-text-tertiary">Folder</span>
+                      </div>
+                      <button
+                        className="text-xs text-accent hover:underline shrink-0"
+                        onClick={async () => {
+                          await restoreFolder(item.id)
+                          mutateTrash()
+                          mutateAssets()
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                  {trash.assets.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm text-text-primary truncate">{item.name}</span>
+                        <span className="text-xs text-text-tertiary capitalize">{item.type}</span>
+                      </div>
+                      <button
+                        className="text-xs text-accent hover:underline shrink-0"
+                        onClick={async () => {
+                          await restoreAsset(item.id)
+                          mutateTrash()
+                          mutateAssets()
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <AssetGrid
+              assets={assets ?? []}
+              folders={subfolders ?? []}
+              currentFolderId={currentFolderId}
+              projectId={projectId}
+              isLoading={loadingAssets}
+              assignees={assigneesMap}
+              thumbnails={thumbnails}
+              versionCounts={versionCounts}
+              selectedAssetId={selectedAsset?.id}
+              onUpload={() => setUploadOpen(true)}
+              onAssetSelect={(asset) => setSelectedAsset(asset as AssetResponse)}
+              onAssetOpen={(asset) => router.push(`/projects/${projectId}/assets/${asset.id}`)}
+              onFolderOpen={(folder) => handleSelectFolder(folder.id)}
+              onFolderRename={renameFolder}
+              onFolderDelete={async (id) => {
+                await deleteFolder(id)
+                mutateAssets()
+              }}
+              onDropToFolder={async (targetFolderId, assetIds, folderIds) => {
+                await bulkMove(assetIds, folderIds, targetFolderId)
+                mutateAssets()
+              }}
+            />
+          )}
         </div>
       </div>
 

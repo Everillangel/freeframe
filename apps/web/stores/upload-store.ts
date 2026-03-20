@@ -44,7 +44,7 @@ interface UploadStore {
   historySkip: number
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
-  startUpload: (file: File, projectId: string, assetName: string, projectName?: string) => string
+  startUpload: (file: File, projectId: string, assetName: string, projectName?: string, folderId?: string | null) => string
   cancelUpload: (fileId: string) => void
   removeFile: (fileId: string) => void
   clearCompleted: () => void
@@ -112,7 +112,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   setPanelOpen: (open) => set({ panelOpen: open }),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
 
-  startUpload: (file, projectId, assetName, projectName) => {
+  startUpload: (file, projectId, assetName, projectName, folderId) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
     const entry: UploadFile = {
@@ -153,6 +153,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
             original_filename: file.name,
             file_size_bytes: file.size,
             mime_type: file.type,
+            folder_id: folderId ?? null,
           },
         )
 

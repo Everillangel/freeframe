@@ -55,6 +55,7 @@ def initiate_upload(
             name=body.asset_name,
             asset_type=asset_type,
             created_by=current_user.id,
+            folder_id=body.folder_id,
         )
         db.add(asset)
         db.flush()

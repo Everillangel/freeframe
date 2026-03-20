@@ -103,14 +103,22 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
 def list_assets(
     project_id: uuid.UUID,
     include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
+    folder_id: Optional[str] = Query(None, description="Filter by folder. 'root' for root level, UUID for specific folder."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_project_role(db, project_id, current_user, ProjectRole.viewer)
-    assets = db.query(Asset).filter(
+    query = db.query(Asset).filter(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
-    ).all()
+    )
+
+    if folder_id == "root":
+        query = query.filter(Asset.folder_id.is_(None))
+    elif folder_id is not None:
+        query = query.filter(Asset.folder_id == uuid.UUID(folder_id))
+
+    assets = query.all()
 
     if not include_failed:
         # Exclude assets where the only version is failed or still uploading
