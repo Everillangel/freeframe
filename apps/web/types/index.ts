@@ -106,6 +106,7 @@ export interface Asset {
   status: AssetStatus;
   rating: number | null;
   assignee_id: string | null;
+  folder_id: string | null;
   due_date: string | null;
   keywords: string[];
   created_by: string;
@@ -356,6 +357,41 @@ export interface WatermarkSettings {
   custom_text: string | null;
   opacity: number;
   created_at: string;
+}
+
+// ─── Folders ──────────────────────────────────────────────────────────────────
+
+export interface Folder {
+  id: string
+  project_id: string
+  parent_id: string | null
+  name: string
+  created_by: string
+  created_at: string
+  updated_at: string
+  item_count: number
+}
+
+export interface FolderTreeNode {
+  id: string
+  name: string
+  parent_id: string | null
+  item_count: number
+  children: FolderTreeNode[]
+}
+
+export interface TrashItem {
+  id: string
+  name: string
+  type: string
+  parent_id?: string | null
+  folder_id?: string | null
+  deleted_at: string | null
+}
+
+export interface TrashResponse {
+  folders: TrashItem[]
+  assets: TrashItem[]
 }
 
 // ─── API Response Wrappers ────────────────────────────────────────────────────
