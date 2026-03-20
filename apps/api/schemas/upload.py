@@ -32,6 +32,7 @@ class InitiateUploadRequest(BaseModel):
     file_size_bytes: int
     # For new version of existing asset
     asset_id: uuid.UUID | None = None
+    folder_id: uuid.UUID | None = None
 
 class InitiateUploadResponse(BaseModel):
     upload_id: str
