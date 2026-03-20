@@ -24,6 +24,7 @@ interface AssetCardProps {
   selected?: boolean
   onSelect?: (e: React.MouseEvent) => void
   onContextMenu?: (e: React.MouseEvent) => void
+  onDragStart?: (e: React.DragEvent) => void
   className?: string
 }
 
@@ -50,12 +51,15 @@ export function AssetCard({
   selected = false,
   onSelect,
   onContextMenu,
+  onDragStart,
   className,
 }: AssetCardProps) {
   const TypeIcon = assetTypeIcons[asset.asset_type]
 
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
       className={cn(
         'group flex flex-col rounded-lg overflow-hidden transition-all duration-150 cursor-pointer',
         'border-2',

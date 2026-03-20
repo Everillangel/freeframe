@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AssetCard } from './asset-card'
-import type { Asset, AssetStatus, AssetType, User } from '@/types'
+import { FolderCard } from './folder-card'
+import type { Asset, AssetStatus, AssetType, User, Folder } from '@/types'
 import { Layers } from 'lucide-react'
 
 type SortKey = 'date' | 'name' | 'status'
@@ -35,6 +36,12 @@ interface AssetGridProps {
   onAssetOpen?: (asset: Asset) => void
   /** @deprecated use onAssetSelect + onAssetOpen */
   onAssetClick?: (asset: Asset) => void
+  folders?: Folder[]
+  currentFolderId?: string | null
+  onFolderOpen?: (folder: Folder) => void
+  onFolderRename?: (folderId: string, name: string) => Promise<void>
+  onFolderDelete?: (folderId: string) => Promise<void>
+  onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
 }
 
 export function AssetGrid({
@@ -50,6 +57,12 @@ export function AssetGrid({
   onAssetSelect,
   onAssetOpen,
   onAssetClick,
+  folders,
+  currentFolderId,
+  onFolderOpen,
+  onFolderRename,
+  onFolderDelete,
+  onDropToFolder,
 }: AssetGridProps) {
   const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
   const [sortKey, setSortKey] = React.useState<SortKey>('date')
@@ -206,6 +219,35 @@ export function AssetGrid({
       </div>
 
       {/* Grid / List */}
+      {/* Folders section */}
+      {folders && folders.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-text-tertiary">
+              {folders.length} {folders.length === 1 ? 'Folder' : 'Folders'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+            {folders.map((folder) => (
+              <FolderCard
+                key={folder.id}
+                folder={folder}
+                onOpen={onFolderOpen!}
+                onRename={onFolderRename}
+                onDelete={onFolderDelete}
+                onDropItems={onDropToFolder}
+              />
+            ))}
+          </div>
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-text-tertiary">
+                {filtered.length} {filtered.length === 1 ? 'Asset' : 'Assets'}
+              </span>
+            </div>
+          )}
+        </>
+      )}
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-border bg-bg-secondary">
           <EmptyState
@@ -236,6 +278,16 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 selected={selectedIds.has(asset.id)}
                 onSelect={() => toggleSelect(asset.id)}
+                onDragStart={(e: React.DragEvent) => {
+                  const ids = selectedIds.has(asset.id)
+                    ? Array.from(selectedIds)
+                    : [asset.id]
+                  e.dataTransfer.setData(
+                    'application/json',
+                    JSON.stringify({ assetIds: ids, folderIds: [] }),
+                  )
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
               />
             </div>
           ))}
