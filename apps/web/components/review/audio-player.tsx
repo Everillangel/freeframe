@@ -8,93 +8,85 @@ import {
   Volume2,
   VolumeX,
   Loader2,
+  Repeat,
+  ChevronUp,
+  Check,
 } from 'lucide-react'
-import { cn, formatTime } from '@/lib/utils'
+import { cn, formatTime, formatTimecode, formatFrames } from '@/lib/utils'
 import { api } from '@/lib/api'
-import { useReviewStore } from '@/stores/review-store'
+import { useReviewStore, type TimeFormat } from '@/stores/review-store'
 import type { Asset, AssetVersion, Comment } from '@/types'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StreamResponse {
   url: string
 }
 
-// ─── Speed options ────────────────────────────────────────────────────────────
-
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 
-// ─── Comment Markers ──────────────────────────────────────────────────────────
+// ─── Comment Markers on timeline ─────────────────────────────────────────────
 
-interface CommentMarkersProps {
-  comments: Comment[]
+interface TimelineProps {
+  currentTime: number
   duration: number
-  onMarkerClick: (time: number) => void
+  comments: Comment[]
+  onSeek: (time: number) => void
 }
 
-function CommentMarkers({ comments, duration, onMarkerClick }: CommentMarkersProps) {
-  if (duration <= 0) return null
+function Timeline({ currentTime, duration, comments, onSeek }: TimelineProps) {
+  const trackRef = React.useRef<HTMLDivElement>(null)
 
   const markers = comments.filter(
     (c) => c.timecode_start != null && !c.resolved && !c.deleted_at,
   )
 
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!trackRef.current || duration <= 0) return
+    const rect = trackRef.current.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    onSeek(pct * duration)
+  }
+
   return (
-    <>
-      {markers.map((comment) => {
-        const pct = ((comment.timecode_start ?? 0) / duration) * 100
-        return (
-          <button
-            key={comment.id}
-            onClick={() => onMarkerClick(comment.timecode_start ?? 0)}
-            title={comment.body.slice(0, 80)}
-            className="absolute top-0 z-10 h-full w-0.5 translate-x-[-50%] cursor-pointer bg-accent/80 transition-opacity hover:opacity-100 opacity-70"
-            style={{ left: `${pct}%` }}
-          />
-        )
-      })}
-    </>
-  )
-}
-
-// ─── Volume Slider ─────────────────────────────────────────────────────────────
-
-interface VolumeSliderProps {
-  volume: number
-  muted: boolean
-  onVolumeChange: (v: number) => void
-  onToggleMute: () => void
-}
-
-function VolumeControl({ volume, muted, onVolumeChange, onToggleMute }: VolumeSliderProps) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <button
-        onClick={onToggleMute}
-        className="flex h-7 w-7 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-        title={muted ? 'Unmute' : 'Mute'}
+    <div className="relative w-full px-4">
+      <div
+        ref={trackRef}
+        onClick={handleClick}
+        className="relative h-1 w-full cursor-pointer rounded-full bg-bg-hover group"
       >
-        {muted || volume === 0 ? (
-          <VolumeX className="h-4 w-4" />
-        ) : (
-          <Volume2 className="h-4 w-4" />
-        )}
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.01}
-        value={muted ? 0 : volume}
-        onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-        className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-bg-hover accent-accent"
-        title="Volume"
-      />
+        {/* Progress */}
+        <div
+          className="absolute left-0 top-0 h-full rounded-full bg-accent transition-[width] duration-75"
+          style={{ width: `${progress}%` }}
+        />
+        {/* Playhead */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: `${progress}%` }}
+        />
+        {/* Comment markers */}
+        {markers.map((c) => {
+          const pct = ((c.timecode_start ?? 0) / duration) * 100
+          return (
+            <div
+              key={c.id}
+              className="absolute top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full bg-status-warning border-2 border-bg-primary cursor-pointer z-10"
+              style={{ left: `${pct}%` }}
+              title={c.body.slice(0, 60)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSeek(c.timecode_start ?? 0)
+              }}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 interface AudioPlayerProps {
   asset: Asset
@@ -104,7 +96,19 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ asset, version, comments = [], className }: AudioPlayerProps) {
-  const { setPlayheadTime } = useReviewStore()
+  const { setPlayheadTime, seekTarget, timeFormat, setTimeFormat } = useReviewStore()
+  const [timeFormatOpen, setTimeFormatOpen] = React.useState(false)
+  const timeFormatRef = React.useRef<HTMLDivElement>(null)
+
+  // Close time format dropdown on outside click
+  React.useEffect(() => {
+    if (!timeFormatOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (timeFormatRef.current && !timeFormatRef.current.contains(e.target as Node)) setTimeFormatOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [timeFormatOpen])
 
   const waveformRef = React.useRef<HTMLDivElement>(null)
   const wavesurferRef = React.useRef<WaveSurfer | null>(null)
@@ -118,9 +122,10 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
   const [volume, setVolume] = React.useState(0.8)
   const [muted, setMuted] = React.useState(false)
   const [speed, setSpeed] = React.useState<number>(1)
+  const [loop, setLoop] = React.useState(false)
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null)
 
-  // ── Fetch presigned URL ──────────────────────────────────────────────────────
+  // Fetch presigned URL
   React.useEffect(() => {
     if (!version) return
     let cancelled = false
@@ -145,16 +150,13 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     }
 
     fetchUrl()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [asset.id, version])
 
-  // ── Initialize WaveSurfer ────────────────────────────────────────────────────
+  // Initialize WaveSurfer
   React.useEffect(() => {
     if (!audioUrl || !waveformRef.current) return
 
-    // Destroy existing instance
     if (wavesurferRef.current) {
       wavesurferRef.current.destroy()
       wavesurferRef.current = null
@@ -162,14 +164,14 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
 
     const ws = WaveSurfer.create({
       container: waveformRef.current,
-      height: 128,
-      waveColor: '#5e5e6e',
+      height: 160,
+      waveColor: '#3a3a48',
       progressColor: '#5b8def',
       cursorColor: '#5b8def',
       cursorWidth: 2,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
+      barWidth: 3,
+      barGap: 2,
+      barRadius: 3,
       normalize: true,
       interact: true,
       hideScrollbar: true,
@@ -200,6 +202,10 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     ws.on('finish', () => {
       setIsPlaying(false)
       setCurrentTime(ws.getDuration())
+      if (loop) {
+        ws.seekTo(0)
+        ws.play()
+      }
     })
 
     ws.on('error', (err: Error) => {
@@ -216,7 +222,15 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl])
 
-  // ── Sync volume/speed/mute changes to WaveSurfer ────────────────────────────
+  // React to external seek requests (e.g. clicking comment timecode)
+  React.useEffect(() => {
+    if (!seekTarget || !wavesurferRef.current || duration <= 0) return
+    const clamped = Math.max(0, Math.min(seekTarget.time, duration))
+    wavesurferRef.current.seekTo(clamped / duration)
+    setCurrentTime(clamped)
+  }, [seekTarget, duration])
+
+  // Sync volume/speed
   React.useEffect(() => {
     wavesurferRef.current?.setVolume(muted ? 0 : volume)
   }, [volume, muted])
@@ -225,7 +239,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     wavesurferRef.current?.setPlaybackRate(speed)
   }, [speed])
 
-  // ── Keyboard shortcut: space = play/pause ────────────────────────────────────
+  // Keyboard: space = play/pause
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -239,115 +253,147 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  // ── Controls ─────────────────────────────────────────────────────────────────
+  const handlePlayPause = () => wavesurferRef.current?.playPause()
 
-  const handlePlayPause = () => {
-    wavesurferRef.current?.playPause()
+  const handleSeek = (time: number) => {
+    if (!wavesurferRef.current || duration <= 0) return
+    wavesurferRef.current.seekTo(time / duration)
   }
 
-  const handleVolumeChange = (v: number) => {
-    setMuted(false)
-    setVolume(v)
+  function displayTime(t: number): string {
+    switch (timeFormat) {
+      case 'frames': return formatFrames(t)
+      case 'standard': return formatTime(t)
+      case 'timecode': return formatTimecode(t)
+      default: return formatTimecode(t)
+    }
   }
-
-  const handleToggleMute = () => {
-    setMuted((m) => !m)
-  }
-
-  const handleMarkerClick = (time: number) => {
-    wavesurferRef.current?.seekTo(duration > 0 ? time / duration : 0)
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border border-border bg-bg-secondary p-4',
-        className,
-      )}
-    >
-      {/* Track info */}
-      <div className="flex items-center justify-between">
-        <p className="truncate text-sm font-medium text-text-primary">{asset.name}</p>
-        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />}
-      </div>
-
-      {/* Error state */}
-      {error && (
-        <div className="rounded bg-status-error/10 px-3 py-2 text-sm text-status-error">
-          {error}
-        </div>
-      )}
-
-      {/* Waveform container */}
-      <div className="relative">
-        {/* Skeleton while loading */}
+    <div className={cn('flex flex-col h-full w-full', className)}>
+      {/* Main waveform area — fills available space */}
+      <div className="flex-1 flex items-center justify-center bg-bg-primary relative">
+        {/* Loading */}
         {isLoading && !error && (
-          <div className="h-32 w-full animate-pulse rounded bg-bg-tertiary" />
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+            <span className="text-xs text-text-tertiary">Loading waveform...</span>
+          </div>
         )}
 
-        {/* WaveSurfer mount point — always in DOM so ref is valid */}
+        {/* Error */}
+        {error && (
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-sm text-status-warning">{error}</span>
+          </div>
+        )}
+
+        {/* WaveSurfer waveform — centered with max width */}
         <div
           ref={waveformRef}
           className={cn(
-            'relative w-full rounded overflow-hidden',
+            'w-full max-w-3xl mx-auto px-8',
             isLoading ? 'invisible h-0' : 'visible',
           )}
-        >
-          {/* Comment markers overlay */}
-          {isReady && (
-            <CommentMarkers
-              comments={comments}
-              duration={duration}
-              onMarkerClick={handleMarkerClick}
-            />
-          )}
-        </div>
+        />
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-3">
-        {/* Play / Pause */}
-        <button
-          onClick={handlePlayPause}
-          disabled={!isReady}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-text-inverse transition-colors hover:bg-accent-hover disabled:opacity-50"
-          title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-        >
-          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
-        </button>
+      {/* Timeline scrubber with comment markers */}
+      <Timeline
+        currentTime={currentTime}
+        duration={duration}
+        comments={comments}
+        onSeek={handleSeek}
+      />
 
-        {/* Timecode */}
-        <span className="min-w-[72px] text-xs tabular-nums text-text-secondary">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
+      {/* Bottom transport bar */}
+      <div className="flex items-center justify-between h-12 px-4 bg-bg-secondary/80 border-t border-border shrink-0">
+        {/* Left: Play, Loop, Speed, Volume */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePlayPause}
+            disabled={!isReady}
+            className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-40"
+            title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+          <button
+            onClick={() => setLoop(!loop)}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded transition-colors',
+              loop ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
+            )}
+            title="Loop"
+          >
+            <Repeat className="h-4 w-4" />
+          </button>
 
-        {/* Volume */}
-        <VolumeControl
-          volume={volume}
-          muted={muted}
-          onVolumeChange={handleVolumeChange}
-          onToggleMute={handleToggleMute}
-        />
+          <button
+            onClick={() => {
+              const idx = SPEED_OPTIONS.indexOf(speed as typeof SPEED_OPTIONS[number])
+              const next = SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length]
+              setSpeed(next)
+            }}
+            disabled={!isReady}
+            className="flex h-7 items-center justify-center rounded px-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors tabular-nums disabled:opacity-40"
+            title="Playback speed"
+          >
+            {speed}x
+          </button>
 
-        {/* Speed selector */}
-        <select
-          value={speed}
-          onChange={(e) => setSpeed(parseFloat(e.target.value))}
-          disabled={!isReady}
-          className="h-7 cursor-pointer rounded border border-border bg-bg-elevated px-1.5 text-xs text-text-secondary transition-colors hover:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus disabled:opacity-50"
-          title="Playback speed"
-        >
-          {SPEED_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}x
-            </option>
-          ))}
-        </select>
+          <button
+            onClick={() => setMuted(!muted)}
+            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-bg-hover transition-colors"
+            title={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {/* Center: Timecode display with format picker */}
+        <div className="relative" ref={timeFormatRef}>
+          <button
+            onClick={() => setTimeFormatOpen((p) => !p)}
+            className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1 hover:bg-bg-hover transition-colors"
+          >
+            <span className="font-mono text-sm text-text-primary tabular-nums tracking-wide">
+              {timeFormat === 'timecode'
+                ? displayTime(currentTime)
+                : <>{displayTime(currentTime)} <span className="text-text-tertiary">/</span> {displayTime(duration)}</>
+              }
+            </span>
+            <ChevronUp className={cn('h-3 w-3 text-text-tertiary transition-transform', timeFormatOpen && 'rotate-180')} />
+          </button>
+          {timeFormatOpen && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+                Time Format
+              </div>
+              {([
+                { id: 'frames' as TimeFormat, label: 'Frames' },
+                { id: 'standard' as TimeFormat, label: 'Standard' },
+                { id: 'timecode' as TimeFormat, label: 'Timecode' },
+              ] as const).map((item) => (
+                <button
+                  key={item.id}
+                  className={cn(
+                    'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
+                    timeFormat === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-white/5',
+                  )}
+                  onClick={() => { setTimeFormat(item.id); setTimeFormatOpen(false) }}
+                >
+                  {item.label}
+                  {timeFormat === item.id && <Check className="h-4 w-4 text-accent" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: spacer for symmetry */}
+        <div className="w-[140px]" />
       </div>
     </div>
   )

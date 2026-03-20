@@ -42,6 +42,14 @@ export function formatTimecode(seconds: number, fps = 24): string {
 }
 
 /**
+ * Format seconds as frame count at given fps
+ * e.g. 83.5 at 24fps → "2004"
+ */
+export function formatFrames(seconds: number, fps = 24): string {
+  return String(Math.floor(seconds * fps))
+}
+
+/**
  * Format bytes into human-readable size string
  * e.g. 1_610_612_736 → "1.5 GB"
  */

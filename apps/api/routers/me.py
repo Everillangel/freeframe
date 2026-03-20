@@ -21,24 +21,26 @@ router = APIRouter(prefix="/me", tags=["me"])
 @router.get("/assets", response_model=list[AssetResponse])
 def list_my_assets(
     filter: Optional[str] = Query(default=None, description="owned|shared|mentioned|assigned|due_soon"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if filter == "owned":
-        assets = db.query(Asset).filter(
+        query = db.query(Asset).filter(
             Asset.created_by == current_user.id,
             Asset.deleted_at.is_(None),
-        ).all()
+        )
 
     elif filter == "shared":
         shared_ids = db.query(AssetShare.asset_id).filter(
             AssetShare.shared_with_user_id == current_user.id,
             AssetShare.deleted_at.is_(None),
         ).subquery()
-        assets = db.query(Asset).filter(
+        query = db.query(Asset).filter(
             Asset.id.in_(shared_ids),
             Asset.deleted_at.is_(None),
-        ).all()
+        )
 
     elif filter == "mentioned":
         mentioned_asset_ids = (
@@ -54,22 +56,22 @@ def list_my_assets(
             .all()
         )
         ids = [r[0] for r in mentioned_asset_ids]
-        assets = db.query(Asset).filter(Asset.id.in_(ids), Asset.deleted_at.is_(None)).all()
+        query = db.query(Asset).filter(Asset.id.in_(ids), Asset.deleted_at.is_(None))
 
     elif filter == "assigned":
-        assets = db.query(Asset).filter(
+        query = db.query(Asset).filter(
             Asset.assignee_id == current_user.id,
             Asset.deleted_at.is_(None),
-        ).all()
+        )
 
     elif filter == "due_soon":
         now = datetime.now(timezone.utc)
-        assets = db.query(Asset).filter(
+        query = db.query(Asset).filter(
             Asset.assignee_id == current_user.id,
             Asset.due_date.isnot(None),
             Asset.due_date <= now + timedelta(days=7),
             Asset.deleted_at.is_(None),
-        ).all()
+        )
 
     else:
         # All accessible: member of project OR directly shared OR assigned
@@ -81,7 +83,7 @@ def list_my_assets(
             AssetShare.shared_with_user_id == current_user.id,
             AssetShare.deleted_at.is_(None),
         ).subquery()
-        assets = db.query(Asset).filter(
+        query = db.query(Asset).filter(
             Asset.deleted_at.is_(None),
         ).filter(
             or_(
@@ -89,8 +91,9 @@ def list_my_assets(
                 Asset.id.in_(shared_ids),
                 Asset.assignee_id == current_user.id,
             )
-        ).all()
+        )
 
+    assets = query.order_by(Asset.created_at.desc()).offset(skip).limit(limit).all()
     return _build_asset_responses_bulk(assets, db)
 
 

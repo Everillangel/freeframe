@@ -30,8 +30,11 @@ interface AssetGridProps {
   thumbnails?: Record<string, string>
   versionCounts?: Record<string, number>
   authorNames?: Record<string, string>
+  selectedAssetId?: string | null
   onUpload?: () => void
   onAssetSelect?: (asset: Asset) => void
+  onAssetOpen?: (asset: Asset) => void
+  /** @deprecated use onAssetSelect + onAssetOpen */
   onAssetClick?: (asset: Asset) => void
 }
 
@@ -43,8 +46,10 @@ export function AssetGrid({
   thumbnails = {},
   versionCounts = {},
   authorNames = {},
+  selectedAssetId,
   onUpload,
   onAssetSelect,
+  onAssetOpen,
   onAssetClick,
 }: AssetGridProps) {
   const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
@@ -216,7 +221,12 @@ export function AssetGrid({
           {filtered.map((asset) => (
             <div
               key={asset.id}
+              className={cn(
+                'rounded-lg transition-all cursor-pointer',
+                selectedAssetId === asset.id && 'ring-2 ring-accent ring-offset-1 ring-offset-bg-primary',
+              )}
               onClick={() => onAssetSelect?.(asset)}
+              onDoubleClick={() => onAssetOpen?.(asset)}
             >
               <AssetCard
                 asset={asset}
@@ -241,10 +251,11 @@ export function AssetGrid({
               <div
                 key={asset.id}
                 onClick={() => onAssetSelect?.(asset)}
+                onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-bg-hover cursor-pointer',
                   i !== filtered.length - 1 && 'border-b border-border',
-                  selectedIds.has(asset.id) && 'bg-accent/5',
+                  selectedAssetId === asset.id ? 'bg-accent/10' : selectedIds.has(asset.id) && 'bg-accent/5',
                 )}
               >
                 {/* Thumbnail */}

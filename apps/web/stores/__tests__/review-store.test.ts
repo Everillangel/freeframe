@@ -50,7 +50,7 @@ describe('Review store', () => {
   it('reset returns all state to initial values', () => {
     useReviewStore.getState().setPlayheadTime(100)
     useReviewStore.getState().toggleDrawingMode()
-    useReviewStore.getState().setDrawingTool('text')
+    useReviewStore.getState().setDrawingTool('rectangle')
     useReviewStore.getState().setDrawingColor('#0000FF')
     useReviewStore.getState().setBrushSize(20)
 

@@ -1,3 +1,4 @@
+import json
 import boto3
 from botocore.exceptions import ClientError
 from ..config import settings
@@ -42,6 +43,22 @@ def get_s3_client():
             region_name=settings.s3_region,
         )
 
+def _get_presign_client():
+    """
+    Client for generating presigned URLs. Uses s3_public_endpoint if set,
+    so presigned URLs are accessible from the browser (e.g. localhost:9000
+    instead of minio:9000 in Docker).
+    """
+    endpoint = settings.s3_public_endpoint or (None if _is_aws_credentials() else settings.s3_endpoint)
+    kwargs = {
+        "aws_access_key_id": settings.s3_access_key,
+        "aws_secret_access_key": settings.s3_secret_key,
+        "region_name": settings.s3_region,
+    }
+    if endpoint:
+        kwargs["endpoint_url"] = endpoint
+    return boto3.client("s3", **kwargs)
+
 def ensure_bucket_exists():
     """Create the S3 bucket if it does not exist. Called on app startup."""
     s3 = get_s3_client()
@@ -68,6 +85,48 @@ def ensure_bucket_exists():
         else:
             raise
 
+    # Set CORS for browser-based uploads (presigned PUT)
+    if not _is_aws_credentials():
+        try:
+            s3.put_bucket_cors(
+                Bucket=settings.s3_bucket,
+                CORSConfiguration={
+                    "CORSRules": [
+                        {
+                            "AllowedHeaders": ["*"],
+                            "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+                            "AllowedOrigins": [settings.frontend_url, "http://localhost:3000"],
+                            "ExposeHeaders": ["ETag", "Content-Length", "x-amz-request-id"],
+                            "MaxAgeSeconds": 3600,
+                        }
+                    ]
+                },
+            )
+        except ClientError:
+            pass  # CORS config failed, non-critical
+
+        # Set public-read policy on processed/ prefix so HLS sub-playlists
+        # and .ts segments can be fetched without presigned URLs
+        try:
+            policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicReadProcessed",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"arn:aws:s3:::{settings.s3_bucket}/processed/*",
+                    }
+                ],
+            }
+            s3.put_bucket_policy(
+                Bucket=settings.s3_bucket,
+                Policy=json.dumps(policy),
+            )
+        except ClientError:
+            pass  # Policy config failed, non-critical
+
 def get_content_type(key: str) -> tuple[str, str]:
     """Return (content_type, cache_control) for a given S3 key."""
     import os
@@ -86,7 +145,7 @@ def create_multipart_upload(s3_key: str, content_type: str) -> str:
 
 def presign_upload_part(s3_key: str, upload_id: str, part_number: int, expires_in: int = 3600) -> str:
     """Return a presigned URL for uploading a single part."""
-    s3 = get_s3_client()
+    s3 = _get_presign_client()
     return s3.generate_presigned_url(
         "upload_part",
         Params={
@@ -119,7 +178,7 @@ def abort_multipart_upload(s3_key: str, upload_id: str) -> None:
 
 def generate_presigned_get_url(s3_key: str, expires_in: int = 3600) -> str:
     """Generate a presigned GET URL for an object."""
-    s3 = get_s3_client()
+    s3 = _get_presign_client()
     return s3.generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.s3_bucket, "Key": s3_key},

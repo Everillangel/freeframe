@@ -24,14 +24,16 @@ export interface CommentWithReplies extends Comment {
 
 interface CreateCommentPayload {
   body: string
+  version_id?: string
   timecode_start?: number
   timecode_end?: number
-  annotation_data?: Record<string, unknown>
+  annotation?: {
+    drawing_data: Record<string, unknown>
+    frame_number?: number
+    carousel_position?: number
+  }
   parent_id?: string
-}
-
-interface CommentsResponse {
-  comments: CommentWithReplies[]
+  visibility?: string
 }
 
 function buildSWRKey(assetId: string | null, versionId: string | null): string | null {
@@ -42,15 +44,15 @@ function buildSWRKey(assetId: string | null, versionId: string | null): string |
 export function useComments(assetId: string | null, versionId: string | null) {
   const swrKey = buildSWRKey(assetId, versionId)
 
-  const { data, error, isLoading, mutate } = useSWR<CommentsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<CommentWithReplies[]>(
     swrKey,
-    (key: string) => api.get<CommentsResponse>(key),
+    (key: string) => api.get<CommentWithReplies[]>(key),
     {
       revalidateOnFocus: false,
     },
   )
 
-  const comments = data?.comments ?? []
+  const comments = data ?? []
 
   // ─── Create comment ─────────────────────────────────────────────────────────
 
@@ -60,17 +62,20 @@ export function useComments(assetId: string | null, versionId: string | null) {
     timecodeEnd?: number,
     annotationData?: Record<string, unknown>,
     parentId?: string,
+    visibility?: string,
   ): Promise<CommentWithReplies> {
     if (!assetId) throw new Error('No asset selected')
+    if (!versionId) throw new Error('No version selected')
 
-    const payload: CreateCommentPayload = { body }
+    const payload: CreateCommentPayload = { body, version_id: versionId }
     if (timecodeStart !== undefined) payload.timecode_start = timecodeStart
     if (timecodeEnd !== undefined) payload.timecode_end = timecodeEnd
-    if (annotationData) payload.annotation_data = annotationData
+    if (annotationData) payload.annotation = { drawing_data: annotationData }
     if (parentId) payload.parent_id = parentId
+    if (visibility) payload.visibility = visibility
 
     const endpoint = parentId
-      ? `/comments/${parentId}/replies`
+      ? `/assets/${assetId}/comments/${parentId}/replies`
       : `/assets/${assetId}/comments`
 
     const newComment = await api.post<CommentWithReplies>(endpoint, payload)

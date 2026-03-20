@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -17,9 +17,11 @@ import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/shared/avatar'
 import { Badge } from '@/components/shared/badge'
 import { AssetGrid } from '@/components/projects/asset-grid'
+import { CommentPanel } from '@/components/review/comment-panel'
 import { UploadZone } from '@/components/upload/upload-zone'
-import { UploadProgress } from '@/components/upload/upload-progress'
-import { useUpload } from '@/hooks/use-upload'
+import { useUploadStore } from '@/stores/upload-store'
+import { useAuthStore } from '@/stores/auth-store'
+import { useComments } from '@/hooks/use-comments'
 import type { Project, AssetResponse, ProjectMember, User, Collection } from '@/types'
 
 // ─── Collection icon colors (Frame.io style) ──────────────────────────────────
@@ -41,6 +43,7 @@ function getCollectionIcon(name: string) {
 
 export default function ProjectDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const projectId = params.id as string
 
   const [uploadOpen, setUploadOpen] = React.useState(false)
@@ -51,7 +54,18 @@ export default function ProjectDetailPage() {
   const [shareLinksExpanded, setShareLinksExpanded] = React.useState(true)
   const [rightTab, setRightTab] = React.useState<'comments' | 'fields'>('comments')
 
-  const { files: uploadFiles, startUpload, cancelUpload, removeFile, clearCompleted } = useUpload()
+  const { files: uploadFiles, startUpload } = useUploadStore()
+  const { user } = useAuthStore()
+
+  // Comments for the selected asset
+  const selectedVersionId = selectedAsset?.latest_version?.id || null
+  const {
+    comments,
+    resolveComment,
+    deleteComment,
+    addReaction,
+    removeReaction,
+  } = useComments(selectedAsset?.id || null, selectedVersionId)
 
   const { data: project, isLoading: loadingProject } = useSWR<Project>(
     `/projects/${projectId}`,
@@ -108,9 +122,11 @@ export default function ProjectDetailPage() {
   }, [assigneeUsers])
 
   React.useEffect(() => {
-    const anyComplete = uploadFiles.some((f) => f.status === 'complete')
+    const anyComplete = uploadFiles.some(
+      (f) => f.projectId === projectId && f.status === 'complete',
+    )
     if (anyComplete) mutateAssets()
-  }, [uploadFiles, mutateAssets])
+  }, [uploadFiles, mutateAssets, projectId])
 
   const handleFilesSelected = (files: File[]) => {
     setPendingFiles(files)
@@ -120,7 +136,7 @@ export default function ProjectDetailPage() {
   const handleStartUpload = () => {
     pendingFiles.forEach((file) => {
       const name = pendingFiles.length === 1 ? assetName || file.name : file.name
-      startUpload(file, projectId, name)
+      startUpload(file, projectId, name, project?.name)
     })
     setPendingFiles([])
     setAssetName('')
@@ -157,11 +173,13 @@ export default function ProjectDetailPage() {
 
         {/* Collections section */}
         <div className="px-3 py-2 border-t border-border">
-          <button
-            onClick={() => setCollectionsExpanded(!collectionsExpanded)}
-            className="w-full flex items-center justify-between px-2 mb-1"
-          >
-            <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Collections</span>
+          <div className="w-full flex items-center justify-between px-2 mb-1">
+            <span
+              className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider cursor-pointer"
+              onClick={() => setCollectionsExpanded(!collectionsExpanded)}
+            >
+              Collections
+            </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={(e) => { e.stopPropagation() }}
@@ -169,9 +187,14 @@ export default function ProjectDetailPage() {
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
-              <ChevronDown className={cn('h-3 w-3 text-text-tertiary transition-transform', !collectionsExpanded && '-rotate-90')} />
+              <button
+                onClick={() => setCollectionsExpanded(!collectionsExpanded)}
+                className="text-text-tertiary hover:text-text-primary transition-colors"
+              >
+                <ChevronDown className={cn('h-3 w-3 transition-transform', !collectionsExpanded && '-rotate-90')} />
+              </button>
             </div>
-          </button>
+          </div>
 
           {collectionsExpanded && (
             <div className="space-y-0.5">
@@ -203,11 +226,13 @@ export default function ProjectDetailPage() {
 
         {/* Share Links section */}
         <div className="px-3 py-2 border-t border-border">
-          <button
-            onClick={() => setShareLinksExpanded(!shareLinksExpanded)}
-            className="w-full flex items-center justify-between px-2 mb-1"
-          >
-            <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Share Links</span>
+          <div className="w-full flex items-center justify-between px-2 mb-1">
+            <span
+              className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider cursor-pointer"
+              onClick={() => setShareLinksExpanded(!shareLinksExpanded)}
+            >
+              Share Links
+            </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={(e) => { e.stopPropagation() }}
@@ -215,9 +240,14 @@ export default function ProjectDetailPage() {
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
-              <ChevronDown className={cn('h-3 w-3 text-text-tertiary transition-transform', !shareLinksExpanded && '-rotate-90')} />
+              <button
+                onClick={() => setShareLinksExpanded(!shareLinksExpanded)}
+                className="text-text-tertiary hover:text-text-primary transition-colors"
+              >
+                <ChevronDown className={cn('h-3 w-3 transition-transform', !shareLinksExpanded && '-rotate-90')} />
+              </button>
             </div>
-          </button>
+          </div>
 
           {shareLinksExpanded && (
             <div className="px-2 py-2 text-xs text-text-tertiary">
@@ -313,11 +343,6 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Active uploads */}
-          {uploadFiles.length > 0 && (
-            <UploadProgress uploads={uploadFiles} onCancel={cancelUpload} onRemove={removeFile} onClearCompleted={clearCompleted} />
-          )}
-
           {/* Asset grid */}
           <AssetGrid
             assets={assets ?? []}
@@ -326,67 +351,82 @@ export default function ProjectDetailPage() {
             assignees={assigneesMap}
             thumbnails={thumbnails}
             versionCounts={versionCounts}
+            selectedAssetId={selectedAsset?.id}
             onUpload={() => setUploadOpen(true)}
             onAssetSelect={(asset) => setSelectedAsset(asset as AssetResponse)}
+            onAssetOpen={(asset) => router.push(`/projects/${projectId}/assets/${asset.id}`)}
           />
         </div>
       </div>
 
       {/* ─── Right Panel (Comments + Fields tabs) ───────────────────────── */}
-      {selectedAsset ? (
-        <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-right-4 duration-150">
-          {/* Tabs */}
-          <div className="flex items-center border-b border-border">
-            <button
-              onClick={() => setRightTab('comments')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2',
-                rightTab === 'comments'
-                  ? 'border-accent text-text-primary'
-                  : 'border-transparent text-text-tertiary hover:text-text-secondary',
-              )}
-            >
-              <MessageSquare className="h-4 w-4" />
-              Comments
-            </button>
-            <button
-              onClick={() => setRightTab('fields')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2',
-                rightTab === 'fields'
-                  ? 'border-accent text-text-primary'
-                  : 'border-transparent text-text-tertiary hover:text-text-secondary',
-              )}
-            >
-              Fields
-            </button>
+      <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
+        {/* Tabs */}
+        <div className="flex items-center border-b border-border">
+          <button
+            onClick={() => setRightTab('comments')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2',
+              rightTab === 'comments'
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-tertiary hover:text-text-secondary',
+            )}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Comments
+          </button>
+          <button
+            onClick={() => setRightTab('fields')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2',
+              rightTab === 'fields'
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-tertiary hover:text-text-secondary',
+            )}
+          >
+            Fields
+          </button>
+          {selectedAsset && (
             <button
               onClick={() => setSelectedAsset(null)}
               className="px-3 text-text-tertiary hover:text-text-primary transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
+          )}
+        </div>
 
-          {rightTab === 'comments' ? (
-            /* Comments tab */
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1 flex items-center justify-center p-6 text-center">
-                <div>
-                  <div className="mx-auto mb-3 h-16 w-16 rounded-full bg-bg-tertiary flex items-center justify-center">
-                    <MessageSquare className="h-8 w-8 text-text-tertiary/50" />
+        {selectedAsset ? (
+          rightTab === 'comments' ? (
+            /* Comments tab — real comments */
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {comments.length > 0 ? (
+                <CommentPanel
+                  comments={comments as any}
+                  currentUserId={user?.id}
+                  onResolve={resolveComment}
+                  onDelete={deleteComment}
+                  onAddReaction={addReaction}
+                  onRemoveReaction={removeReaction}
+                  onReply={() => {}}
+                  onSubmitReply={async () => {}}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-6 text-center">
+                  <div>
+                    <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-bg-tertiary flex items-center justify-center">
+                      <MessageSquare className="h-6 w-6 text-text-tertiary/50" />
+                    </div>
+                    <p className="text-sm text-text-secondary">No comments yet</p>
+                    <p className="text-xs text-text-tertiary mt-1">Double-click the asset to open the viewer and leave comments.</p>
                   </div>
-                  <p className="text-sm text-text-secondary">No comments &ndash; yet</p>
-                  <Link href={`/projects/${projectId}/assets/${selectedAsset.id}`}>
-                    <Button size="sm" className="mt-3">Get Started</Button>
-                  </Link>
                 </div>
-              </div>
-              {/* Comment input bar */}
-              <div className="border-t border-border p-3">
+              )}
+              {/* Quick link to open in viewer */}
+              <div className="border-t border-border p-3 shrink-0">
                 <Link href={`/projects/${projectId}/assets/${selectedAsset.id}`}>
-                  <div className="rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-tertiary cursor-pointer hover:border-border-focus transition-colors">
-                    Leave your comment...
+                  <div className="rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-tertiary cursor-pointer hover:border-border-focus transition-colors text-center">
+                    Open in viewer to comment
                   </div>
                 </Link>
               </div>
@@ -437,9 +477,9 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="pt-3 border-t border-border grid grid-cols-2 gap-2">
-                <Link href={`/projects/${projectId}/assets/${selectedAsset.id}`} className="col-span-2">
-                  <Button className="w-full" size="sm">Open in Player</Button>
-                </Link>
+                <Button asChild className="w-full col-span-2" size="sm">
+                  <Link href={`/projects/${projectId}/assets/${selectedAsset.id}`}>Open in Player</Link>
+                </Button>
                 <Button variant="secondary" size="sm" className="gap-1">
                   <LinkIcon className="h-3.5 w-3.5" /> Share
                 </Button>
@@ -448,20 +488,9 @@ export default function ProjectDetailPage() {
                 </Button>
               </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
-          {/* Empty right panel with tabs still visible */}
-          <div className="flex items-center border-b border-border">
-            <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 border-accent text-text-primary">
-              <MessageSquare className="h-4 w-4" />
-              Comments
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 border-transparent text-text-tertiary">
-              Fields
-            </button>
-          </div>
+          )
+        ) : (
+          /* No asset selected */
           <div className="flex-1 flex items-center justify-center p-6 text-center">
             <div>
               <div className="mx-auto mb-3 h-16 w-16 rounded-full bg-bg-tertiary flex items-center justify-center">
@@ -470,8 +499,8 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-text-secondary">Select an asset to view comments</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

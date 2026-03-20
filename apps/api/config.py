@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     s3_access_key: str
     s3_secret_key: str
     s3_region: str = "us-east-1"
+    s3_public_endpoint: str | None = None  # External URL for presigned URLs (e.g. http://localhost:9000 when S3_ENDPOINT is http://minio:9000)
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15

@@ -1,12 +1,15 @@
 import { create } from 'zustand'
 import type { Asset, AssetVersion } from '@/types'
 
-type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'text' | 'eraser'
+type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'line'
+export type TimeFormat = 'standard' | 'timecode' | 'frames'
 
 interface ReviewState {
   currentAsset: Asset | null
   currentVersion: AssetVersion | null
   playheadTime: number
+  seekTarget: { time: number; id: number } | null
+  timeFormat: TimeFormat
   isDrawingMode: boolean
   drawingTool: DrawingTool
   drawingColor: string
@@ -14,6 +17,8 @@ interface ReviewState {
   setCurrentAsset: (asset: Asset) => void
   setCurrentVersion: (version: AssetVersion) => void
   setPlayheadTime: (time: number) => void
+  seekTo: (time: number) => void
+  setTimeFormat: (format: TimeFormat) => void
   toggleDrawingMode: () => void
   setDrawingTool: (tool: DrawingTool) => void
   setDrawingColor: (color: string) => void
@@ -25,6 +30,8 @@ const initialState = {
   currentAsset: null,
   currentVersion: null,
   playheadTime: 0,
+  seekTarget: null,
+  timeFormat: 'timecode' as TimeFormat,
   isDrawingMode: false,
   drawingTool: 'pen' as DrawingTool,
   drawingColor: '#FF3B30',
@@ -44,6 +51,14 @@ export const useReviewStore = create<ReviewState>()((set) => ({
 
   setPlayheadTime: (time: number) => {
     set({ playheadTime: time })
+  },
+
+  seekTo: (time: number) => {
+    set({ seekTarget: { time, id: Date.now() }, playheadTime: time })
+  },
+
+  setTimeFormat: (format: TimeFormat) => {
+    set({ timeFormat: format })
   },
 
   toggleDrawingMode: () => {

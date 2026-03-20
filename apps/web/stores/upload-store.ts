@@ -1,0 +1,308 @@
+import { create } from 'zustand'
+import { api } from '@/lib/api'
+import type { AssetResponse } from '@/types'
+
+const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
+const HISTORY_PAGE_SIZE = 20
+
+export type UploadStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'failed' | 'cancelled'
+
+export interface UploadFile {
+  id: string
+  fileName: string
+  fileSize: number
+  fileType: string
+  projectId: string
+  projectName?: string
+  assetName: string
+  progress: number
+  processingProgress: number
+  status: UploadStatus
+  error?: string
+  assetId?: string
+  versionId?: string
+  uploadId?: string
+  createdAt: number // timestamp for grouping
+}
+
+interface InitiateResponse {
+  upload_id: string
+  s3_key: string
+  asset_id: string
+  version_id: string
+}
+
+// AbortControllers for cancellation
+const abortControllers: Record<string, AbortController> = {}
+
+interface UploadStore {
+  files: UploadFile[]
+  panelOpen: boolean
+  historyLoaded: boolean
+  historyHasMore: boolean
+  historyLoading: boolean
+  historySkip: number
+  setPanelOpen: (open: boolean) => void
+  togglePanel: () => void
+  startUpload: (file: File, projectId: string, assetName: string, projectName?: string) => string
+  cancelUpload: (fileId: string) => void
+  removeFile: (fileId: string) => void
+  clearCompleted: () => void
+  fetchHistory: () => Promise<void>
+  fetchMoreHistory: () => Promise<void>
+  // SSE-driven processing updates
+  updateProcessingProgress: (assetId: string, percent: number) => void
+  markProcessingComplete: (assetId: string) => void
+  markProcessingFailed: (assetId: string, error: string) => void
+}
+
+function mapProcessingStatus(status: string): UploadStatus {
+  switch (status) {
+    case 'uploading': return 'uploading'
+    case 'processing': return 'processing'
+    case 'ready': return 'complete'
+    case 'failed': return 'failed'
+    default: return 'complete'
+  }
+}
+
+function mimeFromAssetType(assetType: string): string {
+  switch (assetType) {
+    case 'video': return 'video/mp4'
+    case 'audio': return 'audio/mpeg'
+    case 'image':
+    case 'image_carousel': return 'image/jpeg'
+    default: return 'application/octet-stream'
+  }
+}
+
+function mergeHistoryAssets(existing: UploadFile[], assets: AssetResponse[]): UploadFile[] {
+  const existingAssetIds = new Set(existing.map((f) => f.assetId).filter(Boolean))
+  const newFiles: UploadFile[] = assets
+    .filter((a) => a.latest_version && !existingAssetIds.has(a.id))
+    .map((a) => {
+      const v = a.latest_version!
+      const file = v.files?.[0]
+      return {
+        id: `history-${a.id}`,
+        fileName: file?.original_filename ?? a.name,
+        fileSize: file?.file_size_bytes ?? 0,
+        fileType: file?.mime_type ?? mimeFromAssetType(a.asset_type),
+        projectId: a.project_id,
+        assetName: a.name,
+        progress: 100,
+        processingProgress: v.processing_status === 'ready' ? 100 : 0,
+        status: mapProcessingStatus(v.processing_status),
+        assetId: a.id,
+        versionId: v.id,
+        createdAt: new Date(v.created_at).getTime(),
+      }
+    })
+  return [...existing, ...newFiles]
+}
+
+export const useUploadStore = create<UploadStore>((set, get) => ({
+  files: [],
+  panelOpen: false,
+  historyLoaded: false,
+  historyHasMore: true,
+  historyLoading: false,
+  historySkip: 0,
+
+  setPanelOpen: (open) => set({ panelOpen: open }),
+  togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
+
+  startUpload: (file, projectId, assetName, projectName) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+    const entry: UploadFile = {
+      id,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      projectId,
+      projectName,
+      assetName,
+      progress: 0,
+      processingProgress: 0,
+      status: 'pending',
+      createdAt: Date.now(),
+    }
+
+    set((s) => ({ files: [entry, ...s.files], panelOpen: true }))
+
+    const updateFile = (fileId: string, patch: Partial<UploadFile>) => {
+      set((s) => ({
+        files: s.files.map((f) => (f.id === fileId ? { ...f, ...patch } : f)),
+      }))
+    }
+
+    // Start async upload
+    ;(async () => {
+      const controller = new AbortController()
+      abortControllers[id] = controller
+
+      try {
+        updateFile(id, { status: 'uploading' })
+
+        const { upload_id, s3_key, asset_id, version_id } = await api.post<InitiateResponse>(
+          '/upload/initiate',
+          {
+            project_id: projectId,
+            asset_name: assetName,
+            original_filename: file.name,
+            file_size_bytes: file.size,
+            mime_type: file.type,
+          },
+        )
+
+        updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
+
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+        const parts: Array<{ PartNumber: number; ETag: string }> = []
+
+        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
+          if (controller.signal.aborted) {
+            throw new DOMException('Upload cancelled', 'AbortError')
+          }
+
+          const start = (partNumber - 1) * CHUNK_SIZE
+          const end = Math.min(start + CHUNK_SIZE, file.size)
+          const chunk = file.slice(start, end)
+
+          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
+            s3_key,
+            upload_id,
+            part_number: partNumber,
+          })
+
+          const putResponse = await fetch(presigned_url, {
+            method: 'PUT',
+            body: chunk,
+            signal: controller.signal,
+          })
+
+          if (!putResponse.ok) {
+            throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
+          }
+
+          const etag = putResponse.headers.get('ETag') ?? ''
+          parts.push({ PartNumber: partNumber, ETag: etag })
+
+          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
+        }
+
+        await api.post('/upload/complete', {
+          s3_key,
+          upload_id,
+          asset_id,
+          version_id,
+          parts,
+        })
+
+        // Upload done — backend now processes (transcode/convert).
+        // For non-processable types (or if SSE isn't wired), mark complete directly.
+        const isMedia = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/')
+        if (isMedia) {
+          updateFile(id, { progress: 100, status: 'processing', processingProgress: 0 })
+        } else {
+          updateFile(id, { progress: 100, status: 'complete' })
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          updateFile(id, { status: 'cancelled', progress: 0 })
+        } else {
+          const message = err instanceof Error ? err.message : 'Upload failed'
+          updateFile(id, { status: 'failed', error: message })
+        }
+      } finally {
+        delete abortControllers[id]
+      }
+    })()
+
+    return id
+  },
+
+  cancelUpload: (fileId) => {
+    abortControllers[fileId]?.abort()
+    set((s) => ({
+      files: s.files.map((f) =>
+        f.id === fileId ? { ...f, status: 'cancelled' as const, progress: 0 } : f,
+      ),
+    }))
+  },
+
+  removeFile: (fileId) => {
+    set((s) => ({ files: s.files.filter((f) => f.id !== fileId) }))
+  },
+
+  clearCompleted: () => {
+    set((s) => ({ files: s.files.filter((f) => f.status !== 'complete') }))
+  },
+
+  fetchHistory: async () => {
+    if (get().historyLoaded) return
+    set({ historyLoading: true })
+    try {
+      const assets = await api.get<AssetResponse[]>(`/me/assets?skip=0&limit=${HISTORY_PAGE_SIZE}`)
+      const merged = mergeHistoryAssets(get().files, assets)
+      set({
+        historyLoaded: true,
+        historyLoading: false,
+        historySkip: HISTORY_PAGE_SIZE,
+        historyHasMore: assets.length >= HISTORY_PAGE_SIZE,
+        files: merged,
+      })
+    } catch {
+      set({ historyLoaded: true, historyLoading: false })
+    }
+  },
+
+  fetchMoreHistory: async () => {
+    const { historyHasMore, historyLoading, historySkip } = get()
+    if (!historyHasMore || historyLoading) return
+    set({ historyLoading: true })
+    try {
+      const assets = await api.get<AssetResponse[]>(`/me/assets?skip=${historySkip}&limit=${HISTORY_PAGE_SIZE}`)
+      const merged = mergeHistoryAssets(get().files, assets)
+      set((s) => ({
+        historyLoading: false,
+        historySkip: s.historySkip + HISTORY_PAGE_SIZE,
+        historyHasMore: assets.length >= HISTORY_PAGE_SIZE,
+        files: merged,
+      }))
+    } catch {
+      set({ historyLoading: false })
+    }
+  },
+
+  updateProcessingProgress: (assetId, percent) => {
+    set((s) => ({
+      files: s.files.map((f) =>
+        f.assetId === assetId && f.status === 'processing'
+          ? { ...f, processingProgress: percent }
+          : f,
+      ),
+    }))
+  },
+
+  markProcessingComplete: (assetId) => {
+    set((s) => ({
+      files: s.files.map((f) =>
+        f.assetId === assetId && f.status === 'processing'
+          ? { ...f, status: 'complete' as const, processingProgress: 100 }
+          : f,
+      ),
+    }))
+  },
+
+  markProcessingFailed: (assetId, error) => {
+    set((s) => ({
+      files: s.files.map((f) =>
+        f.assetId === assetId && f.status === 'processing'
+          ? { ...f, status: 'failed' as const, error }
+          : f,
+      ),
+    }))
+  },
+}))

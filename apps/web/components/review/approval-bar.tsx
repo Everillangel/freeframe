@@ -163,7 +163,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
 
       <div
         className={cn(
-          'flex items-center gap-3 px-4 py-2 border-t border-border bg-bg-secondary',
+          'flex items-center gap-3 px-4 py-2 border-b border-border bg-bg-secondary',
           className,
         )}
       >

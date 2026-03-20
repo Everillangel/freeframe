@@ -59,10 +59,16 @@ async function request<T>(
     try {
       const errorBody = await response.json()
       if (errorBody?.detail) {
-        detail =
-          typeof errorBody.detail === 'string'
-            ? errorBody.detail
-            : JSON.stringify(errorBody.detail)
+        if (typeof errorBody.detail === 'string') {
+          detail = errorBody.detail
+        } else if (Array.isArray(errorBody.detail)) {
+          // FastAPI validation errors: [{loc: [...], msg: "...", type: "..."}]
+          detail = errorBody.detail
+            .map((e: { msg?: string; loc?: string[] }) => e.msg || 'Validation error')
+            .join('; ')
+        } else {
+          detail = JSON.stringify(errorBody.detail)
+        }
       }
     } catch {
       // ignore parse errors; use statusText as fallback

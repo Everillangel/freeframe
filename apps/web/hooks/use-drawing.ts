@@ -1,14 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReviewStore } from '@/stores/review-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'text' | 'eraser'
+export type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'line'
 
 export interface UseDrawingReturn {
   canvasRef: React.RefObject<HTMLCanvasElement>
+  resize: (width: number, height: number) => void
   clear: () => void
   undo: () => void
   getJSON: () => Record<string, unknown>
@@ -17,16 +18,36 @@ export interface UseDrawingReturn {
 
 const MAX_HISTORY = 20
 
+// ─── Shared singleton state ───────────────────────────────────────────────────
+
+let sharedFabric: import('fabric').Canvas | null = null
+let sharedHistory: string[] = []
+let sharedIsLoading = false
+let sharedPendingSize: { w: number; h: number } | null = null
+
+// Notify all hook consumers when canvas becomes ready
+let readyListeners: Array<() => void> = []
+function onCanvasReady(cb: () => void) {
+  readyListeners.push(cb)
+  return () => { readyListeners = readyListeners.filter((l) => l !== cb) }
+}
+function notifyCanvasReady() {
+  readyListeners.forEach((cb) => cb())
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useDrawing(): UseDrawingReturn {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  // Store the fabric Canvas instance as unknown to avoid top-level fabric import (SSR)
-  const fabricRef = useRef<import('fabric').Canvas | null>(null)
-  const historyRef = useRef<string[]>([])
-  const isLoadingRef = useRef(false)
+  const [canvasReady, setCanvasReady] = useState(!!sharedFabric)
 
   const { drawingTool, drawingColor, brushSize, isDrawingMode } = useReviewStore()
+
+  // Listen for canvas ready notifications (for consumers without the canvas element)
+  useEffect(() => {
+    if (sharedFabric) { setCanvasReady(true); return }
+    return onCanvasReady(() => setCanvasReady(true))
+  }, [isDrawingMode])
 
   // ─── Bootstrap Fabric.js ────────────────────────────────────────────────────
   useEffect(() => {
@@ -34,28 +55,42 @@ export function useDrawing(): UseDrawingReturn {
     const el = canvasRef.current
     if (!el) return
 
-    let canvas: import('fabric').Canvas | null = null
+    let disposed = false
 
     const init = async () => {
       const mod = await import('fabric')
+      if (disposed) return
 
-      canvas = new mod.Canvas(el, {
+      if (sharedFabric) {
+        try { sharedFabric.dispose() } catch { /* already disposed */ }
+        sharedFabric = null
+      }
+
+      const canvas = new mod.Canvas(el, {
         selection: false,
         renderOnAddRemove: true,
+        skipTargetFind: true,       // never find/select objects on click
+        hoverCursor: 'crosshair',
+        moveCursor: 'crosshair',
+        defaultCursor: 'crosshair',
       })
 
-      fabricRef.current = canvas
+      sharedFabric = canvas
+      notifyCanvasReady()
 
-      // Save initial blank state
-      historyRef.current = [JSON.stringify(canvas.toJSON())]
+      if (sharedPendingSize) {
+        canvas.setDimensions({ width: sharedPendingSize.w, height: sharedPendingSize.h })
+        sharedPendingSize = null
+      }
+
+      sharedHistory = [JSON.stringify(canvas.toJSON())]
 
       const saveHistory = () => {
-        if (isLoadingRef.current || !canvas) return
-        const json = JSON.stringify(canvas.toJSON())
-        const history = historyRef.current
-        if (history[history.length - 1] !== json) {
-          if (history.length >= MAX_HISTORY) history.shift()
-          history.push(json)
+        if (sharedIsLoading || !sharedFabric) return
+        const json = JSON.stringify(sharedFabric.toJSON())
+        if (sharedHistory[sharedHistory.length - 1] !== json) {
+          if (sharedHistory.length >= MAX_HISTORY) sharedHistory.shift()
+          sharedHistory.push(json)
         }
       }
 
@@ -67,79 +102,69 @@ export function useDrawing(): UseDrawingReturn {
     init()
 
     return () => {
-      if (canvas) canvas.dispose()
-      fabricRef.current = null
+      disposed = true
+      if (sharedFabric) {
+        try { sharedFabric.dispose() } catch { /* ignore */ }
+      }
+      sharedFabric = null
+      sharedHistory = []
+      setCanvasReady(false)
     }
   }, [])
 
   // ─── Sync tool / color / brush size ─────────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const canvas = fabricRef.current
+    const canvas = sharedFabric
     if (!canvas) return
 
     if (!isDrawingMode) {
       canvas.isDrawingMode = false
-      canvas.selection = false
       return
     }
 
     const applyTool = async () => {
       const mod = await import('fabric')
 
-      if (drawingTool === 'pen' || drawingTool === 'eraser') {
+      // Deselect any active object
+      canvas.discardActiveObject()
+      canvas.renderAll()
+
+      if (drawingTool === 'pen') {
         canvas.isDrawingMode = true
-        canvas.selection = false
         const brush = new mod.PencilBrush(canvas)
-        brush.color = drawingTool === 'eraser' ? '#ffffff' : drawingColor
-        brush.width = drawingTool === 'eraser' ? brushSize * 3 : brushSize
+        brush.color = drawingColor
+        brush.width = brushSize
         canvas.freeDrawingBrush = brush
       } else {
-        // rectangle / arrow / text — handled via mouse event listeners below
+        // For shapes (rectangle, arrow, line) we handle via mouse events
         canvas.isDrawingMode = false
-        canvas.selection = false
       }
     }
 
     applyTool()
-  }, [drawingTool, drawingColor, brushSize, isDrawingMode])
+  }, [drawingTool, drawingColor, brushSize, isDrawingMode, canvasReady])
 
-  // ─── Shape drawing (rectangle, arrow, text) ──────────────────────────────────
+  // ─── Shape drawing (rectangle, arrow, line) ─────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!isDrawingMode) return
-    if (drawingTool !== 'rectangle' && drawingTool !== 'arrow' && drawingTool !== 'text') return
+    if (drawingTool !== 'rectangle' && drawingTool !== 'arrow' && drawingTool !== 'line') return
 
-    const canvas = fabricRef.current
+    const canvas = sharedFabric
     if (!canvas) return
 
-    let shapeStartX = 0
-    let shapeStartY = 0
+    let startX = 0
+    let startY = 0
     let activeShape: import('fabric').FabricObject | null = null
-    let isDrawingShape = false
+    let drawing = false
 
     const handleMouseDown = async (opt: import('fabric').TPointerEventInfo) => {
       const mod = await import('fabric')
       const pointer = canvas.getScenePoint(opt.e as MouseEvent)
-      shapeStartX = pointer.x
-      shapeStartY = pointer.y
-      isDrawingShape = true
-
-      if (drawingTool === 'text') {
-        const textbox = new mod.IText('Text', {
-          left: pointer.x,
-          top: pointer.y,
-          fontSize: 18,
-          fill: drawingColor,
-          selectable: true,
-          editable: true,
-        })
-        canvas.add(textbox)
-        canvas.setActiveObject(textbox)
-        textbox.enterEditing()
-        isDrawingShape = false
-        return
-      }
+      startX = pointer.x
+      startY = pointer.y
+      drawing = true
 
       if (drawingTool === 'rectangle') {
         const rect = new mod.Rect({
@@ -151,16 +176,22 @@ export function useDrawing(): UseDrawingReturn {
           strokeWidth: 2,
           fill: 'transparent',
           selectable: false,
+          evented: false,
+          hasControls: false,
+          hasBorders: false,
         })
         canvas.add(rect)
         activeShape = rect
       }
 
-      if (drawingTool === 'arrow') {
+      if (drawingTool === 'arrow' || drawingTool === 'line') {
         const line = new mod.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
           stroke: drawingColor,
           strokeWidth: 2,
           selectable: false,
+          evented: false,
+          hasControls: false,
+          hasBorders: false,
         })
         canvas.add(line)
         activeShape = line
@@ -168,32 +199,66 @@ export function useDrawing(): UseDrawingReturn {
     }
 
     const handleMouseMove = async (opt: import('fabric').TPointerEventInfo) => {
-      if (!isDrawingShape || !activeShape) return
+      if (!drawing || !activeShape) return
       const mod = await import('fabric')
       const pointer = canvas.getScenePoint(opt.e as MouseEvent)
 
       if (drawingTool === 'rectangle' && activeShape instanceof mod.Rect) {
         activeShape.set({
-          left: Math.min(shapeStartX, pointer.x),
-          top: Math.min(shapeStartY, pointer.y),
-          width: Math.abs(pointer.x - shapeStartX),
-          height: Math.abs(pointer.y - shapeStartY),
+          left: Math.min(startX, pointer.x),
+          top: Math.min(startY, pointer.y),
+          width: Math.abs(pointer.x - startX),
+          height: Math.abs(pointer.y - startY),
         })
         canvas.renderAll()
       }
 
-      if (drawingTool === 'arrow' && activeShape instanceof mod.Line) {
+      if ((drawingTool === 'arrow' || drawingTool === 'line') && activeShape instanceof mod.Line) {
         activeShape.set({ x2: pointer.x, y2: pointer.y })
         canvas.renderAll()
       }
     }
 
-    const handleMouseUp = () => {
-      isDrawingShape = false
+    const handleMouseUp = async () => {
+      // Add arrowhead for arrow tool
+      if (drawingTool === 'arrow' && activeShape) {
+        const mod = await import('fabric')
+        if (activeShape instanceof mod.Line) {
+          const x1 = activeShape.x1 ?? 0
+          const y1 = activeShape.y1 ?? 0
+          const x2 = activeShape.x2 ?? 0
+          const y2 = activeShape.y2 ?? 0
+          const angle = Math.atan2(y2 - y1, x2 - x1)
+          const headLen = 12
+
+          const head = new mod.Polygon(
+            [
+              { x: x2, y: y2 },
+              {
+                x: x2 - headLen * Math.cos(angle - Math.PI / 6),
+                y: y2 - headLen * Math.sin(angle - Math.PI / 6),
+              },
+              {
+                x: x2 - headLen * Math.cos(angle + Math.PI / 6),
+                y: y2 - headLen * Math.sin(angle + Math.PI / 6),
+              },
+            ],
+            {
+              fill: drawingColor,
+              selectable: false,
+              evented: false,
+              hasControls: false,
+              hasBorders: false,
+            },
+          )
+          canvas.add(head)
+        }
+      }
+
+      drawing = false
       activeShape = null
     }
 
-    // Use disposers — the fabric v7 on() returns a VoidFunction disposer
     const disposeDown = canvas.on('mouse:down', handleMouseDown)
     const disposeMove = canvas.on('mouse:move', handleMouseMove)
     const disposeUp = canvas.on('mouse:up', handleMouseUp)
@@ -203,46 +268,50 @@ export function useDrawing(): UseDrawingReturn {
       disposeMove()
       disposeUp()
     }
-  }, [isDrawingMode, drawingTool, drawingColor])
+  }, [isDrawingMode, drawingTool, drawingColor, canvasReady])
 
   // ─── Methods ─────────────────────────────────────────────────────────────────
 
+  const resize = useCallback((width: number, height: number) => {
+    if (sharedFabric) {
+      sharedFabric.setDimensions({ width, height })
+      sharedFabric.renderAll()
+    } else {
+      sharedPendingSize = { w: width, h: height }
+    }
+  }, [])
+
   const clear = useCallback(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-    canvas.clear()
-    historyRef.current = [JSON.stringify(canvas.toJSON())]
+    if (!sharedFabric) return
+    sharedFabric.clear()
+    sharedHistory = [JSON.stringify(sharedFabric.toJSON())]
   }, [])
 
   const undo = useCallback(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-    const history = historyRef.current
-    if (history.length <= 1) return
-    history.pop()
-    const previous = history[history.length - 1]
-    isLoadingRef.current = true
-    canvas.loadFromJSON(JSON.parse(previous) as Record<string, unknown>).then(() => {
-      canvas.renderAll()
-      isLoadingRef.current = false
+    if (!sharedFabric) return
+    if (sharedHistory.length <= 1) return
+    sharedHistory.pop()
+    const previous = sharedHistory[sharedHistory.length - 1]
+    sharedIsLoading = true
+    sharedFabric.loadFromJSON(JSON.parse(previous) as Record<string, unknown>).then(() => {
+      sharedFabric?.renderAll()
+      sharedIsLoading = false
     })
   }, [])
 
   const getJSON = useCallback((): Record<string, unknown> => {
-    const canvas = fabricRef.current
-    if (!canvas) return {}
-    return canvas.toJSON() as Record<string, unknown>
+    if (!sharedFabric) return {}
+    return sharedFabric.toJSON() as Record<string, unknown>
   }, [])
 
   const loadJSON = useCallback((json: Record<string, unknown>) => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-    isLoadingRef.current = true
-    canvas.loadFromJSON(json).then(() => {
-      canvas.renderAll()
-      isLoadingRef.current = false
+    if (!sharedFabric) return
+    sharedIsLoading = true
+    sharedFabric.loadFromJSON(json).then(() => {
+      sharedFabric?.renderAll()
+      sharedIsLoading = false
     })
   }, [])
 
-  return { canvasRef, clear, undo, getJSON, loadJSON }
+  return { canvasRef, resize, clear, undo, getJSON, loadJSON }
 }

@@ -176,6 +176,7 @@ export interface Comment {
   timecode_end: number | null;
   body: string;
   resolved: boolean;
+  visibility: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

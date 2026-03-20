@@ -2,9 +2,12 @@
 
 import * as React from 'react'
 import { useAuthStore } from '@/stores/auth-store'
+import { useUploadStore } from '@/stores/upload-store'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CommandPalette } from '@/components/layout/command-palette'
+import { UploadsPanel } from '@/components/layout/uploads-panel'
+import { UploadSSEBridge } from '@/components/layout/upload-sse-bridge'
 import { cn } from '@/lib/utils'
 
 export default function DashboardLayout({
@@ -12,13 +15,15 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(true)
   const [commandOpen, setCommandOpen] = React.useState(false)
   const { fetchUser } = useAuthStore()
+  const { fetchHistory } = useUploadStore()
 
   React.useEffect(() => {
     fetchUser()
-  }, [fetchUser])
+    fetchHistory()
+  }, [fetchUser, fetchHistory])
 
   // Global keyboard shortcut for command palette
   React.useEffect(() => {
@@ -48,11 +53,13 @@ export default function DashboardLayout({
       >
         <Header onSearchOpen={() => setCommandOpen(true)} />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="relative flex-1 overflow-y-auto">
           {children}
         </div>
       </main>
 
+      <UploadsPanel />
+      <UploadSSEBridge />
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </div>
   )

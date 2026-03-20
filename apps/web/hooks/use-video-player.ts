@@ -52,7 +52,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const hlsRef = useRef<Hls | null>(null)
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { setPlayheadTime } = useReviewStore()
+  const { setPlayheadTime, seekTarget } = useReviewStore()
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -79,6 +79,16 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current)
     }
   }, [setPlayheadTime])
+
+  // React to external seek requests (e.g. clicking comment timecode)
+  useEffect(() => {
+    if (!seekTarget) return
+    const video = videoRef.current
+    if (!video || !video.duration) return
+    const clamped = Math.max(0, Math.min(seekTarget.time, video.duration))
+    video.currentTime = clamped
+    setCurrentTime(clamped)
+  }, [seekTarget])
 
   // Fullscreen change listener
   useEffect(() => {

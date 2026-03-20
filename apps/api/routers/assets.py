@@ -102,6 +102,7 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
 @router.get("/projects/{project_id}/assets", response_model=list[AssetResponse])
 def list_assets(
     project_id: uuid.UUID,
+    include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -110,6 +111,28 @@ def list_assets(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
     ).all()
+
+    if not include_failed:
+        # Exclude assets where the only version is failed or still uploading
+        asset_ids = [a.id for a in assets]
+        if asset_ids:
+            # Find assets that have at least one non-failed, non-uploading version
+            usable = set(
+                row[0] for row in db.query(AssetVersion.asset_id).filter(
+                    AssetVersion.asset_id.in_(asset_ids),
+                    AssetVersion.deleted_at.is_(None),
+                    AssetVersion.processing_status.notin_([ProcessingStatus.failed, ProcessingStatus.uploading]),
+                ).distinct().all()
+            )
+            # Also include assets with no versions yet (just created)
+            has_any_version = set(
+                row[0] for row in db.query(AssetVersion.asset_id).filter(
+                    AssetVersion.asset_id.in_(asset_ids),
+                    AssetVersion.deleted_at.is_(None),
+                ).distinct().all()
+            )
+            assets = [a for a in assets if a.id in usable or a.id not in has_any_version]
+
     return _build_asset_responses_bulk(assets, db)
 
 
