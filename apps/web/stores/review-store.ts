@@ -9,6 +9,9 @@ interface ReviewState {
   currentVersion: AssetVersion | null
   playheadTime: number
   seekTarget: { time: number; id: number } | null
+  focusedCommentId: string | null
+  pendingAnnotation: Record<string, unknown> | null
+  activeAnnotation: Record<string, unknown> | null
   timeFormat: TimeFormat
   isDrawingMode: boolean
   drawingTool: DrawingTool
@@ -18,6 +21,9 @@ interface ReviewState {
   setCurrentVersion: (version: AssetVersion) => void
   setPlayheadTime: (time: number) => void
   seekTo: (time: number) => void
+  setFocusedCommentId: (id: string | null) => void
+  setPendingAnnotation: (data: Record<string, unknown> | null) => void
+  setActiveAnnotation: (data: Record<string, unknown> | null) => void
   setTimeFormat: (format: TimeFormat) => void
   toggleDrawingMode: () => void
   setDrawingTool: (tool: DrawingTool) => void
@@ -31,6 +37,9 @@ const initialState = {
   currentVersion: null,
   playheadTime: 0,
   seekTarget: null,
+  focusedCommentId: null,
+  pendingAnnotation: null,
+  activeAnnotation: null,
   timeFormat: 'timecode' as TimeFormat,
   isDrawingMode: false,
   drawingTool: 'pen' as DrawingTool,
@@ -55,6 +64,18 @@ export const useReviewStore = create<ReviewState>()((set) => ({
 
   seekTo: (time: number) => {
     set({ seekTarget: { time, id: Date.now() }, playheadTime: time })
+  },
+
+  setFocusedCommentId: (id: string | null) => {
+    set({ focusedCommentId: id })
+  },
+
+  setPendingAnnotation: (data: Record<string, unknown> | null) => {
+    set({ pendingAnnotation: data })
+  },
+
+  setActiveAnnotation: (data: Record<string, unknown> | null) => {
+    set({ activeAnnotation: data })
   },
 
   setTimeFormat: (format: TimeFormat) => {

@@ -259,6 +259,7 @@ interface CommentItemProps {
   depth?: number
   currentUserId?: string
   replyingTo?: string | null
+  isFocused?: boolean
   onResolve: (commentId: string) => Promise<void>
   onDelete: (commentId: string) => Promise<void>
   onAddReaction: (commentId: string, emoji: string) => Promise<void>
@@ -274,6 +275,7 @@ function CommentItem({
   depth = 0,
   currentUserId,
   replyingTo,
+  isFocused,
   onResolve,
   onDelete,
   onAddReaction,
@@ -283,9 +285,19 @@ function CommentItem({
   onSubmitReply,
 }: CommentItemProps) {
   const seekTo = useReviewStore((s) => s.seekTo)
+  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
+  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
+  const itemRef = React.useRef<HTMLDivElement>(null)
   const [showReplies, setShowReplies] = React.useState(true)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
   const [resolving, setResolving] = React.useState(false)
+
+  // Scroll into view when focused from progress bar marker click
+  React.useEffect(() => {
+    if (isFocused && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [isFocused])
 
   const authorName =
     comment.author?.name ?? comment.guest_author?.name ?? 'Unknown'
@@ -325,10 +337,25 @@ function CommentItem({
 
   return (
     <div
+      ref={itemRef}
       className={cn(
-        'group/comment relative',
-        depth > 0 && 'ml-8 pl-3 border-l-2 border-white/5',
+        'group/comment relative transition-colors cursor-pointer',
+        depth > 0
+          ? 'ml-8 pl-3 border-l-2 border-white/5'
+          : cn(
+              'rounded-lg border px-3',
+              isFocused
+                ? 'border-accent/50 bg-white/[0.04]'
+                : 'border-white/[0.06] hover:border-white/15 hover:bg-white/[0.02]',
+            ),
       )}
+      onClick={() => {
+        setFocusedCommentId(comment.id)
+        if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
+          seekTo(comment.timecode_start)
+        }
+        setActiveAnnotation(comment.annotation ? comment.annotation.drawing_data : null)
+      }}
     >
       <div className="flex gap-2.5 py-3">
         {/* Colored avatar */}
@@ -364,11 +391,18 @@ function CommentItem({
             </div>
           </div>
 
-          {/* Timecode badge */}
+          {/* Timecode badge + annotation indicator */}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
           {comment.timecode_start !== null && comment.timecode_start !== undefined && (
             <button
-              className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
-              onClick={() => seekTo(comment.timecode_start!)}
+              className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
+              onClick={() => {
+                seekTo(comment.timecode_start!)
+                setFocusedCommentId(comment.id)
+                if (comment.annotation) {
+                  setActiveAnnotation(comment.annotation.drawing_data)
+                }
+              }}
               title="Jump to timecode"
             >
               <Clock className="h-2.5 w-2.5" />
@@ -378,6 +412,22 @@ function CommentItem({
               )}
             </button>
           )}
+          {comment.annotation && (
+            <button
+              className="inline-flex items-center justify-center h-5 w-5 rounded text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/15 transition-colors"
+              onClick={() => {
+                setActiveAnnotation(comment.annotation!.drawing_data)
+                setFocusedCommentId(comment.id)
+                if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
+                  seekTo(comment.timecode_start)
+                }
+              }}
+              title="Show annotation"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          </div>
 
           {/* Body */}
           <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
@@ -553,6 +603,12 @@ export function CommentPanel({
   onSubmitReply,
   className,
 }: CommentPanelProps) {
+  const focusedCommentId = useReviewStore((s) => s.focusedCommentId)
+  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
+  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
+
+
+
   // Toolbar state
   const [visibility, setVisibility] = React.useState<CommentVisibility>('all')
   const [visOpen, setVisOpen] = React.useState(false)
@@ -850,16 +906,14 @@ export function CommentPanel({
           sorted.map((comment, index) => (
             <div
               key={comment.id}
-              className={cn(
-                'px-4',
-                index < sorted.length - 1 && 'border-b border-white/5',
-              )}
+              className="px-3 pt-2 first:pt-3"
             >
               <CommentItem
                 comment={comment}
                 commentNumber={index + 1}
                 currentUserId={currentUserId}
                 replyingTo={replyingTo}
+                isFocused={focusedCommentId === comment.id}
                 onResolve={onResolve}
                 onDelete={onDelete}
                 onAddReaction={onAddReaction}

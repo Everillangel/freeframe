@@ -8,7 +8,6 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { formatRelativeTime } from '@/lib/utils'
 import { EmptyState } from '@/components/shared/empty-state'
-import { Badge } from '@/components/shared/badge'
 import type { Asset } from '@/types'
 
 function getGreeting(): string {
@@ -38,7 +37,6 @@ function AssetCard({ asset }: AssetCardProps) {
           <p className="text-sm font-medium text-text-primary line-clamp-1 group-hover:text-accent transition-colors">
             {asset.name}
           </p>
-          <Badge status={asset.status} />
         </div>
         <p className="text-xs text-text-tertiary">
           {formatRelativeTime(asset.updated_at)}

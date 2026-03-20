@@ -76,13 +76,22 @@ async function request<T>(
     throw new ApiError(response.status, detail)
   }
 
-  // Handle empty responses (e.g. 204 No Content)
+  // Handle empty responses (e.g. 204 No Content, or empty body)
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as unknown as T
+  }
+
   const contentType = response.headers.get('content-type')
   if (!contentType || !contentType.includes('application/json')) {
     return undefined as unknown as T
   }
 
-  return response.json() as Promise<T>
+  const text = await response.text()
+  if (!text) {
+    return undefined as unknown as T
+  }
+
+  return JSON.parse(text) as T
 }
 
 export const api = {

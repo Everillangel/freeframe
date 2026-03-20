@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { useDrawing } from '@/hooks/use-drawing'
 import { useReviewStore } from '@/stores/review-store'
@@ -16,8 +16,15 @@ interface AnnotationCanvasProps {
  */
 export function AnnotationCanvas({ onSave, className }: AnnotationCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { isDrawingMode } = useReviewStore()
-  const { canvasRef, resize } = useDrawing()
+  const { isDrawingMode, setPendingAnnotation } = useReviewStore()
+  const { canvasRef, resize, getJSON } = useDrawing()
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
+
+  const saveAnnotation = useCallback((data: Record<string, unknown>) => {
+    onSaveRef.current?.(data)
+    setPendingAnnotation(data)
+  }, [setPendingAnnotation])
 
   // Keep Fabric canvas dimensions synced with the container
   useEffect(() => {
@@ -39,6 +46,54 @@ export function AnnotationCanvas({ onSave, className }: AnnotationCanvasProps) {
       clearTimeout(timer)
     }
   }, [resize])
+
+  // Push canvas state to parent on every drawing change
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isDrawingMode) return
+
+    let checkInterval: ReturnType<typeof setInterval> | null = null
+
+    // Poll for fabric canvas availability then attach listeners
+    const interval = setInterval(() => {
+      try {
+        const json = getJSON()
+        const objects = (json as any)?.objects
+        if (!objects) return // canvas not ready yet
+
+        clearInterval(interval)
+
+        // Re-export JSON on every change
+        checkInterval = setInterval(() => {
+          const data = getJSON()
+          const objs = (data as any)?.objects
+          if (objs && Array.isArray(objs) && objs.length > 0) {
+            saveAnnotation(data)
+          }
+        }, 500)
+      } catch {
+        // canvas not ready
+      }
+    }, 200)
+
+    return () => {
+      clearInterval(interval)
+      if (checkInterval) clearInterval(checkInterval)
+    }
+  }, [isDrawingMode, getJSON, saveAnnotation])
+
+  // When exiting drawing mode, capture final state
+  const prevDrawingMode = useRef(isDrawingMode)
+  useEffect(() => {
+    if (prevDrawingMode.current && !isDrawingMode) {
+      // Just exited drawing mode — save final canvas state
+      const json = getJSON()
+      const objects = (json as any)?.objects
+      if (objects && Array.isArray(objects) && objects.length > 0) {
+        saveAnnotation(json)
+      }
+    }
+    prevDrawingMode.current = isDrawingMode
+  }, [isDrawingMode, getJSON, saveAnnotation])
 
   if (!isDrawingMode) return null
 

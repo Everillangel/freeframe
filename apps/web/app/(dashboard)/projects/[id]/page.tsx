@@ -15,7 +15,6 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/shared/avatar'
-import { Badge } from '@/components/shared/badge'
 import { AssetGrid } from '@/components/projects/asset-grid'
 import { CommentPanel } from '@/components/review/comment-panel'
 import { UploadZone } from '@/components/upload/upload-zone'
@@ -450,10 +449,6 @@ export default function ProjectDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-text-tertiary">Type</span>
                   <span className="text-xs text-text-primary capitalize">{selectedAsset.asset_type.replace('_', ' ')}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-tertiary">Status</span>
-                  <Badge status={selectedAsset.status} />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-text-tertiary">Uploaded</span>

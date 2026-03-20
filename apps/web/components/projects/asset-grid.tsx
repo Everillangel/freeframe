@@ -4,7 +4,6 @@ import * as React from 'react'
 import { LayoutGrid, List, ArrowUpDown, Search, Plus, X, Copy, Download, MoreHorizontal } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/shared/badge'
 import { Avatar } from '@/components/shared/avatar'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AssetCard } from './asset-card'
@@ -275,7 +274,6 @@ export function AssetGrid({
                     {formatRelativeTime(asset.created_at)}
                   </p>
                 </div>
-                <Badge status={asset.status} />
                 {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
               </div>
             )

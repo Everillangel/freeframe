@@ -52,7 +52,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const hlsRef = useRef<Hls | null>(null)
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { setPlayheadTime, seekTarget } = useReviewStore()
+  const { setPlayheadTime, seekTarget, setActiveAnnotation } = useReviewStore()
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -84,10 +84,27 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   useEffect(() => {
     if (!seekTarget) return
     const video = videoRef.current
-    if (!video || !video.duration) return
-    const clamped = Math.max(0, Math.min(seekTarget.time, video.duration))
-    video.currentTime = clamped
-    setCurrentTime(clamped)
+    if (!video) return
+    const dur = video.duration
+    // Allow seek even if duration isn't fully resolved yet (NaN/0)
+    if (dur && Number.isFinite(dur)) {
+      const clamped = Math.max(0, Math.min(seekTarget.time, dur))
+      video.currentTime = clamped
+      setCurrentTime(clamped)
+    } else {
+      // Queue seek for after metadata loads
+      const onLoaded = () => {
+        const d = video.duration
+        if (d && Number.isFinite(d)) {
+          const clamped = Math.max(0, Math.min(seekTarget.time, d))
+          video.currentTime = clamped
+          setCurrentTime(clamped)
+        }
+        video.removeEventListener('loadedmetadata', onLoaded)
+      }
+      video.addEventListener('loadedmetadata', onLoaded)
+      return () => video.removeEventListener('loadedmetadata', onLoaded)
+    }
   }, [seekTarget])
 
   // Fullscreen change listener
@@ -120,7 +137,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       }
     }
 
-    const onPlay = () => setIsPlaying(true)
+    const onPlay = () => { setIsPlaying(true); setActiveAnnotation(null) }
     const onPause = () => setIsPlaying(false)
     const onWaiting = () => setIsLoading(true)
     const onCanPlay = () => setIsLoading(false)
@@ -136,6 +153,11 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       setIsLoading(false)
       setError('Video playback error')
     }
+    const onProgress = () => {
+      if (video.buffered.length > 0) {
+        setBuffered(video.buffered.end(video.buffered.length - 1))
+      }
+    }
 
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('timeupdate', onTimeUpdate)
@@ -146,6 +168,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     video.addEventListener('volumechange', onVolumeChange)
     video.addEventListener('ended', onEnded)
     video.addEventListener('error', onError)
+    video.addEventListener('progress', onProgress)
 
     const isHlsSource = src.includes('.m3u8')
 
@@ -198,6 +221,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       video.removeEventListener('volumechange', onVolumeChange)
       video.removeEventListener('ended', onEnded)
       video.removeEventListener('error', onError)
+      video.removeEventListener('progress', onProgress)
 
       if (hlsRef.current) {
         hlsRef.current.destroy()

@@ -3,7 +3,6 @@
 import * as React from 'react'
 import { Film, Music, Image as ImageIcon, Images, MessageSquare, MoreHorizontal, Check, Clock } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
-import { Badge } from '@/components/shared/badge'
 import type { Asset, AssetType, User } from '@/types'
 
 const assetTypeIcons: Record<AssetType, React.ElementType> = {
@@ -132,12 +131,6 @@ export function AssetCard({
         </p>
       </div>
 
-      {/* Status field — bottom of card like Frame.io */}
-      <div className="px-2 pb-2 mt-auto">
-        <div className="flex items-center gap-1.5 rounded border border-border bg-bg-tertiary/50 px-2 py-1">
-          <Badge status={asset.status} />
-        </div>
-      </div>
     </div>
   )
 }

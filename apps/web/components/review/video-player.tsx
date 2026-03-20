@@ -28,14 +28,99 @@ interface StreamUrlResponse {
 interface VideoPlayerProps {
   assetId: string
   comments?: Comment[]
+  overlay?: React.ReactNode
   className?: string
+}
+
+// ─── Video frame constraint ──────────────────────────────────────────────────
+
+/**
+ * Wraps children so they are positioned exactly over the visible video frame,
+ * excluding the black letterbox bars created by object-contain.
+ */
+function VideoFrameConstraint({
+  videoRef,
+  children,
+}: {
+  videoRef: React.RefObject<HTMLVideoElement>
+  children: React.ReactNode
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [style, setStyle] = useState<React.CSSProperties>({})
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const calc = () => {
+      const container = video.parentElement
+      if (!container) return
+
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      const vw = video.videoWidth
+      const vh = video.videoHeight
+
+      if (!vw || !vh) {
+        // Video metadata not loaded yet — fill container
+        setStyle({ position: 'absolute', inset: 0 })
+        return
+      }
+
+      const containerAspect = cw / ch
+      const videoAspect = vw / vh
+
+      let renderW: number, renderH: number, offsetX: number, offsetY: number
+
+      if (videoAspect > containerAspect) {
+        // Video wider than container — letterbox top/bottom
+        renderW = cw
+        renderH = cw / videoAspect
+        offsetX = 0
+        offsetY = (ch - renderH) / 2
+      } else {
+        // Video taller than container — letterbox left/right
+        renderH = ch
+        renderW = ch * videoAspect
+        offsetX = (cw - renderW) / 2
+        offsetY = 0
+      }
+
+      setStyle({
+        position: 'absolute',
+        left: offsetX,
+        top: offsetY,
+        width: renderW,
+        height: renderH,
+      })
+    }
+
+    calc()
+    video.addEventListener('loadedmetadata', calc)
+    video.addEventListener('resize', calc)
+
+    const ro = new ResizeObserver(calc)
+    if (video.parentElement) ro.observe(video.parentElement)
+
+    return () => {
+      video.removeEventListener('loadedmetadata', calc)
+      video.removeEventListener('resize', calc)
+      ro.disconnect()
+    }
+  }, [videoRef])
+
+  return (
+    <div ref={wrapperRef} style={style} className="overflow-hidden">
+      {children}
+    </div>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 
-export function VideoPlayer({ assetId, comments = [], className }: VideoPlayerProps) {
+export function VideoPlayer({ assetId, comments = [], overlay, className }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [loop, setLoop] = useState(false)
@@ -191,6 +276,9 @@ export function VideoPlayer({ assetId, comments = [], className }: VideoPlayerPr
             <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
+
+        {/* Overlay slot (annotation canvas / overlay) — constrained to video frame */}
+        {overlay && <VideoFrameConstraint videoRef={videoRef}>{overlay}</VideoFrameConstraint>}
       </div>
 
       {/* Progress bar */}
@@ -200,6 +288,7 @@ export function VideoPlayer({ assetId, comments = [], className }: VideoPlayerPr
           duration={duration}
           buffered={buffered}
           comments={comments}
+          streamUrl={streamUrl}
           onSeek={seek}
         />
       </div>

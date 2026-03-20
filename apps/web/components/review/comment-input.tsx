@@ -8,7 +8,6 @@ import {
   Loader2,
   Send,
   Smile,
-  ThumbsUp,
   Clock,
   ChevronLeft,
   ChevronDown,
@@ -47,6 +46,11 @@ interface CommentInputProps {
 }
 
 // ─── Drawing tools config ─────────────────────────────────────────────────────
+
+const EMOJIS = [
+  '👍', '👎', '❤️', '🔥', '👀', '🎉', '😂', '😮',
+  '😢', '💯', '✅', '❌', '⭐', '💡', '🤔', '👏',
+]
 
 type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'line'
 
@@ -149,9 +153,11 @@ export function CommentInput({
     drawingColor,
     playheadTime,
     timeFormat,
+    pendingAnnotation,
     toggleDrawingMode,
     setDrawingTool,
     setDrawingColor,
+    setPendingAnnotation,
   } = useReviewStore()
 
   const { clear, undo, getJSON } = useDrawing()
@@ -164,20 +170,24 @@ export function CommentInput({
   const [timecodeAttached, setTimecodeAttached] = React.useState(true)
   const visRef = React.useRef<HTMLDivElement>(null)
 
+  // Emoji picker state
+  const [emojiOpen, setEmojiOpen] = React.useState(false)
+
   // Mention state
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null)
   const [mentionStart, setMentionStart] = React.useState<number>(0)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  // Close visibility dropdown on outside click
+  // Close dropdowns on outside click
   React.useEffect(() => {
-    if (!visDropdownOpen) return
+    if (!visDropdownOpen && !emojiOpen) return
     function handleClick(e: MouseEvent) {
-      if (visRef.current && !visRef.current.contains(e.target as Node)) setVisDropdownOpen(false)
+      if (visDropdownOpen && visRef.current && !visRef.current.contains(e.target as Node)) setVisDropdownOpen(false)
+      if (emojiOpen) setEmojiOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [visDropdownOpen])
+  }, [visDropdownOpen, emojiOpen])
 
   const canAnnotate = assetType !== 'audio'
   const hasTimecode = assetType === 'video' || assetType === 'audio'
@@ -190,7 +200,21 @@ export function CommentInput({
       default: return formatTimecode(seconds)
     }
   }
-  const hasAnnotation = annotationData && Object.keys(annotationData).length > 0
+  const hasAnnotation = !!(annotationData && Object.keys(annotationData).length > 0) || !!(pendingAnnotation && (pendingAnnotation as any)?.objects?.length > 0)
+
+  // Capture canvas state synchronously before exiting drawing mode
+  function exitDrawingMode() {
+    if (isDrawingMode) {
+      try {
+        const json = getJSON()
+        const objs = (json as any)?.objects
+        if (objs && Array.isArray(objs) && objs.length > 0) {
+          setPendingAnnotation(json)
+        }
+      } catch { /* canvas may not be ready */ }
+    }
+    toggleDrawingMode()
+  }
 
   function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value
@@ -235,15 +259,37 @@ export function CommentInput({
     setError(null)
 
     try {
-      // If drawing mode is active, grab current canvas state
-      let finalAnnotation = annotationData ?? undefined
+      // Grab canvas state: try live canvas first, then store, then prop
+      let finalAnnotation: Record<string, unknown> | undefined = undefined
+
       if (isDrawingMode) {
-        const json = getJSON()
-        const objects = (json as any)?.objects
-        if (objects && Array.isArray(objects) && objects.length > 0) {
-          finalAnnotation = json
+        try {
+          const json = getJSON()
+          const objects = (json as any)?.objects
+          if (objects && Array.isArray(objects) && objects.length > 0) {
+            finalAnnotation = json
+          }
+        } catch { /* canvas may not exist */ }
+        exitDrawingMode()
+      } else {
+        try {
+          const json = getJSON()
+          const objects = (json as any)?.objects
+          if (objects && Array.isArray(objects) && objects.length > 0) {
+            finalAnnotation = json
+          }
+        } catch { /* canvas may not exist */ }
+      }
+
+      if (!finalAnnotation && pendingAnnotation) {
+        const objs = (pendingAnnotation as any)?.objects
+        if (objs && Array.isArray(objs) && objs.length > 0) {
+          finalAnnotation = pendingAnnotation
         }
-        toggleDrawingMode() // exit drawing mode after submit
+      }
+
+      if (!finalAnnotation && annotationData) {
+        finalAnnotation = annotationData
       }
 
       await onSubmit(
@@ -256,6 +302,7 @@ export function CommentInput({
       )
 
       setBody('')
+      setPendingAnnotation(null)
       if (replyToId && onCancelReply) onCancelReply()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post comment')
@@ -276,20 +323,12 @@ export function CommentInput({
         </div>
       )}
 
-      {/* Annotation indicator */}
-      {canAnnotate && hasAnnotation && !isDrawingMode && (
-        <div className="flex items-center gap-1.5 px-4 py-2 bg-accent/5 border-b border-accent/10 text-xs text-accent">
-          <Pencil className="h-3 w-3" />
-          Annotation attached
-        </div>
-      )}
-
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
         <div className="relative">
           <div className="flex items-start gap-0 rounded-lg border border-white/10 bg-white/5 focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
-            {/* Inline timecode badge */}
-            {hasTimecode && timecodeAttached && (
+            {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
+            {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span className="shrink-0 ml-2.5 mt-[9px] rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-400 leading-none select-none">
                 {displayTime(playheadTime)}
               </span>
@@ -327,7 +366,7 @@ export function CommentInput({
           /* ─── Drawing toolbar ─── */
           <div className="flex items-center gap-1">
             <button
-              onClick={() => toggleDrawingMode()}
+              onClick={() => exitDrawingMode()}
               className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-primary transition-colors"
               title="Exit drawing"
             >
@@ -425,20 +464,35 @@ export function CommentInput({
               )}
 
               {/* Emoji */}
-              <button
-                className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
-                title="Add emoji"
-              >
-                <Smile className="h-4 w-4" />
-              </button>
+              <div className="relative">
+                <button
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
+                  title="Add emoji"
+                  onClick={() => setEmojiOpen((p) => !p)}
+                >
+                  <Smile className="h-4 w-4" />
+                </button>
+                {emojiOpen && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-white/10 bg-[#232328] shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
+                    <div className="grid grid-cols-8 gap-px">
+                      {EMOJIS.map((e) => (
+                        <button
+                          key={e}
+                          className="h-6 w-6 rounded flex items-center justify-center text-sm hover:bg-white/10 transition-colors"
+                          onClick={() => {
+                            setBody((prev) => prev + e)
+                            setEmojiOpen(false)
+                            textareaRef.current?.focus()
+                          }}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              {/* Thumbs up */}
-              <button
-                className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
-                title="Like"
-              >
-                <ThumbsUp className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="flex items-center gap-2">

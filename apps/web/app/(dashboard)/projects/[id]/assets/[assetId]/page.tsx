@@ -8,6 +8,7 @@ import { VideoPlayer } from '@/components/review/video-player'
 import { AudioPlayer } from '@/components/review/audio-player'
 import { ImageViewer } from '@/components/review/image-viewer'
 import { AnnotationCanvas } from '@/components/review/annotation-canvas'
+import { AnnotationOverlay } from '@/components/review/annotation-overlay'
 import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
 // ApprovalBar removed for now
@@ -178,18 +179,21 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     switch (asset.asset_type) {
       case 'video':
         return (
-          <div className="relative flex-1 flex flex-col min-h-0">
-            <VideoPlayer
-              assetId={asset.id}
-              comments={comments}
-              className="flex-1 min-h-0"
-            />
-            {isDrawingMode && (
-              <AnnotationCanvas
-                onSave={(data) => setAnnotationData(data)}
-              />
-            )}
-          </div>
+          <VideoPlayer
+            assetId={asset.id}
+            comments={comments}
+            className="flex-1 min-h-0"
+            overlay={
+              <>
+                <AnnotationOverlay />
+                {isDrawingMode && (
+                  <AnnotationCanvas
+                    onSave={(data) => setAnnotationData(data)}
+                  />
+                )}
+              </>
+            }
+          />
         )
       case 'audio':
         return (
@@ -365,12 +369,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-text-tertiary">Type</span>
                       <span className="text-xs text-text-primary capitalize">{asset.asset_type.replace('_', ' ')}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-text-tertiary">Status</span>
-                      <span className="inline-flex items-center rounded-full bg-status-warning/10 px-2 py-0.5 text-xs font-medium text-status-warning">
-                        {asset.status.replace('_', ' ')}
-                      </span>
                     </div>
                     {currentVersion && (
                       <div className="flex items-center justify-between">

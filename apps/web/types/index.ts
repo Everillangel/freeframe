@@ -165,6 +165,18 @@ export interface GuestUser {
   created_at: string;
 }
 
+export interface CommentAuthor {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+}
+
+export interface GuestAuthor {
+  id: string;
+  name: string;
+  email?: string;
+}
+
 export interface Comment {
   id: string;
   asset_id: string;
@@ -180,6 +192,8 @@ export interface Comment {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  author?: CommentAuthor | null;
+  guest_author?: GuestAuthor | null;
 }
 
 export interface Annotation {
