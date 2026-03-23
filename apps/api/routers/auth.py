@@ -21,6 +21,7 @@ from ..services.redis_service import (
     MAGIC_CODE_EXPIRY_SECONDS,
 )
 from ..tasks.email_tasks import send_magic_code_email, send_invite_email
+from ..tasks.celery_app import send_task_safe
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 
@@ -64,7 +65,7 @@ def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
     store_magic_code(body.email, code)
     
     # Queue email via Celery (async)
-    send_magic_code_email.delay(body.email, code, MAGIC_CODE_EXPIRY_MINUTES)
+    send_task_safe(send_magic_code_email, body.email, code, MAGIC_CODE_EXPIRY_MINUTES)
     
     return SendMagicCodeResponse(
         message="Magic code sent to your email",
