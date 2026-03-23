@@ -716,6 +716,11 @@ export default function ProjectDetailPage() {
         assets={assets ?? []}
         folders={subfolders ?? []}
         onShareCreated={() => mutateShareLinks()}
+        onAdvancedSettings={(token) => {
+          setShowShareLinks(true)
+          setSelectedShareLink(token)
+          setShowTrash(false)
+        }}
       />
     </div>
   )

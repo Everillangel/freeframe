@@ -14,7 +14,16 @@ import {
   Film,
   Music,
   Images,
+  ChevronRight,
+  ChevronLeft,
+  MessageSquare,
+  Download,
+  Key,
+  Clock,
+  Droplets,
+  LayoutGrid,
 } from 'lucide-react'
+import * as Switch from '@radix-ui/react-switch'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
@@ -30,6 +39,7 @@ interface ShareCreateDialogProps {
   assets: AssetResponse[]
   folders: Folder[]
   onShareCreated: () => void
+  onAdvancedSettings?: (token: string) => void
 }
 
 type SelectedItem =
@@ -246,13 +256,19 @@ function SelectionPhase({
 interface LinkCreatedPhaseProps {
   result: CreatedShareResult
   onDone: () => void
+  onAdvancedSettings?: (token: string) => void
 }
 
-function LinkCreatedPhase({ result, onDone }: LinkCreatedPhaseProps) {
+function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPhaseProps) {
   const [title, setTitle] = React.useState(result.title)
   const [editingTitle, setEditingTitle] = React.useState(false)
   const [savingTitle, setSavingTitle] = React.useState(false)
   const [emailInput, setEmailInput] = React.useState('')
+  const [showSettings, setShowSettings] = React.useState(false)
+  const [allowComments, setAllowComments] = React.useState(true)
+  const [allowDownloads, setAllowDownloads] = React.useState(false)
+  const [passphrase, setPassphrase] = React.useState(false)
+  const [watermark, setWatermark] = React.useState(false)
   const titleInputRef = React.useRef<HTMLInputElement>(null)
 
   const shareUrl =
@@ -277,12 +293,41 @@ function LinkCreatedPhase({ result, onDone }: LinkCreatedPhaseProps) {
     }
   }
 
+  async function handleToggle(field: string, value: boolean) {
+    try {
+      const updates: Record<string, unknown> = {}
+      if (field === 'allowComments') {
+        setAllowComments(value)
+        updates.permission = value ? 'comment' : 'view'
+      } else if (field === 'allowDownloads') {
+        setAllowDownloads(value)
+        updates.allow_download = value
+      } else if (field === 'passphrase') {
+        setPassphrase(value)
+        if (!value) updates.password = null
+      } else if (field === 'watermark') {
+        setWatermark(value)
+        updates.show_watermark = value
+      }
+      await api.patch(`/share/${result.token}`, updates)
+    } catch {
+      // revert on error
+    }
+  }
+
   React.useEffect(() => {
     if (editingTitle && titleInputRef.current) {
       titleInputRef.current.focus()
       titleInputRef.current.select()
     }
   }, [editingTitle])
+
+  // Compute settings summary
+  const settingsSummary = [
+    allowComments ? 'view' : null,
+    allowDownloads ? 'download' : null,
+    allowComments ? 'comment' : null,
+  ].filter(Boolean)
 
   return (
     <>
@@ -325,77 +370,178 @@ function LinkCreatedPhase({ result, onDone }: LinkCreatedPhaseProps) {
       </div>
 
       {/* Content */}
-      <div className="px-5 py-4 space-y-4">
+      <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
         {/* Share URL */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Globe className="h-3.5 w-3.5 text-status-success" />
-            <span className="text-xs font-medium text-status-success">Public</span>
-          </div>
-          <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary px-3 py-2">
-            <span className="flex-1 truncate font-mono text-xs text-text-primary">{shareUrl}</span>
-            <button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(shareUrl)
-                } catch {
-                  // fallback
-                }
-              }}
-              className="text-text-tertiary hover:text-text-primary transition-colors shrink-0"
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
+        <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary px-3 py-2">
+          <span className="flex-1 truncate font-mono text-xs text-text-primary">{shareUrl}</span>
+          <button
+            onClick={async () => {
+              try { await navigator.clipboard.writeText(shareUrl) } catch {}
+            }}
+            className="text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <div className="flex items-center gap-1 shrink-0 rounded-full bg-bg-secondary border border-border px-2 py-0.5">
+            <Globe className="h-3 w-3 text-status-success" />
+            <span className="text-2xs font-medium text-text-primary">Public</span>
           </div>
         </div>
 
         {/* Send to email */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-text-secondary">Send to name or email</label>
-          <input
-            type="text"
-            value={emailInput}
-            onChange={(e) => setEmailInput(e.target.value)}
-            placeholder="Enter name or email..."
-            className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
-          />
-        </div>
+        <input
+          type="text"
+          value={emailInput}
+          onChange={(e) => setEmailInput(e.target.value)}
+          placeholder="Send to name or email"
+          className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+        />
 
-        {/* Preview thumbnail */}
-        {result.thumbnailUrl && (
-          <div className="rounded-lg border border-border bg-bg-tertiary overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={result.thumbnailUrl}
-              alt={title}
-              className="w-full h-32 object-cover"
-            />
-          </div>
-        )}
-
-        {/* No thumbnail placeholder */}
-        {!result.thumbnailUrl && (
-          <div className="rounded-lg border border-border bg-bg-tertiary h-32 flex items-center justify-center">
-            {result.itemType === 'folder' ? (
-              <FolderIcon className="h-10 w-10 text-text-tertiary/40" />
+        {/* Preview thumbnail or Settings */}
+        {!showSettings ? (
+          <>
+            {/* Preview */}
+            {result.thumbnailUrl ? (
+              <div className="rounded-lg border border-border bg-bg-tertiary overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={result.thumbnailUrl} alt={title} className="w-full h-32 object-cover" />
+              </div>
             ) : (
-              <Image className="h-10 w-10 text-text-tertiary/40" />
+              <div className="rounded-lg border border-border bg-bg-tertiary h-32 flex items-center justify-center">
+                {result.itemType === 'folder' ? (
+                  <FolderIcon className="h-10 w-10 text-text-tertiary/40" />
+                ) : (
+                  <Image className="h-10 w-10 text-text-tertiary/40" />
+                )}
+              </div>
             )}
-          </div>
+
+            {/* Settings disclosure */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-full flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-4 py-3 hover:bg-bg-hover transition-colors"
+            >
+              <div className="text-left">
+                <p className="text-sm font-medium text-text-primary">Settings</p>
+                <p className="text-xs text-text-tertiary">
+                  Anyone with the link can {settingsSummary.join(', ')}.
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-text-tertiary" />
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Inline settings panel */}
+            <button
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-1 text-sm font-medium text-text-primary hover:text-accent transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </button>
+
+            <div className="space-y-1">
+              {/* Layout */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <LayoutGrid className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Layout</span>
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-tertiary p-0.5">
+                  <button className="rounded-md bg-accent px-3 py-1 text-2xs font-medium text-white">Grid</button>
+                  <button className="rounded-md px-3 py-1 text-2xs font-medium text-text-tertiary hover:text-text-primary">List</button>
+                </div>
+              </div>
+
+              {/* Allow comments */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Allow comments</span>
+                </div>
+                <Switch.Root
+                  checked={allowComments}
+                  onCheckedChange={(v) => handleToggle('allowComments', v)}
+                  className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+                </Switch.Root>
+              </div>
+
+              {/* Allow downloads */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Download className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Allow downloads</span>
+                </div>
+                <Switch.Root
+                  checked={allowDownloads}
+                  onCheckedChange={(v) => handleToggle('allowDownloads', v)}
+                  className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+                </Switch.Root>
+              </div>
+
+              {/* Passphrase */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Key className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Passphrase</span>
+                </div>
+                <Switch.Root
+                  checked={passphrase}
+                  onCheckedChange={(v) => handleToggle('passphrase', v)}
+                  className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+                </Switch.Root>
+              </div>
+
+              {/* Expiration date */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Clock className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Expiration date</span>
+                </div>
+                <button className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors">
+                  Not set
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+
+              {/* Watermark */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Droplets className="h-4 w-4 text-text-tertiary" />
+                  <span className="text-sm text-text-primary">Watermark</span>
+                </div>
+                <Switch.Root
+                  checked={watermark}
+                  onCheckedChange={(v) => handleToggle('watermark', v)}
+                  className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+                </Switch.Root>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between border-t border-border px-5 py-3">
-        <a
-          href={shareUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => {
+            onAdvancedSettings?.(result.token)
+            onDone()
+          }}
           className="text-xs text-text-tertiary hover:text-text-secondary transition-colors flex items-center gap-1"
         >
           Advanced settings
           <ExternalLink className="h-3 w-3" />
-        </a>
+        </button>
         <div className="flex items-center gap-2">
           <CopyButton text={shareUrl} label="Copy Link" />
           <Button size="sm" onClick={onDone}>
@@ -417,6 +563,7 @@ export function ShareCreateDialog({
   assets,
   folders,
   onShareCreated,
+  onAdvancedSettings,
 }: ShareCreateDialogProps) {
   const [selectedItems, setSelectedItems] = React.useState<Map<string, SelectedItem>>(new Map())
   const [creating, setCreating] = React.useState(false)
@@ -510,7 +657,7 @@ export function ShareCreateDialog({
           )}
 
           {createdResult ? (
-            <LinkCreatedPhase result={createdResult} onDone={handleDone} />
+            <LinkCreatedPhase result={createdResult} onDone={handleDone} onAdvancedSettings={onAdvancedSettings} />
           ) : (
             <SelectionPhase
               assets={assets}
