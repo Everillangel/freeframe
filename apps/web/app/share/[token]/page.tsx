@@ -229,22 +229,27 @@ interface ShareViewerProps {
 }
 
 function ShareViewer({ token, asset, permission, allowDownload, branding }: ShareViewerProps) {
-  const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
+  const [streamUrl, setStreamUrl] = React.useState<string | null>(asset.stream_url ?? null)
   const [streamLoading, setStreamLoading] = React.useState(false)
   const [commentKey, setCommentKey] = React.useState(0)
 
-  // For video/audio assets, get a stream URL via the share token
+  // For video/audio assets, get a stream URL if not already provided
   React.useEffect(() => {
+    if (asset.stream_url) {
+      setStreamUrl(asset.stream_url)
+      return
+    }
     if (asset.asset_type !== 'video' && asset.asset_type !== 'audio') return
     setStreamLoading(true)
-    fetch(`${API_URL}/share/${token}/stream`)
+    fetch(`${API_URL}/share/${token}/stream/${asset.id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data?.url) setStreamUrl(data.url)
+        if (data?.stream_url) setStreamUrl(data.stream_url)
+        else if (data?.url) setStreamUrl(data.url)
       })
       .catch(() => null)
       .finally(() => setStreamLoading(false))
-  }, [token, asset.asset_type])
+  }, [token, asset.asset_type, asset.stream_url, asset.id])
 
   const primaryColor = branding?.primary_color ?? '#6366f1'
   const brandingTitle = branding?.custom_title ?? 'FreeFrame'
@@ -354,7 +359,7 @@ function ShareViewer({ token, asset, permission, allowDownload, branding }: Shar
           {(asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && (
             <div className="flex items-center justify-center p-4 bg-bg-tertiary">
               <img
-                src={`${API_URL}/share/${token}/thumbnail`}
+                src={asset.thumbnail_url || asset.stream_url || `${API_URL}/share/${token}/thumbnail/${asset.id}`}
                 alt={asset.name}
                 className="max-h-[60vh] w-auto rounded object-contain"
                 onError={(e) => {
