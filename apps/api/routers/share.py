@@ -5,6 +5,7 @@ from typing import Optional
 import bcrypt
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+import sqlalchemy
 from sqlalchemy import func as sa_func, case
 from sqlalchemy.orm import Session
 
@@ -609,7 +610,7 @@ def list_project_share_links(
             ShareLink.description,
             ShareLink.is_enabled,
             ShareLink.permission,
-            sa_func.literal("asset").label("share_type"),
+            sqlalchemy.literal("asset").label("share_type"),
             Asset.name.label("target_name"),
             sa_func.coalesce(activity_stats.c.view_count, 0).label("view_count"),
             activity_stats.c.last_viewed_at,
@@ -632,7 +633,7 @@ def list_project_share_links(
             ShareLink.description,
             ShareLink.is_enabled,
             ShareLink.permission,
-            sa_func.literal("folder").label("share_type"),
+            sqlalchemy.literal("folder").label("share_type"),
             Folder.name.label("target_name"),
             sa_func.coalesce(activity_stats.c.view_count, 0).label("view_count"),
             activity_stats.c.last_viewed_at,
