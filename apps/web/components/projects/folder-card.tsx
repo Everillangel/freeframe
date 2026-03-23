@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useState } from 'react'
-import { Folder, MoreHorizontal, Pencil, Trash } from 'lucide-react'
+import { Folder, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NameDialog } from './name-dialog'
 import type { Folder as FolderType } from '@/types'
@@ -13,6 +13,7 @@ interface FolderCardProps {
   onSelect?: (e: React.MouseEvent) => void
   onRename?: (folderId: string, name: string) => Promise<void>
   onDelete?: (folderId: string) => Promise<void>
+  onShare?: (folderId: string, folderName: string) => Promise<void>
   onDropItems?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
   className?: string
 }
@@ -24,6 +25,7 @@ export function FolderCard({
   onSelect,
   onRename,
   onDelete,
+  onShare,
   onDropItems,
   className,
 }: FolderCardProps) {
@@ -112,6 +114,16 @@ export function FolderCard({
                     }}
                   >
                     <Pencil className="h-3 w-3" /> Rename
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/5"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMenuOpen(false)
+                      onShare?.(folder.id, folder.name)
+                    }}
+                  >
+                    <Share2 className="h-3 w-3" /> Share
                   </button>
                   <button
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"

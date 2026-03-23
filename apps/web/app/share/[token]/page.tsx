@@ -10,20 +10,29 @@ import {
   XCircle,
   Download,
   ExternalLink,
+  ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { GuestCommentInput } from '@/components/review/guest-comment-input'
-import type { Asset, SharePermission, ProjectBranding } from '@/types'
+import { FolderShareViewer } from '@/components/share/folder-share-viewer'
+import type { Asset, SharePermission, ProjectBranding, ShareLinkAppearance } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ShareValidateResponse {
-  valid: boolean
   asset?: Asset
+  asset_id?: string | null
+  folder_id?: string | null
+  folder_name?: string
+  title?: string
+  description?: string | null
   permission?: SharePermission
   allow_download?: boolean
-  password_required?: boolean
+  show_versions?: boolean
+  show_watermark?: boolean
+  appearance?: ShareLinkAppearance | null
+  requires_password?: boolean
   expired?: boolean
   branding?: ProjectBranding | null
 }
@@ -45,19 +54,24 @@ interface CommentsResponse {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-async function fetchShareInfo(token: string, password?: string): Promise<ShareValidateResponse> {
+async function fetchShareInfo(
+  token: string,
+  password?: string,
+  logOpen?: boolean,
+): Promise<ShareValidateResponse> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const body = password ? JSON.stringify({ password }) : undefined
   const method = password ? 'POST' : 'GET'
+  const logParam = logOpen ? '?log_open=true' : ''
   const url = password
     ? `${API_URL}/share/${token}/validate`
-    : `${API_URL}/share/${token}`
+    : `${API_URL}/share/${token}${logParam}`
 
   const response = await fetch(url, { method, headers, body })
   if (!response.ok) {
-    if (response.status === 401) return { valid: false, password_required: true }
-    if (response.status === 410) return { valid: false, expired: true }
-    return { valid: false }
+    if (response.status === 401) return { requires_password: true }
+    if (response.status === 410) return { expired: true }
+    return {}
   }
   return response.json()
 }
@@ -465,6 +479,169 @@ function GuestApprovalActions({ token, asset }: GuestApprovalActionsProps) {
   )
 }
 
+// ─── Folder asset viewer (single asset within folder share) ──────────────────
+
+interface FolderAssetViewerProps {
+  token: string
+  assetId: string
+  allowDownload: boolean
+  branding: any
+  onBack: () => void
+}
+
+function FolderAssetViewer({ token, assetId, allowDownload, branding, onBack }: FolderAssetViewerProps) {
+  const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
+  const [thumbnailUrl, setThumbnailUrl] = React.useState<string | null>(null)
+  const [assetInfo, setAssetInfo] = React.useState<{ name: string; asset_type: string; description?: string } | null>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+
+    // Fetch stream URL (which may also include asset info)
+    const streamPromise = fetch(`${API_URL}/share/${token}/stream/${assetId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+    // Fetch thumbnail URL
+    const thumbPromise = fetch(`${API_URL}/share/${token}/thumbnail/${assetId}`)
+      .then((r) => {
+        if (!r.ok) return null
+        // If the endpoint returns JSON with a url field
+        const contentType = r.headers.get('content-type')
+        if (contentType?.includes('application/json')) {
+          return r.json()
+        }
+        // If it redirects or returns image directly, use the request URL
+        return { url: `${API_URL}/share/${token}/thumbnail/${assetId}` }
+      })
+      .catch(() => null)
+
+    Promise.all([streamPromise, thumbPromise]).then(([streamData, thumbData]) => {
+      if (cancelled) return
+      if (streamData?.url) setStreamUrl(streamData.url)
+      if (streamData?.name) setAssetInfo({ name: streamData.name, asset_type: streamData.asset_type ?? 'image', description: streamData.description })
+      else setAssetInfo({ name: 'Asset', asset_type: 'image' })
+      if (thumbData?.url) setThumbnailUrl(thumbData.url)
+      setLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [token, assetId])
+
+  const primaryColor = branding?.primary_color ?? '#6366f1'
+  const brandingTitle = branding?.custom_title ?? 'FreeFrame'
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-primary">
+        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+      </div>
+    )
+  }
+
+  const assetType = assetInfo?.asset_type ?? 'image'
+
+  return (
+    <div className="min-h-screen bg-bg-primary text-text-primary">
+      {/* Brand header */}
+      <header
+        className="flex items-center justify-between border-b border-border px-5 py-3"
+        style={{ borderBottomColor: `${primaryColor}30` }}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to folder
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {allowDownload && streamUrl && (
+            <a
+              href={streamUrl}
+              download
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary',
+                'hover:bg-bg-hover hover:text-text-primary transition-colors',
+              )}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+          )}
+        </div>
+      </header>
+
+      {/* Asset title */}
+      <div className="border-b border-border px-5 py-3">
+        <h1 className="text-sm font-medium text-text-primary">{assetInfo?.name ?? 'Asset'}</h1>
+        {assetInfo?.description && (
+          <p className="mt-0.5 text-xs text-text-tertiary">{assetInfo.description}</p>
+        )}
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="rounded-full bg-bg-secondary px-2 py-0.5 text-2xs text-text-tertiary capitalize">
+            {assetType.replace('_', ' ')}
+          </span>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        <div className="mb-6 overflow-hidden rounded-xl border border-border bg-bg-secondary">
+          {assetType === 'video' && (
+            <div className="aspect-video w-full bg-black">
+              {streamUrl ? (
+                <video src={streamUrl} controls className="h-full w-full" preload="metadata">
+                  Your browser does not support video playback.
+                </video>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-text-tertiary">Video unavailable</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {assetType === 'audio' && (
+            <div className="p-6">
+              {streamUrl ? (
+                <audio src={streamUrl} controls className="w-full">
+                  Your browser does not support audio playback.
+                </audio>
+              ) : (
+                <p className="text-center text-sm text-text-tertiary py-6">Audio unavailable</p>
+              )}
+            </div>
+          )}
+
+          {(assetType === 'image' || assetType === 'image_carousel') && (
+            <div className="flex items-center justify-center p-4 bg-bg-tertiary">
+              <img
+                src={thumbnailUrl ?? `${API_URL}/share/${token}/thumbnail/${assetId}`}
+                alt={assetInfo?.name ?? 'Asset'}
+                className="max-h-[60vh] w-auto rounded object-contain"
+                onError={(e) => {
+                  ;(e.target as HTMLImageElement).style.display = 'none'
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Custom footer */}
+        {branding?.custom_footer && (
+          <p className="mt-6 text-center text-xs text-text-tertiary">{branding.custom_footer}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SharePage({
@@ -484,18 +661,32 @@ export default function SharePage({
         asset: Asset
         permission: SharePermission
         allowDownload: boolean
+        showVersions: boolean
         branding: ProjectBranding | null
+      }
+    | {
+        stage: 'folder_ready'
+        folderName: string
+        title: string
+        description: string | null
+        permission: SharePermission
+        allowDownload: boolean
+        showVersions: boolean
+        appearance: ShareLinkAppearance
+        branding: any
       }
 
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
+  const [viewingAssetInFolder, setViewingAssetInFolder] = React.useState<string | null>(null)
 
   async function validate(password?: string) {
     if (password) {
       setState({ stage: 'password_required', loading: true })
     }
     try {
-      const data = await fetchShareInfo(token, password)
-      if (data.password_required && !password) {
+      const isFirstLoad = !password
+      const data = await fetchShareInfo(token, password, isFirstLoad)
+      if (data.requires_password && !password) {
         setState({ stage: 'password_required' })
         return
       }
@@ -503,7 +694,36 @@ export default function SharePage({
         setState({ stage: 'expired' })
         return
       }
-      if (!data.valid || !data.asset || !data.permission) {
+      if (!data.permission) {
+        setState({ stage: 'invalid' })
+        return
+      }
+
+      // Folder share mode: folder_id is present, asset_id is null
+      if (data.folder_id && !data.asset_id) {
+        const defaultAppearance: ShareLinkAppearance = {
+          layout: 'grid',
+          theme: 'dark',
+          accent_color: null,
+          open_in_viewer: true,
+          sort_by: 'name',
+        }
+        setState({
+          stage: 'folder_ready',
+          folderName: data.folder_name ?? 'Shared Folder',
+          title: data.title ?? data.folder_name ?? 'Shared Folder',
+          description: data.description ?? null,
+          permission: data.permission,
+          allowDownload: data.allow_download ?? false,
+          showVersions: data.show_versions ?? true,
+          appearance: data.appearance ?? defaultAppearance,
+          branding: data.branding ?? null,
+        })
+        return
+      }
+
+      // Standard asset share mode
+      if (!data.asset) {
         setState({ stage: 'invalid' })
         return
       }
@@ -512,6 +732,7 @@ export default function SharePage({
         asset: data.asset,
         permission: data.permission,
         allowDownload: data.allow_download ?? false,
+        showVersions: data.show_versions ?? true,
         branding: data.branding ?? null,
       })
     } catch {
@@ -548,6 +769,35 @@ export default function SharePage({
 
   if (state.stage === 'invalid') {
     return <ErrorState />
+  }
+
+  if (state.stage === 'folder_ready' && !viewingAssetInFolder) {
+    return (
+      <FolderShareViewer
+        token={token}
+        folderName={state.folderName}
+        title={state.title}
+        description={state.description}
+        permission={state.permission}
+        allowDownload={state.allowDownload}
+        showVersions={state.showVersions}
+        appearance={state.appearance}
+        branding={state.branding}
+        onAssetClick={(assetId) => setViewingAssetInFolder(assetId)}
+      />
+    )
+  }
+
+  if (state.stage === 'folder_ready' && viewingAssetInFolder) {
+    return (
+      <FolderAssetViewer
+        token={token}
+        assetId={viewingAssetInFolder}
+        allowDownload={state.allowDownload}
+        branding={state.branding}
+        onBack={() => setViewingAssetInFolder(null)}
+      />
+    )
   }
 
   return (

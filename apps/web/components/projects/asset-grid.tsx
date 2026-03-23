@@ -39,6 +39,7 @@ interface AssetGridProps {
   onFolderOpen?: (folder: Folder) => void
   onFolderRename?: (folderId: string, name: string) => Promise<void>
   onFolderDelete?: (folderId: string) => Promise<void>
+  onFolderShare?: (folderId: string, folderName: string) => Promise<void>
   onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
@@ -76,6 +77,7 @@ export function AssetGrid({
   onFolderOpen,
   onFolderRename,
   onFolderDelete,
+  onFolderShare,
   onDropToFolder,
   actions,
 }: AssetGridProps) {
@@ -185,6 +187,7 @@ export function AssetGrid({
                 onOpen={onFolderOpen!}
                 onRename={onFolderRename}
                 onDelete={onFolderDelete}
+                onShare={onFolderShare}
                 onDropItems={onDropToFolder}
               />
             ))}
