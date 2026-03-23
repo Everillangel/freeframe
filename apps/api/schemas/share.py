@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 from typing import Optional, Literal
@@ -8,7 +8,7 @@ from ..models.share import SharePermission
 class ShareLinkAppearance(BaseModel):
     layout: Literal["grid", "list"] = "grid"
     theme: Literal["dark", "light"] = "dark"
-    accent_color: Optional[str] = None
+    accent_color: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     open_in_viewer: bool = True
     sort_by: Literal["name", "created_at", "file_size"] = "created_at"
 
@@ -49,8 +49,8 @@ class ShareLinkValidateResponse(BaseModel):
     folder_name: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    permission: SharePermission
-    allow_download: bool
+    permission: SharePermission = SharePermission.view
+    allow_download: bool = False
     show_versions: bool = True
     show_watermark: bool = False
     appearance: Optional[dict] = None

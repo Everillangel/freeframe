@@ -122,17 +122,9 @@ def validate_share_link_endpoint(
     if link.password_hash:
         if not password:
             return ShareLinkValidateResponse(
-                asset_id=link.asset_id,
-                folder_id=link.folder_id,
-                folder_name=folder_name,
-                title=link.title,
-                description=link.description,
-                permission=link.permission,
-                allow_download=link.allow_download,
-                show_versions=link.show_versions,
-                show_watermark=link.show_watermark,
-                appearance=link.appearance,
                 requires_password=True,
+                title=link.title,
+                permission=link.permission,
             )
         try:
             plain_bytes = password[:72].encode('utf-8')

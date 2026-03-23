@@ -82,5 +82,5 @@ class ShareLinkActivity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        Index("ix_share_activity_link_created", "share_link_id", "created_at"),
+        Index("ix_share_activity_link_created", "share_link_id", created_at.desc()),
     )
