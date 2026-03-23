@@ -16,7 +16,7 @@ from ..models.project import ProjectMember, ProjectRole
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
 from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
 from ..models.user import User, GuestUser
-from ..models.share import ShareLink, SharePermission
+from ..models.share import ShareLink, ShareLinkActivity, ShareActivityAction, SharePermission
 from ..schemas.comment import (
     AnnotationResponse,
     AttachmentResponse,
@@ -566,4 +566,17 @@ def guest_comment(
 
     db.commit()
     db.refresh(comment)
+
+    # Log share link activity
+    activity = ShareLinkActivity(
+        share_link_id=link.id,
+        action=ShareActivityAction.commented,
+        actor_email=guest_email,
+        actor_name=body.guest_name,
+        asset_id=asset.id,
+        asset_name=asset.name,
+    )
+    db.add(activity)
+    db.commit()
+
     return _build_comment_response(comment, db)

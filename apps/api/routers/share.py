@@ -15,9 +15,14 @@ from ..models.asset import Asset
 from ..models.folder import Folder
 from ..models.share import AssetShare, ShareLink, SharePermission, ShareLinkActivity, ShareActivityAction
 from ..models.activity import ActivityLog, ActivityAction
+from ..models.asset import AssetVersion, AssetType, MediaFile, ProcessingStatus
 from ..schemas.share import (
     DirectShareCreate,
     DirectShareResponse,
+    FolderShareAssetItem,
+    FolderShareAssetsResponse,
+    FolderShareSubfolder,
+    ShareLinkActivityResponse,
     ShareLinkCreate,
     ShareLinkListItem,
     ShareLinkResponse,
@@ -25,6 +30,7 @@ from ..schemas.share import (
     ShareLinkValidateResponse,
 )
 from ..services.permissions import require_project_role, validate_share_link
+from ..services.s3_service import generate_presigned_get_url
 from ..models.project import ProjectRole
 from ..tasks.email_tasks import send_share_email
 from ..config import settings
@@ -56,6 +62,52 @@ def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
             raise HTTPException(status_code=404, detail="Shared folder not found")
         return folder.project_id
     raise HTTPException(status_code=400, detail="Invalid share link")
+
+
+def _log_share_activity(
+    db: Session,
+    share_link_id: uuid.UUID,
+    action: ShareActivityAction,
+    actor_email: str,
+    actor_name: Optional[str] = None,
+    asset_id: Optional[uuid.UUID] = None,
+    asset_name: Optional[str] = None,
+):
+    activity = ShareLinkActivity(
+        share_link_id=share_link_id,
+        action=action,
+        actor_email=actor_email,
+        actor_name=actor_name,
+        asset_id=asset_id,
+        asset_name=asset_name,
+    )
+    db.add(activity)
+    db.commit()
+
+
+def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID) -> bool:
+    """Check if folder_id is a descendant of ancestor_id via parent chain traversal."""
+    current_id = folder_id
+    visited = set()
+    while current_id and current_id not in visited:
+        if current_id == ancestor_id:
+            return True
+        visited.add(current_id)
+        folder = db.query(Folder.parent_id).filter(Folder.id == current_id).first()
+        current_id = folder.parent_id if folder else None
+    return False
+
+
+def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFile]:
+    """Get the first media file from the latest ready version of an asset."""
+    version = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).order_by(AssetVersion.version_number.desc()).first()
+    if not version:
+        return None
+    return db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
 
 
 # ── Share links ───────────────────────────────────────────────────────────────
@@ -117,6 +169,7 @@ def list_share_links(
 def validate_share_link_endpoint(
     token: str,
     password: Optional[str] = None,
+    log_open: bool = False,
     db: Session = Depends(get_db),
 ):
     """Public endpoint — no auth required. Validates token and optional password."""
@@ -143,6 +196,9 @@ def validate_share_link_endpoint(
                 raise HTTPException(status_code=403, detail="Incorrect password")
         except ValueError:
             raise HTTPException(status_code=403, detail="Incorrect password")
+
+    if log_open:
+        _log_share_activity(db, link.id, ShareActivityAction.opened, actor_email="anonymous")
 
     return ShareLinkValidateResponse(
         asset_id=link.asset_id,
@@ -562,3 +618,187 @@ def list_project_share_links(
         )
         for row in results
     ]
+
+
+# ── Share link activity ───────────────────────────────────────────────────────
+
+@router.get("/share/{token}/activity", response_model=list[ShareLinkActivityResponse])
+def get_share_link_activity(
+    token: str,
+    page: int = 1,
+    per_page: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    link = db.query(ShareLink).filter(ShareLink.token == token, ShareLink.deleted_at.is_(None)).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    project_id = _get_project_id_from_link(db, link)
+    require_project_role(db, project_id, current_user, ProjectRole.viewer)
+
+    offset = (page - 1) * per_page
+    activities = db.query(ShareLinkActivity).filter(
+        ShareLinkActivity.share_link_id == link.id,
+    ).order_by(ShareLinkActivity.created_at.desc()).offset(offset).limit(per_page).all()
+    return activities
+
+
+# ── Folder share public endpoints ─────────────────────────────────────────────
+
+@router.get("/share/{token}/assets", response_model=FolderShareAssetsResponse)
+def get_folder_share_assets(
+    token: str,
+    folder_id: Optional[uuid.UUID] = None,
+    page: int = 1,
+    per_page: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Public endpoint — no auth required. Returns assets and subfolders for a folder share link."""
+    link = validate_share_link(db, token)
+
+    if not link.folder_id:
+        raise HTTPException(status_code=400, detail="This share link is not a folder share")
+
+    # Determine which folder to list contents from
+    target_folder_id = link.folder_id
+    if folder_id:
+        # Validate the requested folder is a descendant of the shared folder
+        if folder_id != link.folder_id and not _is_descendant_of(db, folder_id, link.folder_id):
+            raise HTTPException(status_code=403, detail="Folder is not within the shared folder")
+        target_folder_id = folder_id
+
+    # Get subfolders
+    subfolders_query = db.query(Folder).filter(
+        Folder.parent_id == target_folder_id,
+        Folder.deleted_at.is_(None),
+    ).order_by(Folder.name).all()
+
+    subfolder_items = []
+    for sf in subfolders_query:
+        # Count assets + direct child folders in this subfolder
+        asset_count = db.query(sa_func.count(Asset.id)).filter(
+            Asset.folder_id == sf.id,
+            Asset.deleted_at.is_(None),
+        ).scalar() or 0
+        child_folder_count = db.query(sa_func.count(Folder.id)).filter(
+            Folder.parent_id == sf.id,
+            Folder.deleted_at.is_(None),
+        ).scalar() or 0
+        subfolder_items.append(FolderShareSubfolder(
+            id=sf.id,
+            name=sf.name,
+            item_count=asset_count + child_folder_count,
+        ))
+
+    # Get assets in this folder
+    total = db.query(sa_func.count(Asset.id)).filter(
+        Asset.folder_id == target_folder_id,
+        Asset.deleted_at.is_(None),
+    ).scalar() or 0
+
+    offset = (page - 1) * per_page
+    assets = db.query(Asset).filter(
+        Asset.folder_id == target_folder_id,
+        Asset.deleted_at.is_(None),
+    ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
+
+    asset_items = []
+    for asset in assets:
+        thumbnail_url = None
+        file_size = None
+        media_file = _get_latest_media_file(db, asset.id)
+        if media_file:
+            if media_file.s3_key_thumbnail:
+                thumbnail_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
+            file_size = media_file.file_size_bytes
+        asset_items.append(FolderShareAssetItem(
+            id=asset.id,
+            name=asset.name,
+            asset_type=asset.asset_type.value,
+            thumbnail_url=thumbnail_url,
+            file_size=file_size,
+            created_at=asset.created_at,
+        ))
+
+    return FolderShareAssetsResponse(
+        assets=asset_items,
+        subfolders=subfolder_items,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/share/{token}/stream/{asset_id}")
+def get_share_stream_url(
+    token: str,
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Public endpoint — no auth required. Returns presigned stream URL for an asset in a share link."""
+    link = validate_share_link(db, token)
+
+    asset = _get_asset(db, asset_id)
+
+    # Validate asset belongs to this share
+    if link.folder_id:
+        # Folder share: asset must be in the shared folder or a descendant
+        if asset.folder_id != link.folder_id:
+            if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):
+                raise HTTPException(status_code=403, detail="Asset is not within the shared folder")
+    elif link.asset_id:
+        if asset.id != link.asset_id:
+            raise HTTPException(status_code=403, detail="Asset does not match share link")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid share link")
+
+    media_file = _get_latest_media_file(db, asset.id)
+    if not media_file:
+        raise HTTPException(status_code=404, detail="No ready media file found")
+
+    # Generate presigned URL (same pattern as assets.py stream endpoint)
+    s3_key = media_file.s3_key_processed or media_file.s3_key_raw
+    if asset.asset_type == AssetType.video and media_file.s3_key_processed:
+        s3_key = f"{media_file.s3_key_processed}/master.m3u8"
+
+    url = generate_presigned_get_url(s3_key)
+
+    # Log viewed_asset activity
+    _log_share_activity(
+        db, link.id, ShareActivityAction.viewed_asset,
+        actor_email="anonymous",
+        asset_id=asset.id,
+        asset_name=asset.name,
+    )
+
+    return {"url": url, "asset_type": asset.asset_type.value}
+
+
+@router.get("/share/{token}/thumbnail/{asset_id}")
+def get_share_thumbnail_url(
+    token: str,
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Public endpoint — no auth required. Returns presigned thumbnail URL for an asset in a share link."""
+    link = validate_share_link(db, token)
+
+    asset = _get_asset(db, asset_id)
+
+    # Validate asset belongs to this share
+    if link.folder_id:
+        if asset.folder_id != link.folder_id:
+            if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):
+                raise HTTPException(status_code=403, detail="Asset is not within the shared folder")
+    elif link.asset_id:
+        if asset.id != link.asset_id:
+            raise HTTPException(status_code=403, detail="Asset does not match share link")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid share link")
+
+    media_file = _get_latest_media_file(db, asset.id)
+    if not media_file or not media_file.s3_key_thumbnail:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    url = generate_presigned_get_url(media_file.s3_key_thumbnail)
+    return {"url": url}
