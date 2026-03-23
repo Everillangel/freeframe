@@ -9,7 +9,7 @@ import {
   Upload, X, FolderOpen,
   Link as LinkIcon, Download, Share2, Plus,
   Trash2, ChevronDown, MessageSquare,
-  FolderPlus, Folder as FolderIcon,
+  FolderPlus, Folder as FolderIcon, FileText,
 } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -25,7 +25,10 @@ import { useViewStore } from '@/stores/view-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { useComments } from '@/hooks/use-comments'
 import { useFolders, useTrash } from '@/hooks/use-folders'
+import { useShareLinks } from '@/hooks/use-share-links'
 import { FolderTree } from '@/components/projects/folder-tree'
+import { ShareLinksTable } from '@/components/projects/share-links-table'
+import { ShareLinkDetail } from '@/components/projects/share-link-detail'
 import { NameDialog } from '@/components/projects/name-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
 
@@ -65,6 +68,8 @@ export default function ProjectDetailPage() {
     searchParams.get('folder') || null
   )
   const [showTrash, setShowTrash] = React.useState(false)
+  const [showShareLinks, setShowShareLinks] = React.useState(false)
+  const [selectedShareLink, setSelectedShareLink] = React.useState<string | null>(null)
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false)
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<string | null>(null)
 
@@ -85,6 +90,7 @@ export default function ProjectDetailPage() {
   } = useFolders(projectId)
 
   const { trash, mutateTrash } = useTrash(projectId)
+  const { shareLinks, toggleEnabled, createFolderShare, mutateShareLinks } = useShareLinks(projectId)
 
   // Comments for the selected asset
   const selectedVersionId = selectedAsset?.latest_version?.id || null
@@ -222,6 +228,8 @@ export default function ProjectDetailPage() {
   const handleSelectFolder = React.useCallback((folderId: string | null) => {
     setCurrentFolderId(folderId)
     setShowTrash(false)
+    setShowShareLinks(false)
+    setSelectedShareLink(null)
     const url = folderId
       ? `/projects/${projectId}?folder=${folderId}`
       : `/projects/${projectId}`
@@ -248,7 +256,7 @@ export default function ProjectDetailPage() {
             currentFolderId={currentFolderId}
             showTrash={showTrash}
             onSelectFolder={handleSelectFolder}
-            onShowTrash={() => { setShowTrash(true); setCurrentFolderId(null) }}
+            onShowTrash={() => { setShowTrash(true); setCurrentFolderId(null); setShowShareLinks(false); setSelectedShareLink(null) }}
             onCreateFolder={(_name, parentId) => {
               setFolderDialogParentId(parentId)
               setFolderDialogOpen(true)
@@ -345,8 +353,38 @@ export default function ProjectDetailPage() {
           </div>
 
           {shareLinksExpanded && (
-            <div className="px-2 py-2 text-xs text-text-tertiary">
-              No share links yet
+            <div className="space-y-0.5">
+              <button
+                onClick={() => { setShowShareLinks(true); setSelectedShareLink(null); setShowTrash(false); setCurrentFolderId(null) }}
+                className={cn(
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors',
+                  showShareLinks && !selectedShareLink
+                    ? 'bg-bg-hover text-text-primary'
+                    : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
+                )}
+              >
+                <LinkIcon className="h-4 w-4" />
+                <span>All Share Links ({shareLinks.length})</span>
+              </button>
+              {shareLinks.map((link) => (
+                <button
+                  key={link.token}
+                  onClick={() => { setShowShareLinks(true); setSelectedShareLink(link.token); setShowTrash(false); setCurrentFolderId(null) }}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors',
+                    selectedShareLink === link.token
+                      ? 'bg-bg-hover text-text-primary'
+                      : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
+                  )}
+                >
+                  {link.share_type === 'folder' ? (
+                    <FolderIcon className="h-4 w-4" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  <span className="truncate">{link.title || link.target_name}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -361,8 +399,23 @@ export default function ProjectDetailPage() {
         onClick={() => setSelectedAsset(null)}
       >
         <div className="px-5 pt-3 pb-6 space-y-3">
-          {/* Asset grid or Trash view */}
-          {showTrash ? (
+          {/* Asset grid, Share links, or Trash view */}
+          {showShareLinks && !selectedShareLink ? (
+            <ShareLinksTable
+              shareLinks={shareLinks}
+              onSelectLink={(token) => setSelectedShareLink(token)}
+              onToggleEnabled={(token, enabled) => toggleEnabled(token, enabled)}
+              onViewActivity={(token) => setSelectedShareLink(token)}
+              frontendUrl={typeof window !== 'undefined' ? window.location.origin : ''}
+            />
+          ) : showShareLinks && selectedShareLink ? (
+            <ShareLinkDetail
+              token={selectedShareLink}
+              projectId={projectId}
+              onBack={() => setSelectedShareLink(null)}
+              frontendUrl={typeof window !== 'undefined' ? window.location.origin : ''}
+            />
+          ) : showTrash ? (
             <div className="flex-1 overflow-y-auto">
               <h2 className="text-sm font-medium text-text-primary mb-3">Recently Deleted</h2>
               {trash.folders.length === 0 && trash.assets.length === 0 ? (
@@ -430,6 +483,9 @@ export default function ProjectDetailPage() {
               onFolderDelete={async (id) => {
                 await deleteFolder(id)
                 mutateAssets()
+              }}
+              onFolderShare={async (folderId, folderName) => {
+                await createFolderShare(folderId, { title: folderName })
               }}
               onDropToFolder={async (targetFolderId, assetIds, folderIds) => {
                 await bulkMove(assetIds, folderIds, targetFolderId)
