@@ -55,6 +55,8 @@ class ShareLinkValidateResponse(BaseModel):
     show_watermark: bool = False
     appearance: Optional[dict] = None
     requires_password: bool
+    asset: Optional[dict] = None  # Full asset details for asset shares
+    branding: Optional[dict] = None  # Project branding info
 
 
 class ShareLinkUpdate(BaseModel):

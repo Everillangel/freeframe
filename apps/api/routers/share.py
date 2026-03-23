@@ -15,6 +15,7 @@ from ..models.asset import Asset
 from ..models.folder import Folder
 from ..models.share import AssetShare, ShareLink, SharePermission, ShareLinkActivity, ShareActivityAction
 from ..models.activity import ActivityLog, ActivityAction
+from ..models.branding import ProjectBranding
 from ..models.asset import AssetVersion, AssetType, MediaFile, ProcessingStatus
 from ..schemas.share import (
     DirectShareCreate,
@@ -208,6 +209,44 @@ def validate_share_link_endpoint(
     if log_open:
         _log_share_activity(db, link.id, ShareActivityAction.opened, actor_email="anonymous")
 
+    # Build asset details for asset shares
+    asset_data = None
+    branding_data = None
+    if link.asset_id:
+        asset = _get_asset(db, link.asset_id)
+        # Get thumbnail URL
+        media_file = _get_latest_media_file(db, asset.id)
+        thumbnail_url = None
+        if media_file and media_file.s3_key_thumbnail:
+            thumbnail_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
+        # Get stream URL
+        stream_url = None
+        if media_file:
+            if media_file.s3_key_processed:
+                stream_url = generate_presigned_get_url(media_file.s3_key_processed)
+            elif media_file.s3_key_raw:
+                stream_url = generate_presigned_get_url(media_file.s3_key_raw)
+
+        asset_data = {
+            "id": str(asset.id),
+            "name": asset.name,
+            "asset_type": asset.asset_type.value if hasattr(asset.asset_type, 'value') else str(asset.asset_type),
+            "description": asset.description,
+            "thumbnail_url": thumbnail_url,
+            "stream_url": stream_url,
+        }
+        # Get project branding
+        branding = db.query(ProjectBranding).filter(
+            ProjectBranding.project_id == asset.project_id
+        ).first()
+        if branding:
+            branding_data = {
+                "logo_url": branding.logo_s3_key,
+                "primary_color": branding.primary_color,
+                "custom_title": branding.custom_title,
+                "custom_footer": branding.custom_footer,
+            }
+
     return ShareLinkValidateResponse(
         asset_id=link.asset_id,
         folder_id=link.folder_id,
@@ -220,6 +259,8 @@ def validate_share_link_endpoint(
         show_watermark=link.show_watermark,
         appearance=link.appearance,
         requires_password=False,
+        asset=asset_data,
+        branding=branding_data,
     )
 
 
