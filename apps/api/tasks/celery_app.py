@@ -25,6 +25,10 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    broker_connection_retry_on_startup=True,
+    broker_connection_retry=True,
+    broker_connection_max_retries=5,
+    broker_pool_limit=0,  # Disable connection pooling in web process to avoid stale connections
     # Define queues
     task_queues=(
         Queue("default"),
