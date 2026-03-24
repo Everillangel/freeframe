@@ -115,6 +115,9 @@ class FolderShareAssetItem(BaseModel):
     asset_type: str
     thumbnail_url: Optional[str] = None
     file_size: Optional[int] = None
+    duration_seconds: Optional[float] = None
+    comment_count: int = 0
+    created_by_name: Optional[str] = None
     created_at: datetime
 
 

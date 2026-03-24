@@ -887,7 +887,6 @@ export default function SharePage({
       }
 
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
-  const [viewingAssetInFolder, setViewingAssetInFolder] = React.useState<string | null>(null)
 
   async function validate(password?: string) {
     if (password) {
@@ -1013,7 +1012,7 @@ export default function SharePage({
     )
   }
 
-  if (state.stage === 'folder_ready' && !viewingAssetInFolder) {
+  if (state.stage === 'folder_ready') {
     return (
       <FolderShareViewer
         token={token}
@@ -1025,21 +1024,6 @@ export default function SharePage({
         showVersions={state.showVersions}
         appearance={state.appearance}
         branding={state.branding}
-        onAssetClick={(assetId) => setViewingAssetInFolder(assetId)}
-      />
-    )
-  }
-
-  if (state.stage === 'folder_ready' && viewingAssetInFolder) {
-    return (
-      <FolderAssetViewer
-        token={token}
-        assetId={viewingAssetInFolder}
-        permission={state.permission}
-        allowDownload={state.allowDownload}
-        branding={state.branding}
-        folderName={state.folderName}
-        onBack={() => setViewingAssetInFolder(null)}
       />
     )
   }

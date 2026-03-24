@@ -320,6 +320,9 @@ export interface FolderShareAssetItem {
   asset_type: string
   thumbnail_url: string | null
   file_size: number | null
+  duration_seconds: number | null
+  comment_count: number
+  created_by_name: string | null
   created_at: string
 }
 

@@ -59,6 +59,7 @@ export default function ProjectDetailPage() {
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false)
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<string | null>(null)
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
+  const [shareDialogPreselect, setShareDialogPreselect] = React.useState<{ type: 'folder' | 'asset'; id: string; name: string } | null>(null)
   const [membersDialogOpen, setMembersDialogOpen] = React.useState(false)
 
   const { files: uploadFiles, startUpload } = useUploadStore()
@@ -479,7 +480,8 @@ export default function ProjectDetailPage() {
                 mutateSubfolders()
               }}
               onFolderShare={async (folderId, folderName) => {
-                await createFolderShare(folderId, { title: folderName })
+                setShareDialogPreselect({ type: 'folder', id: folderId, name: folderName })
+                setShareDialogOpen(true)
               }}
               onDropToFolder={async (targetFolderId, assetIds, folderIds) => {
                 await bulkMove(assetIds, folderIds, targetFolderId)
@@ -713,11 +715,15 @@ export default function ProjectDetailPage() {
       {/* Share create dialog */}
       <ShareCreateDialog
         open={shareDialogOpen}
-        onOpenChange={setShareDialogOpen}
+        onOpenChange={(open) => {
+          setShareDialogOpen(open)
+          if (!open) setShareDialogPreselect(null)
+        }}
         projectId={projectId}
         currentFolderId={currentFolderId}
         assets={assets ?? []}
         folders={subfolders ?? []}
+        preselectedItem={shareDialogPreselect}
         onShareCreated={() => mutateShareLinks()}
         onAdvancedSettings={(token) => {
           setShowShareLinks(true)

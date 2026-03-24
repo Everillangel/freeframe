@@ -12,6 +12,9 @@ import {
   Video,
   Music,
   Loader2,
+  MessageSquare,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
@@ -51,7 +54,7 @@ interface FolderShareViewerProps {
 function formatFileSize(bytes: number | null): string {
   if (bytes == null) return '—'
   if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
@@ -64,39 +67,35 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function formatShortDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 function getAssetTypeIcon(assetType: string): React.ElementType {
   switch (assetType) {
-    case 'video':
-      return Video
-    case 'audio':
-      return Music
+    case 'video': return Video
+    case 'audio': return Music
     case 'image':
-    case 'image_carousel':
-      return ImageIcon
-    default:
-      return File
+    case 'image_carousel': return ImageIcon
+    default: return File
   }
 }
 
 function getAssetTypeBadgeLabel(assetType: string): string {
   switch (assetType) {
-    case 'image_carousel':
-      return 'Carousel'
-    default:
-      return assetType.charAt(0).toUpperCase() + assetType.slice(1)
-  }
-}
-
-/** Grid column classes based on card_size */
-function gridColsClass(cardSize: 's' | 'm' | 'l' | undefined): string {
-  switch (cardSize) {
-    case 's':
-      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7'
-    case 'l':
-      return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-    case 'm':
-    default:
-      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+    case 'image_carousel': return 'Carousel'
+    default: return assetType.charAt(0).toUpperCase() + assetType.slice(1)
   }
 }
 
@@ -125,40 +124,22 @@ async function handleDownload(token: string, assetId: string, assetName: string)
 
 interface SubfolderCardProps {
   subfolder: FolderShareSubfolder
-  isDark: boolean
-  accentColor: string
-  aspectRatio: 'landscape' | 'square' | 'portrait'
   onClick: (subfolder: FolderShareSubfolder) => void
 }
 
-function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }: SubfolderCardProps) {
+function SubfolderCard({ subfolder, onClick }: SubfolderCardProps) {
   const thumbs = subfolder.thumbnail_urls ?? []
 
   return (
     <button
-      className={cn(
-        'group flex flex-col rounded-lg border p-0 overflow-hidden text-left transition-all cursor-pointer',
-        isDark
-          ? 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
-          : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100',
-      )}
+      className="group flex flex-col rounded-lg border border-white/[0.08] bg-white/[0.02] overflow-hidden text-left transition-all cursor-pointer hover:border-white/[0.15] hover:bg-white/[0.04]"
       onClick={() => onClick(subfolder)}
     >
-      <div
-        className={cn(
-          'w-full relative overflow-hidden',
-          aspectRatio === 'landscape' && 'aspect-[16/10]',
-          aspectRatio === 'square' && 'aspect-square',
-          aspectRatio === 'portrait' && 'aspect-[3/4]',
-          isDark ? 'bg-white/[0.02]' : 'bg-zinc-100/50',
-        )}
-      >
+      {/* Thumbnail area */}
+      <div className="w-full aspect-[16/10] relative overflow-hidden bg-zinc-900/50">
         {thumbs.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <Folder
-              className="h-10 w-10 transition-transform group-hover:scale-110"
-              style={{ color: accentColor, opacity: 0.7 }}
-            />
+            <Folder className="h-10 w-10 text-zinc-600" />
           </div>
         ) : thumbs.length === 1 ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -172,8 +153,7 @@ function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }:
           <div className={cn(
             'absolute inset-0 grid gap-[1px]',
             thumbs.length === 2 && 'grid-cols-2',
-            thumbs.length === 3 && 'grid-cols-2 grid-rows-2',
-            thumbs.length >= 4 && 'grid-cols-2 grid-rows-2',
+            thumbs.length >= 3 && 'grid-cols-2 grid-rows-2',
           )}>
             {thumbs.slice(0, 4).map((url, i) => (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -190,279 +170,106 @@ function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }:
             ))}
           </div>
         )}
-
-        {/* Folder icon overlay badge */}
-        {thumbs.length > 0 && (
-          <div className={cn(
-            'absolute bottom-1.5 left-1.5 flex items-center justify-center h-6 w-6 rounded-md backdrop-blur-sm',
-            isDark ? 'bg-black/50' : 'bg-white/70',
-          )}>
-            <Folder className="h-3.5 w-3.5" style={{ color: accentColor }} />
+        {/* Download icon */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-center h-6 w-6 rounded-md bg-black/60 backdrop-blur-sm">
+            <Download className="h-3 w-3 text-white" />
           </div>
-        )}
+        </div>
       </div>
-      <div className="px-3 py-2">
-        <p
-          className={cn(
-            'text-sm font-medium truncate',
-            isDark ? 'text-white' : 'text-zinc-900',
-          )}
-        >
-          {subfolder.name}
-        </p>
-        <p className={cn('text-xs mt-0.5', isDark ? 'text-zinc-400' : 'text-zinc-500')}>
-          {subfolder.item_count} {subfolder.item_count === 1 ? 'item' : 'items'}
+
+      {/* Info */}
+      <div className="px-3 py-2.5">
+        <p className="text-sm font-medium text-white truncate">{subfolder.name}</p>
+        <p className="text-xs text-zinc-500 mt-0.5">
+          {subfolder.item_count} {subfolder.item_count === 1 ? 'Item' : 'Items'}
         </p>
       </div>
     </button>
   )
 }
 
-// ─── Asset Grid Card ──────────────────────────────────────────────────────────
+// ─── Asset Grid Card (Frame.io style) ────────────────────────────────────────
 
 interface AssetGridCardProps {
   asset: FolderShareAssetItem
-  isDark: boolean
-  accentColor: string
   allowDownload: boolean
   token: string
-  openInViewer: boolean
-  onAssetClick?: (assetId: string) => void
-  aspectRatio?: 'landscape' | 'square' | 'portrait'
-  thumbnailScale?: 'fit' | 'fill'
-  showCardInfo?: boolean
+  isSelected: boolean
+  onSelect: (asset: FolderShareAssetItem) => void
 }
 
-function AssetGridCard({
-  asset,
-  isDark,
-  aspectRatio = 'landscape',
-  thumbnailScale = 'fill',
-  showCardInfo = true,
-  accentColor,
-  allowDownload,
-  token,
-  openInViewer,
-  onAssetClick,
-}: AssetGridCardProps) {
+function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect }: AssetGridCardProps) {
   const TypeIcon = getAssetTypeIcon(asset.asset_type)
-
-  function handleClick() {
-    if (openInViewer && onAssetClick) {
-      onAssetClick(asset.id)
-    }
-  }
 
   return (
     <div
       className={cn(
-        'group flex flex-col rounded-lg border overflow-hidden transition-all',
-        isDark
-          ? 'border-white/10 bg-white/[0.03] hover:border-white/20'
-          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm',
-        openInViewer && onAssetClick ? 'cursor-pointer' : 'cursor-default',
+        'group flex flex-col rounded-lg border overflow-hidden transition-all cursor-pointer',
+        isSelected
+          ? 'border-indigo-500/60 ring-1 ring-indigo-500/40'
+          : 'border-white/[0.08] hover:border-white/[0.15]',
+        'bg-white/[0.02] hover:bg-white/[0.04]',
       )}
-      onClick={handleClick}
+      onClick={() => onSelect(asset)}
     >
       {/* Thumbnail */}
-      <div
-        className={cn(
-          'w-full flex items-center justify-center relative',
-          aspectRatio === 'landscape' && 'aspect-[16/10]',
-          aspectRatio === 'square' && 'aspect-square',
-          aspectRatio === 'portrait' && 'aspect-[3/4]',
-          isDark ? 'bg-zinc-900' : 'bg-zinc-100',
-        )}
-      >
+      <div className="w-full aspect-[16/10] relative overflow-hidden bg-zinc-900/50">
         {asset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={asset.thumbnail_url}
             alt={asset.name}
-            className={cn(
-              'h-full w-full transition-transform duration-200 group-hover:scale-[1.02]',
-              thumbnailScale === 'fill' ? 'object-cover' : 'object-contain',
-            )}
-            onError={(e) => {
-              ;(e.target as HTMLImageElement).style.display = 'none'
-            }}
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <TypeIcon className={cn('h-10 w-10', isDark ? 'text-zinc-600' : 'text-zinc-400')} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <TypeIcon className="h-10 w-10 text-zinc-600" />
+          </div>
+        )}
+
+        {/* Comment count badge — bottom left */}
+        {asset.comment_count > 0 && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+            <MessageSquare className="h-3 w-3 text-white" />
+            <span className="text-[10px] font-medium text-white">{asset.comment_count}</span>
+          </div>
+        )}
+
+        {/* Duration badge — bottom right (video/audio) */}
+        {asset.duration_seconds != null && asset.duration_seconds > 0 && (
+          <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+            <span className="text-[10px] font-medium text-white tabular-nums">
+              {formatDuration(asset.duration_seconds)}
+            </span>
+          </div>
         )}
 
         {/* Download button overlay */}
         {allowDownload && (
           <button
-            className={cn(
-              'absolute top-2 right-2 flex items-center justify-center h-7 w-7 rounded-md',
-              'opacity-0 group-hover:opacity-100 transition-opacity',
-              'bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm',
-            )}
+            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               handleDownload(token, asset.id, asset.name)
             }}
             title="Download"
           >
-            <Download className="h-3.5 w-3.5" />
+            <Download className="h-3 w-3" />
           </button>
         )}
       </div>
 
-      {/* Info */}
-      {showCardInfo && <div className="px-3 py-2.5 flex flex-col gap-1 min-h-[60px]">
-        <p
-          className={cn(
-            'text-sm font-medium line-clamp-1',
-            isDark ? 'text-white' : 'text-zinc-900',
-          )}
-        >
-          {asset.name}
-        </p>
-        <div className="flex items-center gap-2">
-          <span
-            className="text-2xs px-1.5 py-0.5 rounded-full font-medium"
-            style={{
-              backgroundColor: `${accentColor}20`,
-              color: accentColor,
-            }}
-          >
-            {getAssetTypeBadgeLabel(asset.asset_type)}
-          </span>
-          <span className={cn('text-2xs', isDark ? 'text-zinc-500' : 'text-zinc-400')}>
-            {formatFileSize(asset.file_size)}
-          </span>
-        </div>
-      </div>}
-    </div>
-  )
-}
-
-// ─── Asset List Row ───────────────────────────────────────────────────────────
-
-interface AssetListRowProps {
-  asset: FolderShareAssetItem
-  isDark: boolean
-  accentColor: string
-  allowDownload: boolean
-  token: string
-  openInViewer: boolean
-  onAssetClick?: (assetId: string) => void
-}
-
-function AssetListRow({
-  asset,
-  isDark,
-  accentColor,
-  allowDownload,
-  token,
-  openInViewer,
-  onAssetClick,
-}: AssetListRowProps) {
-  const TypeIcon = getAssetTypeIcon(asset.asset_type)
-
-  function handleClick() {
-    if (openInViewer && onAssetClick) {
-      onAssetClick(asset.id)
-    }
-  }
-
-  return (
-    <div
-      className={cn(
-        'group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all',
-        isDark
-          ? 'border-white/5 hover:border-white/10 hover:bg-white/[0.03]'
-          : 'border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50',
-        openInViewer && onAssetClick ? 'cursor-pointer' : 'cursor-default',
-      )}
-      onClick={handleClick}
-    >
-      {/* Small thumbnail */}
-      <div
-        className={cn(
-          'h-10 w-14 shrink-0 rounded flex items-center justify-center overflow-hidden',
-          isDark ? 'bg-zinc-800' : 'bg-zinc-100',
-        )}
-      >
-        {asset.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={asset.thumbnail_url}
-            alt={asset.name}
-            className="h-full w-full object-cover"
-            onError={(e) => {
-              ;(e.target as HTMLImageElement).style.display = 'none'
-            }}
-          />
-        ) : (
-          <TypeIcon className={cn('h-4 w-4', isDark ? 'text-zinc-500' : 'text-zinc-400')} />
-        )}
-      </div>
-
-      {/* Name */}
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            'text-sm font-medium truncate',
-            isDark ? 'text-white' : 'text-zinc-900',
-          )}
-        >
-          {asset.name}
+      {/* Info — name, author, date */}
+      <div className="px-3 py-2.5">
+        <p className="text-sm font-medium text-white line-clamp-1">{asset.name}</p>
+        <p className="text-xs text-zinc-500 mt-0.5 truncate">
+          {asset.created_by_name && <>{asset.created_by_name} &middot; </>}
+          {formatShortDate(asset.created_at)}
+          {asset.file_size != null && <> &middot; {formatFileSize(asset.file_size)}</>}
         </p>
       </div>
-
-      {/* Type badge */}
-      <span
-        className="text-2xs px-1.5 py-0.5 rounded-full font-medium shrink-0 hidden sm:inline"
-        style={{
-          backgroundColor: `${accentColor}20`,
-          color: accentColor,
-        }}
-      >
-        {getAssetTypeBadgeLabel(asset.asset_type)}
-      </span>
-
-      {/* File size */}
-      <span
-        className={cn(
-          'text-xs w-20 text-right shrink-0 hidden md:block',
-          isDark ? 'text-zinc-500' : 'text-zinc-400',
-        )}
-      >
-        {formatFileSize(asset.file_size)}
-      </span>
-
-      {/* Date */}
-      <span
-        className={cn(
-          'text-xs w-28 text-right shrink-0 hidden lg:block',
-          isDark ? 'text-zinc-500' : 'text-zinc-400',
-        )}
-      >
-        {formatDate(asset.created_at)}
-      </span>
-
-      {/* Download */}
-      {allowDownload && (
-        <button
-          className={cn(
-            'flex items-center justify-center h-7 w-7 rounded-md shrink-0',
-            'opacity-0 group-hover:opacity-100 transition-opacity',
-            isDark
-              ? 'hover:bg-white/10 text-zinc-400 hover:text-white'
-              : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700',
-          )}
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDownload(token, asset.id, asset.name)
-          }}
-          title="Download"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </button>
-      )}
     </div>
   )
 }
@@ -473,45 +280,156 @@ interface SectionHeaderProps {
   label: string
   count: number
   totalSize: string | null
-  isDark: boolean
   expanded: boolean
   onToggle: () => void
 }
 
-function SectionHeader({ label, count, totalSize, isDark, expanded, onToggle }: SectionHeaderProps) {
+function SectionHeader({ label, count, totalSize, expanded, onToggle }: SectionHeaderProps) {
   return (
-    <button
-      className={cn(
-        'flex items-center gap-2 py-2 w-full text-left group',
-      )}
-      onClick={onToggle}
-    >
+    <button className="flex items-center gap-2 py-2 w-full text-left group" onClick={onToggle}>
       <ChevronDown
-        className={cn(
-          'h-4 w-4 shrink-0 transition-transform',
-          !expanded && '-rotate-90',
-          isDark ? 'text-zinc-500' : 'text-zinc-400',
-        )}
+        className={cn('h-4 w-4 shrink-0 transition-transform text-zinc-500', !expanded && '-rotate-90')}
       />
-      <span
-        className={cn(
-          'text-xs font-semibold uppercase tracking-wider',
-          isDark ? 'text-zinc-400' : 'text-zinc-500',
-        )}
-      >
+      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
         {count} {label}
       </span>
       {totalSize && (
-        <span
-          className={cn(
-            'text-xs',
-            isDark ? 'text-zinc-600' : 'text-zinc-400',
-          )}
-        >
-          &middot; {totalSize}
-        </span>
+        <span className="text-xs text-zinc-600">&middot; {totalSize}</span>
       )}
     </button>
+  )
+}
+
+// ─── Right Panel: Asset Details + Comments ───────────────────────────────────
+
+interface RightPanelProps {
+  selectedAsset: FolderShareAssetItem | null
+  token: string
+  permission: SharePermission
+  allowDownload: boolean
+}
+
+interface GuestComment {
+  id: string
+  body: string
+  guest_name: string
+  guest_email: string
+  created_at: string
+  timecode_start?: number | null
+}
+
+function RightPanel({ selectedAsset, token, permission, allowDownload }: RightPanelProps) {
+  const [comments, setComments] = React.useState<GuestComment[]>([])
+  const [loadingComments, setLoadingComments] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!selectedAsset) {
+      setComments([])
+      return
+    }
+    setLoadingComments(true)
+    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`)
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ comments: [] })))
+      .then((data) => setComments(data.comments ?? []))
+      .catch(() => setComments([]))
+      .finally(() => setLoadingComments(false))
+  }, [selectedAsset?.id, token])
+
+  if (!selectedAsset) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+        <div className="h-14 w-14 rounded-full bg-white/5 flex items-center justify-center mb-3">
+          <MessageSquare className="h-7 w-7 text-zinc-600" />
+        </div>
+        <p className="text-sm font-medium text-zinc-300">Select an asset to view details</p>
+      </div>
+    )
+  }
+
+  const TypeIcon = getAssetTypeIcon(selectedAsset.asset_type)
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Asset info header */}
+      <div className="px-4 py-4 border-b border-white/[0.06] shrink-0">
+        <div className="flex items-center gap-2 mb-2">
+          <TypeIcon className="h-4 w-4 text-zinc-400 shrink-0" />
+          <span className="text-xs text-zinc-400 uppercase font-medium">
+            {getAssetTypeBadgeLabel(selectedAsset.asset_type)}
+          </span>
+        </div>
+        <h3 className="text-sm font-semibold text-white leading-snug">{selectedAsset.name}</h3>
+        <div className="mt-2 space-y-1">
+          {selectedAsset.created_by_name && (
+            <p className="text-xs text-zinc-500">By {selectedAsset.created_by_name}</p>
+          )}
+          <p className="text-xs text-zinc-500">
+            {formatDate(selectedAsset.created_at)}
+            {selectedAsset.file_size != null && <> &middot; {formatFileSize(selectedAsset.file_size)}</>}
+            {selectedAsset.duration_seconds != null && selectedAsset.duration_seconds > 0 && (
+              <> &middot; {formatDuration(selectedAsset.duration_seconds)}</>
+            )}
+          </p>
+        </div>
+
+        {/* Download button */}
+        {allowDownload && (
+          <button
+            className="mt-3 flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+            onClick={() => handleDownload(token, selectedAsset.id, selectedAsset.name)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </button>
+        )}
+      </div>
+
+      {/* Comments section */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-3 border-b border-white/[0.06]">
+          <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            Comments ({comments.length})
+          </h4>
+        </div>
+
+        {loadingComments ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+          </div>
+        ) : comments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+            <MessageSquare className="h-8 w-8 text-zinc-700 mb-2" />
+            <p className="text-xs text-zinc-500">No comments yet</p>
+          </div>
+        ) : (
+          <div className="px-4 py-3 space-y-2.5">
+            {comments.map((comment) => (
+              <div
+                key={comment.id}
+                className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-[10px] font-medium text-purple-400">
+                    {comment.guest_name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs font-medium text-zinc-200">{comment.guest_name}</span>
+                  {comment.timecode_start != null && (
+                    <span className="text-[10px] text-zinc-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">
+                      {Math.floor(comment.timecode_start / 60)}:
+                      {String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
+                    </span>
+                  )}
+                  <span className="ml-auto text-[10px] text-zinc-600">
+                    {formatShortDate(comment.created_at)}
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{comment.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -522,7 +440,7 @@ export function FolderShareViewer({
   folderName,
   title,
   description,
-  permission: _permission,
+  permission,
   allowDownload,
   showVersions: _showVersions,
   appearance,
@@ -534,6 +452,8 @@ export function FolderShareViewer({
   const [searchQuery, setSearchQuery] = React.useState('')
   const [foldersExpanded, setFoldersExpanded] = React.useState(true)
   const [assetsExpanded, setAssetsExpanded] = React.useState(true)
+  const [panelOpen, setPanelOpen] = React.useState(true)
+  const [selectedAsset, setSelectedAsset] = React.useState<FolderShareAssetItem | null>(null)
 
   const [assets, setAssets] = React.useState<FolderShareAssetItem[]>([])
   const [subfolders, setSubfolders] = React.useState<FolderShareSubfolder[]>([])
@@ -543,12 +463,7 @@ export function FolderShareViewer({
   const [loadingMore, setLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const isDark = appearance.theme === 'dark'
   const accentColor = appearance.accent_color ?? branding?.primary_color ?? '#6366f1'
-  const cardSize = appearance.card_size
-  const aspectRatio = appearance.aspect_ratio || 'landscape'
-  const thumbnailScale = appearance.thumbnail_scale || 'fill'
-  const showCardInfo = appearance.show_card_info !== false
   const perPage = 24
 
   // Compute total size of assets
@@ -556,6 +471,13 @@ export function FolderShareViewer({
     const sum = assets.reduce((acc, a) => acc + (a.file_size ?? 0), 0)
     return sum > 0 ? formatFileSize(sum) : null
   }, [assets])
+
+  // Compute total size of subfolders (approximate from asset sizes)
+  const totalFolderSize = React.useMemo(() => {
+    // We don't have individual subfolder sizes from the API,
+    // just show item count info instead
+    return null
+  }, [])
 
   // Fetch assets for current folder/page
   React.useEffect(() => {
@@ -565,6 +487,7 @@ export function FolderShareViewer({
     setPage(1)
     setAssets([])
     setSubfolders([])
+    setSelectedAsset(null)
 
     fetch(
       `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=1&per_page=${perPage}`,
@@ -587,9 +510,7 @@ export function FolderShareViewer({
         if (!cancelled) setLoading(false)
       })
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [token, currentSubfolderId])
 
   async function loadMore() {
@@ -618,7 +539,6 @@ export function FolderShareViewer({
 
   function navigateToBreadcrumb(index: number) {
     if (index === -1) {
-      // Navigate to root
       setBreadcrumbs([])
       setCurrentSubfolderId(null)
     } else {
@@ -639,9 +559,8 @@ export function FolderShareViewer({
     : subfolders
 
   const hasMore = assets.length < total && !searchQuery.trim()
-  const totalItems = assets.length + subfolders.length
 
-  // Summary line: "N Folders, N Assets"
+  // Summary text
   const summaryParts: string[] = []
   if (subfolders.length > 0) {
     summaryParts.push(`${subfolders.length} Folder${subfolders.length === 1 ? '' : 's'}`)
@@ -651,317 +570,240 @@ export function FolderShareViewer({
   }
   const summaryText = summaryParts.join(', ')
 
+  // Current folder name for breadcrumb display
+  const currentTitle = breadcrumbs.length > 0
+    ? breadcrumbs[breadcrumbs.length - 1].name
+    : (title || folderName)
+
   return (
-    <div
-      className={cn(
-        'flex-1 min-h-screen flex flex-col',
-        isDark ? 'bg-zinc-950 text-white' : 'bg-white text-zinc-900',
-      )}
-    >
-      {/* Header */}
-      <header
-        className={cn(
-          'sticky top-0 z-10 border-b px-5 py-4',
-          isDark ? 'bg-zinc-950/95 border-white/10 backdrop-blur-sm' : 'bg-white/95 border-zinc-200 backdrop-blur-sm',
-        )}
-      >
-        <div className="mx-auto max-w-6xl">
-          {/* Brand row */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              {branding?.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={branding.logo_url}
-                  alt={branding.custom_title ?? 'Logo'}
-                  className="h-7 w-auto object-contain"
-                />
-              ) : (
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded text-xs font-bold text-white"
-                  style={{ backgroundColor: accentColor }}
-                >
-                  FF
-                </div>
-              )}
-              {branding?.custom_title && (
-                <span
-                  className={cn('text-sm font-medium', isDark ? 'text-zinc-400' : 'text-zinc-500')}
-                >
-                  {branding.custom_title}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Title + subtitle */}
-          <div className="mb-4">
-            <h1
-              className={cn(
-                'text-xl font-bold leading-tight',
-                isDark ? 'text-white' : 'text-zinc-900',
-              )}
-            >
-              {title || folderName}
-            </h1>
-            {!loading && (
-              <p
-                className={cn(
-                  'mt-1 text-sm',
-                  isDark ? 'text-zinc-400' : 'text-zinc-500',
-                )}
-              >
-                {summaryText || 'Empty folder'}
-              </p>
-            )}
-            {description && (
-              <p
-                className={cn(
-                  'mt-1 text-sm',
-                  isDark ? 'text-zinc-500' : 'text-zinc-400',
-                )}
-              >
-                {description}
-              </p>
-            )}
-          </div>
-
-          {/* Breadcrumb + Search row */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Breadcrumb */}
-            <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
-              <button
-                className={cn(
-                  'shrink-0 font-medium hover:underline',
-                  isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-900',
-                  breadcrumbs.length === 0 && 'pointer-events-none',
-                )}
-                onClick={() => navigateToBreadcrumb(-1)}
-              >
-                Root
-              </button>
-              {breadcrumbs.map((crumb, i) => (
-                <React.Fragment key={crumb.id}>
-                  <ChevronRight
-                    className={cn('h-3.5 w-3.5 shrink-0', isDark ? 'text-zinc-600' : 'text-zinc-400')}
-                  />
-                  <button
-                    className={cn(
-                      'truncate max-w-[160px] hover:underline',
-                      i === breadcrumbs.length - 1
-                        ? isDark
-                          ? 'text-white font-medium pointer-events-none'
-                          : 'text-zinc-900 font-medium pointer-events-none'
-                        : isDark
-                          ? 'text-zinc-300 hover:text-white'
-                          : 'text-zinc-600 hover:text-zinc-900',
-                    )}
-                    onClick={() => navigateToBreadcrumb(i)}
-                    title={crumb.name}
-                  >
-                    {crumb.name}
-                  </button>
-                </React.Fragment>
-              ))}
-            </nav>
-
-            {/* Search */}
+    <div className="flex-1 min-h-screen flex flex-col bg-[#0d0d0f] text-white">
+      {/* ─── Top Bar (Frame.io style) ─────────────────────────────────── */}
+      <header className="flex items-center justify-between border-b border-white/[0.06] px-4 h-12 bg-[#111113] shrink-0">
+        {/* Left: avatar + breadcrumb */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Project avatar */}
+          {branding?.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={branding.logo_url}
+              alt=""
+              className="h-7 w-7 rounded-full object-cover shrink-0"
+            />
+          ) : (
             <div
-              className={cn(
-                'relative flex items-center shrink-0',
-              )}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+              style={{ backgroundColor: accentColor }}
             >
-              <Search
-                className={cn(
-                  'absolute left-2.5 h-3.5 w-3.5 pointer-events-none',
-                  isDark ? 'text-zinc-500' : 'text-zinc-400',
-                )}
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search assets…"
-                className={cn(
-                  'h-8 w-52 pl-8 pr-3 rounded-md text-sm border focus:outline-none',
-                  isDark
-                    ? 'bg-zinc-900 border-white/10 text-white placeholder:text-zinc-600 focus:border-white/20'
-                    : 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-300',
-                )}
-                style={{
-                  ['--tw-ring-color' as string]: accentColor,
-                }}
-              />
+              {(branding?.custom_title ?? folderName ?? 'FF').substring(0, 2).toUpperCase()}
             </div>
-          </div>
+          )}
+
+          {/* Breadcrumb */}
+          <span className="text-[13px] font-medium text-white truncate">{currentTitle}</span>
+        </div>
+
+        {/* Right: Download All + panel toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          {allowDownload && (
+            <button
+              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
+              onClick={() => {
+                // Download all visible assets
+                filteredAssets.forEach((a) => handleDownload(token, a.id, a.name))
+              }}
+            >
+              <Download className="h-3 w-3" />
+              Download All
+            </button>
+          )}
+          <button
+            onClick={() => setPanelOpen((v) => !v)}
+            className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+            title={panelOpen ? 'Hide panel' : 'Show panel'}
+          >
+            {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          </button>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="mx-auto max-w-6xl w-full px-5 py-6 flex-1">
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2
-              className={cn('h-8 w-8 animate-spin', isDark ? 'text-zinc-500' : 'text-zinc-400')}
-            />
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="text-center">
-              <p className={cn('text-sm', isDark ? 'text-zinc-400' : 'text-zinc-500')}>{error}</p>
+      {/* ─── Content area ──────────────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* ─── Left: folder contents ─────────────────────────────────── */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Sub-header: title, summary, breadcrumb, search */}
+          <div className="border-b border-white/[0.06] px-5 py-4">
+            <h1 className="text-lg font-bold text-white leading-tight">{title || folderName}</h1>
+            {!loading && (
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {description ? `${description} · ` : ''}
+                {summaryText || 'Empty folder'}
+              </p>
+            )}
+
+            {/* Breadcrumb + Search row */}
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
+              <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
+                <button
+                  className={cn(
+                    'shrink-0 font-medium hover:underline text-zinc-400 hover:text-white',
+                    breadcrumbs.length === 0 && 'text-white pointer-events-none',
+                  )}
+                  onClick={() => navigateToBreadcrumb(-1)}
+                >
+                  Root
+                </button>
+                {breadcrumbs.map((crumb, i) => (
+                  <React.Fragment key={crumb.id}>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                    <button
+                      className={cn(
+                        'truncate max-w-[160px] hover:underline',
+                        i === breadcrumbs.length - 1
+                          ? 'text-white font-medium pointer-events-none'
+                          : 'text-zinc-400 hover:text-white',
+                      )}
+                      onClick={() => navigateToBreadcrumb(i)}
+                      title={crumb.name}
+                    >
+                      {crumb.name}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </nav>
+
+              {/* Search */}
+              <div className="relative flex items-center shrink-0">
+                <Search className="absolute left-2.5 h-3.5 w-3.5 pointer-events-none text-zinc-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search assets…"
+                  className="h-8 w-52 pl-8 pr-3 rounded-md text-sm border bg-zinc-900/50 border-white/[0.08] text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                />
+              </div>
             </div>
           </div>
-        ) : filteredSubfolders.length === 0 && filteredAssets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <Folder className={cn('h-12 w-12', isDark ? 'text-zinc-700' : 'text-zinc-300')} />
-            <p className={cn('text-sm', isDark ? 'text-zinc-500' : 'text-zinc-400')}>
-              {searchQuery.trim() ? 'No results found' : 'This folder is empty'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Subfolders section */}
-            {filteredSubfolders.length > 0 && (
-              <section className="mb-6">
-                <SectionHeader
-                  label={filteredSubfolders.length === 1 ? 'Folder' : 'Folders'}
-                  count={filteredSubfolders.length}
-                  totalSize={null}
-                  isDark={isDark}
-                  expanded={foldersExpanded}
-                  onToggle={() => setFoldersExpanded((v) => !v)}
-                />
-                {foldersExpanded && (
-                  <div className={cn('grid gap-3 mt-2', gridColsClass(cardSize))}>
-                    {filteredSubfolders.map((subfolder) => (
-                      <SubfolderCard
-                        key={subfolder.id}
-                        subfolder={subfolder}
-                        isDark={isDark}
-                        accentColor={accentColor}
-                        aspectRatio={aspectRatio}
-                        onClick={navigateToSubfolder}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
 
-            {/* Assets section */}
-            {filteredAssets.length > 0 && (
-              <section>
-                <SectionHeader
-                  label={filteredAssets.length === 1 ? 'Asset' : 'Assets'}
-                  count={filteredAssets.length}
-                  totalSize={totalAssetSize}
-                  isDark={isDark}
-                  expanded={assetsExpanded}
-                  onToggle={() => setAssetsExpanded((v) => !v)}
-                />
-
-                {assetsExpanded && (
-                  <>
-                    {appearance.layout === 'grid' ? (
-                      <div className={cn('grid gap-3 mt-2', gridColsClass(cardSize))}>
-                        {filteredAssets.map((asset) => (
-                          <AssetGridCard
-                            key={asset.id}
-                            asset={asset}
-                            isDark={isDark}
-                            accentColor={accentColor}
-                            allowDownload={allowDownload}
-                            token={token}
-                            openInViewer={appearance.open_in_viewer}
-                            onAssetClick={onAssetClick}
-                            aspectRatio={aspectRatio}
-                            thumbnailScale={thumbnailScale}
-                            showCardInfo={showCardInfo}
+          {/* Main scrollable content */}
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            {loading ? (
+              <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-24">
+                <p className="text-sm text-zinc-500">{error}</p>
+              </div>
+            ) : filteredSubfolders.length === 0 && filteredAssets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-3">
+                <Folder className="h-12 w-12 text-zinc-700" />
+                <p className="text-sm text-zinc-500">
+                  {searchQuery.trim() ? 'No results found' : 'This folder is empty'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Subfolders section */}
+                {filteredSubfolders.length > 0 && (
+                  <section className="mb-6">
+                    <SectionHeader
+                      label={filteredSubfolders.length === 1 ? 'Folder' : 'Folders'}
+                      count={filteredSubfolders.length}
+                      totalSize={totalFolderSize}
+                      expanded={foldersExpanded}
+                      onToggle={() => setFoldersExpanded((v) => !v)}
+                    />
+                    {foldersExpanded && (
+                      <div className="grid gap-3 mt-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                        {filteredSubfolders.map((subfolder) => (
+                          <SubfolderCard
+                            key={subfolder.id}
+                            subfolder={subfolder}
+                            onClick={navigateToSubfolder}
                           />
                         ))}
                       </div>
-                    ) : (
-                      <div className="flex flex-col gap-1 mt-2">
-                        {/* List header */}
-                        <div
-                          className={cn(
-                            'hidden lg:grid grid-cols-[1fr_100px_80px_112px_28px] gap-3 px-3 py-1.5 text-xs font-medium',
-                            isDark ? 'text-zinc-500' : 'text-zinc-400',
-                          )}
-                        >
-                          <span>Name</span>
-                          <span className="text-right">Type</span>
-                          <span className="text-right">Size</span>
-                          <span className="text-right">Date</span>
-                          {allowDownload && <span />}
+                    )}
+                  </section>
+                )}
+
+                {/* Assets section */}
+                {filteredAssets.length > 0 && (
+                  <section>
+                    <SectionHeader
+                      label={filteredAssets.length === 1 ? 'Asset' : 'Assets'}
+                      count={filteredAssets.length}
+                      totalSize={totalAssetSize}
+                      expanded={assetsExpanded}
+                      onToggle={() => setAssetsExpanded((v) => !v)}
+                    />
+
+                    {assetsExpanded && (
+                      <>
+                        <div className="grid gap-3 mt-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                          {filteredAssets.map((asset) => (
+                            <AssetGridCard
+                              key={asset.id}
+                              asset={asset}
+                              allowDownload={allowDownload}
+                              token={token}
+                              isSelected={selectedAsset?.id === asset.id}
+                              onSelect={setSelectedAsset}
+                            />
+                          ))}
                         </div>
-                        {filteredAssets.map((asset) => (
-                          <AssetListRow
-                            key={asset.id}
-                            asset={asset}
-                            isDark={isDark}
-                            accentColor={accentColor}
-                            allowDownload={allowDownload}
-                            token={token}
-                            openInViewer={appearance.open_in_viewer}
-                            onAssetClick={onAssetClick}
-                          />
-                        ))}
-                      </div>
-                    )}
 
-                    {/* Load more */}
-                    {hasMore && (
-                      <div className="flex justify-center mt-6">
-                        <button
-                          onClick={loadMore}
-                          disabled={loadingMore}
-                          className={cn(
-                            'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border transition-colors',
-                            isDark
-                              ? 'border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20 disabled:opacity-50'
-                              : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50',
-                          )}
-                        >
-                          {loadingMore ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : null}
-                          {loadingMore ? 'Loading…' : 'Load more'}
-                        </button>
-                      </div>
+                        {/* Load more */}
+                        {hasMore && (
+                          <div className="flex justify-center mt-6">
+                            <button
+                              onClick={loadMore}
+                              disabled={loadingMore}
+                              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20 disabled:opacity-50 transition-colors"
+                            >
+                              {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {loadingMore ? 'Loading…' : 'Load more'}
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
+                  </section>
                 )}
-              </section>
+              </>
             )}
-          </>
-        )}
-      </main>
+          </div>
 
-      {/* Footer */}
-      <footer
-        className={cn(
-          'border-t px-5 py-4',
-          isDark ? 'border-white/10' : 'border-zinc-200',
-        )}
-      >
-        <div className="mx-auto max-w-6xl flex items-center justify-between gap-4 flex-wrap">
-          {branding?.custom_footer ? (
-            <p className={cn('text-xs', isDark ? 'text-zinc-500' : 'text-zinc-400')}>
-              {branding.custom_footer}
-            </p>
-          ) : (
-            <span />
-          )}
-          {!loading && (
-            <p className={cn('text-xs tabular-nums', isDark ? 'text-zinc-600' : 'text-zinc-400')}>
-              {searchQuery.trim()
-                ? `${filteredAssets.length + filteredSubfolders.length} result${filteredAssets.length + filteredSubfolders.length === 1 ? '' : 's'}`
-                : `${totalItems} item${totalItems === 1 ? '' : 's'}`}
-            </p>
-          )}
+          {/* Footer */}
+          <footer className="border-t border-white/[0.06] px-5 py-3 shrink-0">
+            <div className="flex items-center justify-between">
+              {branding?.custom_footer ? (
+                <p className="text-xs text-zinc-600">{branding.custom_footer}</p>
+              ) : (
+                <span />
+              )}
+              {!loading && (
+                <p className="text-xs tabular-nums text-zinc-600">
+                  {assets.length + subfolders.length} item{assets.length + subfolders.length === 1 ? '' : 's'}
+                </p>
+              )}
+            </div>
+          </footer>
         </div>
-      </footer>
+
+        {/* ─── Right Panel ───────────────────────────────────────────── */}
+        {panelOpen && (
+          <div className="w-[320px] shrink-0 border-l border-white/[0.06] bg-[#111113] flex flex-col overflow-hidden">
+            <RightPanel
+              selectedAsset={selectedAsset}
+              token={token}
+              permission={permission}
+              allowDownload={allowDownload}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

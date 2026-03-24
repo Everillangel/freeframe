@@ -18,6 +18,7 @@ from ..models.share import AssetShare, ShareLink, SharePermission, ShareLinkActi
 from ..models.activity import ActivityLog, ActivityAction
 from ..models.branding import ProjectBranding
 from ..models.asset import AssetVersion, AssetType, MediaFile, ProcessingStatus
+from ..models.comment import Comment
 from ..schemas.share import (
     DirectShareCreate,
     DirectShareResponse,
@@ -887,17 +888,31 @@ def get_folder_share_assets(
     for asset in assets:
         thumbnail_url = None
         file_size = None
+        duration_seconds = None
         media_file = _get_latest_media_file(db, asset.id)
         if media_file:
             if media_file.s3_key_thumbnail:
                 thumbnail_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
             file_size = media_file.file_size_bytes
+            duration_seconds = media_file.duration_seconds
+
+        comment_count = db.query(sa_func.count(Comment.id)).filter(
+            Comment.asset_id == asset.id,
+            Comment.deleted_at.is_(None),
+        ).scalar() or 0
+
+        # Get creator name
+        creator = db.query(User).filter(User.id == asset.created_by).first() if asset.created_by else None
+
         asset_items.append(FolderShareAssetItem(
             id=asset.id,
             name=asset.name,
             asset_type=asset.asset_type.value,
             thumbnail_url=thumbnail_url,
             file_size=file_size,
+            duration_seconds=duration_seconds,
+            comment_count=comment_count,
+            created_by_name=creator.name if creator else None,
             created_at=asset.created_at,
         ))
 

@@ -38,6 +38,7 @@ interface ShareCreateDialogProps {
   currentFolderId: string | null
   assets: AssetResponse[]
   folders: Folder[]
+  preselectedItem?: { type: 'folder' | 'asset'; id: string; name: string } | null
   onShareCreated: () => void
   onAdvancedSettings?: (token: string) => void
 }
@@ -749,6 +750,7 @@ export function ShareCreateDialog({
   currentFolderId,
   assets,
   folders,
+  preselectedItem,
   onShareCreated,
   onAdvancedSettings,
 }: ShareCreateDialogProps) {
@@ -760,12 +762,28 @@ export function ShareCreateDialog({
   // Reset state when dialog opens/closes
   React.useEffect(() => {
     if (open) {
-      setSelectedItems(new Map())
+      const initial = new Map<string, SelectedItem>()
+      if (preselectedItem) {
+        const key = `${preselectedItem.type}:${preselectedItem.id}`
+        if (preselectedItem.type === 'folder') {
+          initial.set(key, { type: 'folder', id: preselectedItem.id, name: preselectedItem.name })
+        } else {
+          const asset = assets.find(a => a.id === preselectedItem.id)
+          initial.set(key, {
+            type: 'asset',
+            id: preselectedItem.id,
+            name: preselectedItem.name,
+            thumbnailUrl: asset?.thumbnail_url ?? null,
+            assetType: asset?.asset_type ?? 'image',
+          })
+        }
+      }
+      setSelectedItems(initial)
       setCreating(false)
       setError(null)
       setCreatedResult(null)
     }
-  }, [open])
+  }, [open, preselectedItem, assets])
 
   function handleToggle(item: SelectedItem) {
     const key = `${item.type}:${item.id}`
