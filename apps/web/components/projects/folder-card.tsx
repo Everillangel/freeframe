@@ -6,6 +6,7 @@ import { Folder, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { NameDialog } from './name-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { Folder as FolderType, AssetResponse } from '@/types'
 
 function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: string; folderId: string; itemCount: number }) {
@@ -78,6 +79,7 @@ export function FolderCard({
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
 
   // Close menu on outside click
@@ -188,7 +190,7 @@ export function FolderCard({
                     onClick={(e) => {
                       e.stopPropagation()
                       setMenuOpen(false)
-                      if (confirm(`Delete "${folder.name}" and all contents?`)) onDelete?.(folder.id)
+                      setDeleteOpen(true)
                     }}
                   >
                     <Trash className="h-3 w-3" /> Delete
@@ -212,6 +214,17 @@ export function FolderCard({
         defaultValue={folder.name}
         submitLabel="Rename"
         onSubmit={(name) => onRename?.(folder.id, name)}
+      />
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete "${folder.name}"?`}
+        description="This folder and all its contents will be moved to trash. You can restore them later."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => onDelete?.(folder.id)}
       />
     </>
   )
