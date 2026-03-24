@@ -282,7 +282,7 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
 
       {/* Suggestions dropdown */}
       {showSuggestions && (
-        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl overflow-hidden">
+        <div className="absolute z-[100] left-0 right-0 mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl overflow-hidden">
           {suggestions.map((user) => (
             <button
               key={user.id}

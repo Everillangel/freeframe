@@ -167,7 +167,7 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
         className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
       />
       {showDrop && (
-        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-border bg-bg-secondary shadow-xl overflow-hidden">
+        <div className="absolute z-[100] left-0 right-0 mt-1 rounded-lg border border-border bg-bg-secondary shadow-xl overflow-hidden">
           {suggestions.map((u) => (
             <button
               key={u.id}
