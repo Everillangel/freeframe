@@ -303,23 +303,23 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left: viewer column */}
-        <div className="flex-1 flex flex-col bg-[#1a1a1a] overflow-hidden min-w-0">
+        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {/* Media viewer */}
           {renderMediaViewer()}
         </div>
 
         {/* Right: comments sidebar */}
         {sidebarOpen && (
-          <div className="w-[360px] flex flex-col border-l border-white/5 bg-[#1e1e22] shrink-0 animate-in slide-in-from-right-2 duration-150">
+          <div className="w-[360px] flex flex-col border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-right-2 duration-150">
             {/* Tabs (Frame.io pill style) */}
             <div className="px-4 pt-3 pb-2 shrink-0">
-              <div className="flex items-center bg-white/5 rounded-lg p-0.5">
+              <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
                 <button
                   onClick={() => setActiveTab('comments')}
                   className={cn(
                     'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all',
                     activeTab === 'comments'
-                      ? 'bg-white/10 text-text-primary shadow-sm'
+                      ? 'bg-bg-hover text-text-primary shadow-sm'
                       : 'text-text-tertiary hover:text-text-secondary',
                   )}
                 >
@@ -330,7 +330,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                   className={cn(
                     'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all',
                     activeTab === 'fields'
-                      ? 'bg-white/10 text-text-primary shadow-sm'
+                      ? 'bg-bg-hover text-text-primary shadow-sm'
                       : 'text-text-tertiary hover:text-text-secondary',
                   )}
                 >

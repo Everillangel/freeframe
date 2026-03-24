@@ -116,13 +116,13 @@ function MentionDropdown({
       {filtered.map((user) => (
         <button
           key={user.id}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-white/5 transition-colors"
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
           onMouseDown={(e) => {
             e.preventDefault()
             onSelect(user)
           }}
         >
-          <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-[10px] text-white font-semibold shrink-0">
+          <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-left min-w-0">
@@ -312,7 +312,7 @@ export function CommentInput({
   }
 
   return (
-    <div className={cn('border-t border-white/5 bg-bg-secondary shrink-0', className)}>
+    <div className={cn('border-t border-border bg-bg-secondary shrink-0', className)}>
       {/* Reply indicator */}
       {replyToId && (
         <div className="flex items-center justify-between px-4 py-2 bg-accent/5 border-b border-accent/10 text-xs text-accent">
@@ -326,7 +326,7 @@ export function CommentInput({
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
         <div className="relative">
-          <div className="flex items-start gap-0 rounded-lg border border-white/10 bg-white/5 focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
+          <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span className="shrink-0 ml-2.5 mt-[9px] rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-400 leading-none select-none">
@@ -346,7 +346,7 @@ export function CommentInput({
 
           {/* Mention dropdown */}
           {mentionQuery !== null && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-white/10 bg-[#2a2a2e] shadow-xl max-h-48 overflow-y-auto">
+            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto">
               <MentionDropdown
                 query={mentionQuery}
                 projectId={projectId}
@@ -367,7 +367,7 @@ export function CommentInput({
           <div className="flex items-center gap-1">
             <button
               onClick={() => exitDrawingMode()}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-primary transition-colors"
+              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
               title="Exit drawing"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -386,7 +386,7 @@ export function CommentInput({
                     'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
                     drawingTool === tool.id
                       ? 'bg-accent/15 text-accent'
-                      : 'text-text-tertiary hover:bg-white/5 hover:text-text-secondary',
+                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -414,14 +414,14 @@ export function CommentInput({
 
             <button
               onClick={undo}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
+              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Undo"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={clear}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
+              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Clear"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -438,7 +438,7 @@ export function CommentInput({
                     'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
                     timecodeAttached
                       ? 'text-amber-400 bg-amber-400/10'
-                      : 'text-text-tertiary hover:bg-white/5 hover:text-text-secondary',
+                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
                   )}
                   onClick={() => setTimecodeAttached((p) => !p)}
                   title={timecodeAttached ? 'Detach timecode' : 'Attach timecode'}
@@ -454,7 +454,7 @@ export function CommentInput({
                     'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
                     hasAnnotation
                       ? 'text-accent bg-accent/10'
-                      : 'text-text-tertiary hover:bg-white/5 hover:text-text-secondary',
+                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
                   )}
                   onClick={() => toggleDrawingMode()}
                   title="Draw annotation"
@@ -466,19 +466,19 @@ export function CommentInput({
               {/* Emoji */}
               <div className="relative">
                 <button
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors"
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                   title="Add emoji"
                   onClick={() => setEmojiOpen((p) => !p)}
                 >
                   <Smile className="h-4 w-4" />
                 </button>
                 {emojiOpen && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-white/10 bg-[#232328] shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
                     <div className="grid grid-cols-8 gap-px">
                       {EMOJIS.map((e) => (
                         <button
                           key={e}
-                          className="h-6 w-6 rounded flex items-center justify-center text-sm hover:bg-white/10 transition-colors"
+                          className="h-6 w-6 rounded flex items-center justify-center text-sm hover:bg-bg-hover transition-colors"
                           onClick={() => {
                             setBody((prev) => prev + e)
                             setEmojiOpen(false)
@@ -504,7 +504,7 @@ export function CommentInput({
                     'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border',
                     commentVisibility === 'internal'
                       ? 'text-amber-400 border-amber-400/30 bg-amber-400/10'
-                      : 'text-text-tertiary hover:bg-white/5 hover:text-text-secondary border-white/10',
+                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border',
                   )}
                 >
                   {commentVisibility === 'internal' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
@@ -512,11 +512,11 @@ export function CommentInput({
                   <ChevronDown className="h-3 w-3" />
                 </button>
                 {visDropdownOpen && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-white/10 bg-[#232328] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
                     <button
                       className={cn(
                         'flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors',
-                        commentVisibility === 'public' ? 'text-text-primary bg-white/5' : 'text-text-secondary hover:bg-white/5',
+                        commentVisibility === 'public' ? 'text-text-primary bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
                       )}
                       onClick={() => { setCommentVisibility('public'); setVisDropdownOpen(false) }}
                     >
@@ -526,7 +526,7 @@ export function CommentInput({
                     <button
                       className={cn(
                         'flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors',
-                        commentVisibility === 'internal' ? 'text-amber-400 bg-white/5' : 'text-text-secondary hover:bg-white/5',
+                        commentVisibility === 'internal' ? 'text-amber-400 bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
                       )}
                       onClick={() => { setCommentVisibility('internal'); setVisDropdownOpen(false) }}
                     >
@@ -541,7 +541,7 @@ export function CommentInput({
               <button
                 onClick={handleSubmit}
                 disabled={!body.trim() || submitting}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Send (Enter)"
               >
                 {submitting ? (

@@ -114,7 +114,7 @@ function Dropdown({
     <div
       ref={ref}
       className={cn(
-        'absolute top-full mt-1 z-50 rounded-xl border border-white/10 bg-[#232328] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100',
+        'absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100',
         align === 'right' ? 'right-0' : 'left-0',
         className,
       )}
@@ -144,27 +144,27 @@ function CommentMenu({
     <div className="relative">
       <button
         onClick={() => setOpen((p) => !p)}
-        className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-white/5 transition-colors"
+        className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
       <Dropdown open={open} onClose={() => setOpen(false)} align="right" className="w-44">
         <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5 transition-colors"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
           onClick={() => setOpen(false)}
         >
           <Pencil className="h-3.5 w-3.5" />
           Edit
         </button>
         <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5 transition-colors"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
           onClick={() => setOpen(false)}
         >
           <Link2 className="h-3.5 w-3.5" />
           Copy Link
         </button>
         <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-white/5 transition-colors"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-bg-tertiary transition-colors"
           onClick={() => { onDelete(commentId); setOpen(false) }}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -210,11 +210,11 @@ function InlineReplyInput({
   }
 
   return (
-    <div className="mt-2 border-t border-white/5 pt-3 pb-1">
+    <div className="mt-2 border-t border-border pt-3 pb-1">
       <input
         ref={inputRef}
         type="text"
-        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
+        className="w-full rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
         placeholder="Leave your reply here..."
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -225,24 +225,24 @@ function InlineReplyInput({
       />
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-1">
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors">
+          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors">
             <Paperclip className="h-4 w-4" />
           </button>
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-white/5 hover:text-text-secondary transition-colors">
+          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors">
             <Smile className="h-4 w-4" />
           </button>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-1 text-[12px] font-medium text-text-secondary hover:text-text-primary rounded-md border border-white/10 hover:bg-white/5 transition-colors"
+            className="px-3 py-1 text-[12px] font-medium text-text-secondary hover:text-text-primary rounded-md border border-border hover:bg-bg-tertiary transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={!body.trim() || submitting}
-            className="h-7 w-7 flex items-center justify-center rounded-full bg-accent text-white hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="h-7 w-7 flex items-center justify-center rounded-full bg-accent text-text-inverse hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
@@ -342,7 +342,7 @@ function CommentItem({
       className={cn(
         'group/comment relative transition-colors cursor-pointer',
         depth > 0
-          ? 'ml-8 pl-3 border-l-2 border-white/5'
+          ? 'ml-8 pl-3 border-l-2 border-border'
           : cn(
               'rounded-lg border px-3',
               isFocused
@@ -362,7 +362,7 @@ function CommentItem({
         {/* Colored avatar */}
         <div
           className={cn(
-            'h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 mt-0.5',
+            'h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-text-inverse shrink-0 mt-0.5',
             avatarColor,
           )}
         >
@@ -445,7 +445,7 @@ function CommentItem({
                     'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
                     r.userReacted
                       ? 'border-accent/40 bg-accent/10 text-accent'
-                      : 'border-white/10 bg-white/5 text-text-secondary hover:border-white/20',
+                      : 'border-border bg-bg-tertiary text-text-secondary hover:border-white/20',
                   )}
                   onClick={() => handleReactionClick(r.emoji, r.userReacted)}
                 >
@@ -471,18 +471,18 @@ function CommentItem({
               {/* Emoji — hover only */}
               <div className="relative opacity-0 group-hover/comment:opacity-100 transition-opacity">
                 <button
-                  className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-white/5 transition-colors"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
                   onClick={() => setShowEmojiPicker((p) => !p)}
                   title="Add reaction"
                 >
                   <Smile className="h-4 w-4" />
                 </button>
                 {showEmojiPicker && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-xl border border-white/10 bg-[#232328] p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-xl border border-border bg-bg-elevated p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
                     {QUICK_EMOJIS.map((e) => (
                       <button
                         key={e}
-                        className="h-8 w-8 rounded-lg text-base hover:bg-white/10 transition-colors"
+                        className="h-8 w-8 rounded-lg text-base hover:bg-bg-hover transition-colors"
                         onClick={() => handleQuickEmoji(e)}
                       >
                         {e}
@@ -500,7 +500,7 @@ function CommentItem({
               {/* Resolve — green filled when resolved (clickable to unresolve), outline on hover when unresolved */}
               {comment.resolved ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                  className="h-6 w-6 flex items-center justify-center rounded-full bg-emerald-500 text-text-inverse hover:bg-emerald-600 transition-colors disabled:opacity-50"
                   onClick={handleResolve}
                   disabled={resolving}
                   title="Unresolve"
@@ -509,7 +509,7 @@ function CommentItem({
                 </button>
               ) : (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-white/5 transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100"
+                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100"
                   onClick={handleResolve}
                   disabled={resolving}
                   title="Resolve"
@@ -701,7 +701,7 @@ export function CommentPanel({
           <button
             className={cn(
               'flex items-center gap-1.5 text-[13px] font-medium transition-colors rounded-md px-2 py-1',
-              visOpen ? 'bg-white/5 text-text-primary' : 'text-text-secondary hover:text-text-primary',
+              visOpen ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary hover:text-text-primary',
             )}
             onClick={() => { setVisOpen((p) => !p); setFilterOpen(false); setSortOpen(false) }}
           >
@@ -718,7 +718,7 @@ export function CommentPanel({
                 key={item.id}
                 className={cn(
                   'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                  visibility === item.id ? 'text-text-primary bg-white/5' : 'text-text-secondary hover:bg-white/5',
+                  visibility === item.id ? 'text-text-primary bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
                 )}
                 onClick={() => { setVisibility(item.id); setVisOpen(false) }}
               >
@@ -738,7 +738,7 @@ export function CommentPanel({
                 'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
                 filterOpen || hasActiveFilters
                   ? 'text-accent bg-accent/10'
-                  : 'text-text-tertiary hover:text-text-secondary hover:bg-white/5',
+                  : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
               )}
               title="Filter"
               onClick={() => { setFilterOpen((p) => !p); setVisOpen(false); setSortOpen(false) }}
@@ -759,7 +759,7 @@ export function CommentPanel({
               ]).map(({ key, icon: Icon, label }) => (
                 <button
                   key={key}
-                  className="flex w-full items-center justify-between px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5 transition-colors"
+                  className="flex w-full items-center justify-between px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
                   onClick={() => toggleFilter(key)}
                 >
                   <div className="flex items-center gap-2.5">
@@ -770,26 +770,26 @@ export function CommentPanel({
                     'h-4 w-4 rounded border flex items-center justify-center transition-colors',
                     filters[key] ? 'bg-accent border-accent' : 'border-white/20',
                   )}>
-                    {filters[key] && <Check className="h-3 w-3 text-white" />}
+                    {filters[key] && <Check className="h-3 w-3 text-text-inverse" />}
                   </div>
                 </button>
               ))}
-              <div className="border-t border-white/5 mt-1 pt-1">
-                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5 transition-colors">
+              <div className="border-t border-border mt-1 pt-1">
+                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors">
                   <Hash className="h-4 w-4" />
                   Hashtag
                   <ChevronRight className="h-3.5 w-3.5 ml-auto" />
                 </button>
-                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-white/5 transition-colors">
+                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors">
                   <User className="h-4 w-4" />
                   Person
                   <ChevronRight className="h-3.5 w-3.5 ml-auto" />
                 </button>
               </div>
               {hasActiveFilters && (
-                <div className="border-t border-white/5 mt-1 pt-1 px-1.5 pb-1">
+                <div className="border-t border-border mt-1 pt-1 px-1.5 pb-1">
                   <button
-                    className="w-full py-1.5 text-[13px] text-text-secondary bg-white/5 hover:bg-white/10 rounded-lg transition-colors font-medium"
+                    className="w-full py-1.5 text-[13px] text-text-secondary bg-bg-tertiary hover:bg-bg-hover rounded-lg transition-colors font-medium"
                     onClick={() => setFilters(EMPTY_FILTERS)}
                   >
                     Clear Filters
@@ -804,7 +804,7 @@ export function CommentPanel({
             <button
               className={cn(
                 'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-                sortOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-white/5',
+                sortOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
               )}
               title="Sort"
               onClick={() => { setSortOpen((p) => !p); setVisOpen(false); setFilterOpen(false) }}
@@ -825,7 +825,7 @@ export function CommentPanel({
                   key={item.id}
                   className={cn(
                     'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                    sortMode === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-white/5',
+                    sortMode === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-bg-tertiary',
                   )}
                   onClick={() => { setSortMode(item.id); setSortOpen(false) }}
                 >
@@ -840,7 +840,7 @@ export function CommentPanel({
           <button
             className={cn(
               'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-              searchOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-white/5',
+              searchOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
             )}
             title="Search"
             onClick={() => { setSearchOpen((p) => !p); if (searchOpen) setSearchQuery('') }}
@@ -849,7 +849,7 @@ export function CommentPanel({
           </button>
 
           {/* More */}
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:text-text-secondary hover:bg-white/5 transition-colors" title="More">
+          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors" title="More">
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
@@ -858,7 +858,7 @@ export function CommentPanel({
       {/* ─── Search bar ───────────────────────────────────────────── */}
       {searchOpen && (
         <div className="px-4 pb-2 shrink-0">
-          <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-tertiary px-3 py-1.5">
             <Search className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
             <input
               ref={searchRef}
@@ -887,13 +887,13 @@ export function CommentPanel({
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
           </div>
         )}
 
         {!isLoading && sorted.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/5 text-text-tertiary mb-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-bg-tertiary text-text-tertiary mb-3">
               <MessageSquare className="h-6 w-6" />
             </div>
             <p className="text-sm text-text-secondary font-medium">No comments yet</p>
