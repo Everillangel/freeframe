@@ -593,64 +593,60 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           className="w-full bg-transparent text-sm text-zinc-400 placeholder:text-zinc-600 outline-none border-none resize-none focus:ring-0"
         />
 
-        {/* Content summary */}
-        {(previewFolders.length > 0 || previewThumbnails.length > 0) && (
-          <div className="flex items-center gap-3 text-xs text-zinc-400">
+        {/* Content preview — matches project view style */}
+        {(previewFolders.length > 0 || previewThumbnails.length > 0) ? (
+          <div className="space-y-4">
+            {/* Folders */}
             {previewFolders.length > 0 && (
-              <span>{previewFolders.length} folder{previewFolders.length !== 1 ? 's' : ''}</span>
+              <>
+                <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
+                  {previewFolders.length} {previewFolders.length === 1 ? 'Folder' : 'Folders'}
+                </span>
+                <div className="grid grid-cols-3 gap-3">
+                  {previewFolders.map((folder) => (
+                    <div key={folder.id} className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden">
+                      <div className="aspect-[4/3] flex items-center justify-center bg-white/[0.02]">
+                        <svg className="h-10 w-10 text-text-tertiary/50" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                      </div>
+                      <div className="px-3 py-2">
+                        <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
+                        <p className="text-xs text-text-tertiary mt-0.5">{folder.item_count} {folder.item_count === 1 ? 'Item' : 'Items'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
+            {/* Assets */}
             {previewThumbnails.length > 0 && (
-              <span>{previewThumbnails.length} asset{previewThumbnails.length !== 1 ? 's' : ''}</span>
+              <>
+                <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
+                  {previewThumbnails.length} {previewThumbnails.length === 1 ? 'Asset' : 'Assets'}
+                </span>
+                <div className="grid grid-cols-3 gap-3">
+                  {previewThumbnails.slice(0, 6).map((asset) => (
+                    <div key={asset.id} className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden">
+                      <div className="aspect-[16/10] bg-bg-tertiary flex items-center justify-center overflow-hidden">
+                        {asset.thumbnail_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Eye className="h-8 w-8 text-text-tertiary/40" />
+                        )}
+                      </div>
+                      <div className="px-3 py-2">
+                        <p className="text-sm font-medium text-text-primary truncate">{asset.name}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
-        )}
-
-        {/* Content preview with thumbnails */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-          {(previewFolders.length > 0 || previewThumbnails.length > 0) ? (
-            <div className="p-3 space-y-2">
-              {/* Folder previews */}
-              {previewFolders.length > 0 && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {previewFolders.map((folder) => (
-                    <div key={folder.id} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-center">
-                      <div className="flex items-center justify-center h-8 mb-1">
-                        <svg className="h-6 w-6 text-zinc-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
-                      </div>
-                      <p className="text-2xs text-zinc-300 truncate font-medium">{folder.name}</p>
-                      <p className="text-2xs text-zinc-600">{folder.item_count} item{folder.item_count !== 1 ? 's' : ''}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Asset thumbnails */}
-              {previewThumbnails.length > 0 && (
-                <div className={cn(
-                  'grid gap-px rounded-lg overflow-hidden',
-                  previewThumbnails.length === 1 && 'grid-cols-1',
-                  previewThumbnails.length === 2 && 'grid-cols-2',
-                  previewThumbnails.length >= 3 && 'grid-cols-2',
-                )}>
-                  {previewThumbnails.slice(0, 4).map((asset) => (
-                    <div key={asset.id} className="aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden max-h-[200px]">
-                      {asset.thumbnail_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-contain" />
-                      ) : (
-                        <div className="flex flex-col items-center gap-1">
-                          <Eye className="h-6 w-6 text-zinc-600" />
-                          <span className="text-2xs text-zinc-600 truncate max-w-[100px]">{asset.name}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-8 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
-                <Eye className="h-6 w-6 text-zinc-500" />
+        ) : (
+          <div className="rounded-xl border border-border bg-bg-tertiary/50 p-8 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
+              <Eye className="h-6 w-6 text-zinc-500" />
               </div>
               <p className="text-sm font-medium text-zinc-300">No content yet</p>
             </div>
