@@ -15,6 +15,7 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
+  ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
@@ -199,9 +200,10 @@ interface AssetGridCardProps {
   token: string
   isSelected: boolean
   onSelect: (asset: FolderShareAssetItem) => void
+  onOpen: (asset: FolderShareAssetItem) => void
 }
 
-function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect }: AssetGridCardProps) {
+function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOpen }: AssetGridCardProps) {
   const TypeIcon = getAssetTypeIcon(asset.asset_type)
 
   return (
@@ -214,6 +216,7 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect }: As
         'bg-white/[0.02] hover:bg-white/[0.04]',
       )}
       onClick={() => onSelect(asset)}
+      onDoubleClick={() => onOpen(asset)}
     >
       {/* Thumbnail */}
       <div className="w-full aspect-[16/10] relative overflow-hidden bg-zinc-900/50">
@@ -309,6 +312,7 @@ interface RightPanelProps {
   token: string
   permission: SharePermission
   allowDownload: boolean
+  onOpenAsset?: (asset: FolderShareAssetItem) => void
 }
 
 interface GuestComment {
@@ -320,7 +324,7 @@ interface GuestComment {
   timecode_start?: number | null
 }
 
-function RightPanel({ selectedAsset, token, permission, allowDownload }: RightPanelProps) {
+function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAsset }: RightPanelProps) {
   const [comments, setComments] = React.useState<GuestComment[]>([])
   const [loadingComments, setLoadingComments] = React.useState(false)
 
@@ -374,16 +378,26 @@ function RightPanel({ selectedAsset, token, permission, allowDownload }: RightPa
           </p>
         </div>
 
-        {/* Download button */}
-        {allowDownload && (
-          <button
-            className="mt-3 flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
-            onClick={() => handleDownload(token, selectedAsset.id, selectedAsset.name)}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download
-          </button>
-        )}
+        {/* Actions */}
+        <div className="mt-3 flex items-center gap-3">
+          {onOpenAsset && (
+            <button
+              className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent-hover transition-colors"
+              onClick={() => onOpenAsset(selectedAsset)}
+            >
+              Open
+            </button>
+          )}
+          {allowDownload && (
+            <button
+              className="flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+              onClick={() => handleDownload(token, selectedAsset.id, selectedAsset.name)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Comments section */}
@@ -435,6 +449,106 @@ function RightPanel({ selectedAsset, token, permission, allowDownload }: RightPa
   )
 }
 
+// ─── Asset Viewer (full-screen media viewer for shared assets) ───────────────
+
+interface AssetViewerProps {
+  token: string
+  asset: FolderShareAssetItem
+  allowDownload: boolean
+  onBack: () => void
+}
+
+function AssetViewer({ token, asset, allowDownload, onBack }: AssetViewerProps) {
+  const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    setLoading(true)
+    fetch(`${API_URL}/share/${token}/stream/${asset.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.url) setStreamUrl(data.url)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [token, asset.id])
+
+  return (
+    <div className="flex-1 min-h-screen flex flex-col bg-black text-white">
+      {/* Top bar */}
+      <header className="flex items-center gap-3 border-b border-white/[0.06] px-4 h-12 bg-zinc-950 shrink-0">
+        <button
+          onClick={onBack}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-medium text-white truncate">{asset.name}</span>
+        <div className="flex-1" />
+        {allowDownload && (
+          <button
+            className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
+            onClick={() => handleDownload(token, asset.id, asset.name)}
+          >
+            <Download className="h-3 w-3" />
+            Download
+          </button>
+        )}
+      </header>
+
+      {/* Media viewer */}
+      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+        {loading ? (
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+        ) : asset.asset_type === 'video' ? (
+          streamUrl ? (
+            <video src={streamUrl} controls autoPlay className="max-h-full max-w-full rounded-lg">
+              Your browser does not support video playback.
+            </video>
+          ) : (
+            <div className="text-center text-zinc-500">
+              <Video className="h-12 w-12 mx-auto mb-2" />
+              <p className="text-sm">Video unavailable</p>
+            </div>
+          )
+        ) : asset.asset_type === 'audio' ? (
+          streamUrl ? (
+            <div className="w-full max-w-lg space-y-4">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-20 w-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Music className="h-8 w-8 text-zinc-500" />
+                </div>
+                <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
+              </div>
+              <audio src={streamUrl} controls autoPlay className="w-full" />
+            </div>
+          ) : (
+            <div className="text-center text-zinc-500">
+              <Music className="h-12 w-12 mx-auto mb-2" />
+              <p className="text-sm">Audio unavailable</p>
+            </div>
+          )
+        ) : (
+          /* Image */
+          streamUrl || asset.thumbnail_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={streamUrl || asset.thumbnail_url!}
+              alt={asset.name}
+              className="max-h-full max-w-full object-contain rounded-lg"
+            />
+          ) : (
+            <div className="text-center text-zinc-500">
+              <ImageIcon className="h-12 w-12 mx-auto mb-2" />
+              <p className="text-sm">Image unavailable</p>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function FolderShareViewer({
@@ -457,6 +571,7 @@ export function FolderShareViewer({
   const [foldersExpanded, setFoldersExpanded] = React.useState(true)
   const [assetsExpanded, setAssetsExpanded] = React.useState(true)
   const [panelOpen, setPanelOpen] = React.useState(true)
+  const [viewingAsset, setViewingAsset] = React.useState<FolderShareAssetItem | null>(null)
 
   // Set page title
   React.useEffect(() => {
@@ -584,6 +699,18 @@ export function FolderShareViewer({
   const currentTitle = breadcrumbs.length > 0
     ? breadcrumbs[breadcrumbs.length - 1].name
     : (title || folderName)
+
+  // Asset viewer overlay
+  if (viewingAsset) {
+    return (
+      <AssetViewer
+        token={token}
+        asset={viewingAsset}
+        allowDownload={allowDownload}
+        onBack={() => setViewingAsset(null)}
+      />
+    )
+  }
 
   return (
     <div className="flex-1 min-h-screen flex flex-col bg-[#0d0d0f] text-white">
@@ -800,6 +927,7 @@ export function FolderShareViewer({
                               token={token}
                               isSelected={selectedAsset?.id === asset.id}
                               onSelect={setSelectedAsset}
+                              onOpen={setViewingAsset}
                             />
                           ))}
                         </div>
@@ -850,6 +978,7 @@ export function FolderShareViewer({
               token={token}
               permission={permission}
               allowDownload={allowDownload}
+              onOpenAsset={setViewingAsset}
             />
           </div>
         )}
