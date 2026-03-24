@@ -280,14 +280,14 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
       />
 
-      {/* Suggestions dropdown */}
-      {showSuggestions && (
-        <div className="absolute z-[100] left-0 right-0 mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl overflow-hidden">
+      {/* Suggestions dropdown — rendered inline to avoid overflow clipping */}
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl">
           {suggestions.map((user) => (
             <button
               key={user.id}
               onClick={() => inviteUser(user)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors first:rounded-t-lg last:rounded-b-lg"
             >
               <div className="h-7 w-7 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
                 <span className="text-xs font-medium text-accent">
