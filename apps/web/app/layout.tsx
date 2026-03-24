@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { ToastProvider } from '@/components/shared/toast'
+import { ThemeInitializer } from '@/components/shared/theme-initializer'
 import './globals.css'
 
 const inter = Inter({
@@ -28,8 +29,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <ThemeInitializer />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
