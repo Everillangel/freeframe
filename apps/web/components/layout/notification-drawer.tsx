@@ -24,21 +24,42 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   approval: CheckCircle,
 }
 
-const notificationLabels: Record<NotificationType, string> = {
-  mention: 'mentioned you',
-  assignment: 'assigned you to an asset',
-  due_soon: 'asset due soon',
-  comment: 'commented on an asset',
-  approval: 'updated approval status',
+function getNotificationText(n: Notification): { title: string; subtitle: string | null } {
+  const actor = n.actor_name || 'Someone'
+  const asset = n.asset_name || 'an asset'
+  switch (n.type) {
+    case 'mention':
+      return { title: `${actor} mentioned you`, subtitle: n.comment_preview || `on ${asset}` }
+    case 'comment':
+      return { title: `${actor} commented`, subtitle: n.comment_preview || `on ${asset}` }
+    case 'assignment':
+      return { title: `${actor} assigned you`, subtitle: `to ${asset}` }
+    case 'approval':
+      return { title: `${actor} updated approval`, subtitle: `on ${asset}` }
+    case 'due_soon':
+      return { title: `${asset} is due soon`, subtitle: null }
+    default:
+      return { title: 'New notification', subtitle: null }
+  }
 }
 
-function NotificationItem({ notification }: { notification: Notification }) {
+function NotificationItem({ notification, onClose }: { notification: Notification; onClose: () => void }) {
   const { markAsRead } = useNotificationStore()
   const Icon = notificationIcons[notification.type]
+  const { title, subtitle } = getNotificationText(notification)
+
+  function handleClick() {
+    if (!notification.read) markAsRead(notification.id)
+    // Navigate to asset if possible
+    if (notification.project_id && notification.asset_id) {
+      window.location.href = `/projects/${notification.project_id}/assets/${notification.asset_id}`
+      onClose()
+    }
+  }
 
   return (
     <button
-      onClick={() => !notification.read && markAsRead(notification.id)}
+      onClick={handleClick}
       className={cn(
         'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-hover',
         !notification.read && 'bg-bg-secondary',
@@ -46,7 +67,7 @@ function NotificationItem({ notification }: { notification: Notification }) {
     >
       <div
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full mt-0.5',
           notification.type === 'mention' && 'bg-accent-muted text-accent',
           notification.type === 'approval' && 'bg-status-success/15 text-status-success',
           notification.type === 'comment' && 'bg-bg-tertiary text-text-secondary',
@@ -57,8 +78,11 @@ function NotificationItem({ notification }: { notification: Notification }) {
         <Icon className="h-3.5 w-3.5" />
       </div>
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-        <p className="text-sm text-text-primary">{notificationLabels[notification.type]}</p>
-        <p className="text-2xs text-text-tertiary">{formatRelativeTime(notification.created_at)}</p>
+        <p className="text-sm text-text-primary font-medium">{title}</p>
+        {subtitle && (
+          <p className="text-xs text-text-secondary line-clamp-2">{subtitle}</p>
+        )}
+        <p className="text-2xs text-text-tertiary mt-0.5">{formatRelativeTime(notification.created_at)}</p>
       </div>
       {!notification.read && (
         <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent" />
@@ -164,7 +188,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
           ) : (
             <div className="p-1 space-y-0.5">
               {filtered.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} />
+                <NotificationItem key={notification.id} notification={notification} onClose={onClose} />
               ))}
             </div>
           )}

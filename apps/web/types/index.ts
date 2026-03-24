@@ -412,6 +412,10 @@ export interface Notification {
   type: NotificationType;
   read: boolean;
   created_at: string;
+  asset_name: string | null;
+  actor_name: string | null;
+  comment_preview: string | null;
+  project_id: string | null;
 }
 
 // ─── Branding & Watermarking ──────────────────────────────────────────────────

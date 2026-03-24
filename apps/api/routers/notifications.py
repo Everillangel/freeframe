@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
+from ..models.asset import Asset
 from ..models.activity import Notification
-from ..schemas.notification import NotificationResponse
+from ..models.comment import Comment
+from ..schemas.asset import NotificationResponse
 import uuid
 
 router = APIRouter(tags=["notifications"])
@@ -20,7 +22,45 @@ def list_notifications(
     if unread_only:
         query = query.filter(Notification.read == False)
     notifications = query.order_by(Notification.created_at.desc()).limit(50).all()
-    return notifications
+
+    # Enrich with asset name, actor name, comment preview
+    results = []
+    for n in notifications:
+        asset_name = None
+        actor_name = None
+        comment_preview = None
+        project_id = None
+
+        if n.asset_id:
+            asset = db.query(Asset).filter(Asset.id == n.asset_id).first()
+            if asset:
+                asset_name = asset.name
+                project_id = asset.project_id
+
+        if n.comment_id:
+            comment = db.query(Comment).filter(Comment.id == n.comment_id).first()
+            if comment:
+                comment_preview = comment.body[:100] if comment.body else None
+                # Get actor from comment author
+                if comment.author_id:
+                    author = db.query(User).filter(User.id == comment.author_id).first()
+                    if author:
+                        actor_name = author.name
+
+        results.append(NotificationResponse(
+            id=n.id,
+            type=n.type,
+            asset_id=n.asset_id,
+            comment_id=n.comment_id,
+            read=n.read,
+            created_at=n.created_at,
+            asset_name=asset_name,
+            actor_name=actor_name,
+            comment_preview=comment_preview,
+            project_id=project_id,
+        ))
+
+    return results
 
 
 @router.post("/me/notifications/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)

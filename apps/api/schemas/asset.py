@@ -69,7 +69,11 @@ class NotificationResponse(BaseModel):
     id: uuid.UUID
     type: NotificationType
     asset_id: uuid.UUID
-    comment_id: Optional[uuid.UUID]
+    comment_id: Optional[uuid.UUID] = None
     read: bool
     created_at: datetime
-    model_config = {"from_attributes": True}
+    # Enriched fields
+    asset_name: Optional[str] = None
+    actor_name: Optional[str] = None
+    comment_preview: Optional[str] = None
+    project_id: Optional[uuid.UUID] = None
