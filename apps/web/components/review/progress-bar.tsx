@@ -195,11 +195,13 @@ function CommentMarker({
 
   const handleClick = useCallback(() => {
     if (comment.timecode_start !== null) {
-      seekTo(comment.timecode_start)
+      seekTo(comment.timecode_start, true)
     }
     setFocusedCommentId(comment.id)
     if ((comment as any).annotation?.drawing_data) {
       setActiveAnnotation((comment as any).annotation.drawing_data)
+    } else {
+      setActiveAnnotation(null)
     }
   }, [comment, seekTo, setFocusedCommentId, setActiveAnnotation])
 
