@@ -115,6 +115,12 @@
 }
 
 @layer components {
+  /* Theme-aware logo switching */
+  [data-theme="dark"] .logo-dark { display: block; }
+  [data-theme="dark"] .logo-light { display: none; }
+  [data-theme="light"] .logo-dark { display: none; }
+  [data-theme="light"] .logo-light { display: block; }
+
   /* Smooth focus ring for interactive elements */
   .focus-ring {
     @apply outline-none ring-0 transition-shadow duration-150;

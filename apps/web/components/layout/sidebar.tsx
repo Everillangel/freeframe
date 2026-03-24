@@ -57,11 +57,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? 'justify-center px-0' : 'px-4 gap-2.5',
         )}
       >
+        {/* White logo for dark theme, dark logo for light theme */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo-icon.png"
           alt="FreeFrame"
-          className="h-7 w-7 shrink-0 object-contain"
+          className="h-7 w-7 shrink-0 object-contain logo-dark"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-icon-dark.png"
+          alt="FreeFrame"
+          className="h-7 w-7 shrink-0 object-contain logo-light"
         />
         {!collapsed && (
           <span className="text-sm font-semibold text-text-primary tracking-tight">
