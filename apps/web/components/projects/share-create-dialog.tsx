@@ -804,28 +804,34 @@ export function ShareCreateDialog({
     setError(null)
 
     try {
-      // Take the first selected item to create a share link
-      const firstItem = Array.from(selectedItems.values())[0]
-      let shareLink: ShareLink
+      const items = Array.from(selectedItems.values())
+      let lastShareLink: ShareLink | null = null
+      let lastItem: SelectedItem | null = null
 
-      if (firstItem.type === 'folder') {
-        shareLink = await api.post<ShareLink>(`/folders/${firstItem.id}/share`, {
-          title: firstItem.name,
-        })
-      } else {
-        shareLink = await api.post<ShareLink>(`/assets/${firstItem.id}/share`, {
-          title: firstItem.name,
-        })
+      // Create a share link for each selected item
+      for (const item of items) {
+        if (item.type === 'folder') {
+          lastShareLink = await api.post<ShareLink>(`/folders/${item.id}/share`, {
+            title: item.name,
+          })
+        } else {
+          lastShareLink = await api.post<ShareLink>(`/assets/${item.id}/share`, {
+            title: item.name,
+          })
+        }
+        lastItem = item
       }
 
-      setCreatedResult({
-        token: shareLink.token,
-        title: shareLink.title || firstItem.name,
-        itemType: firstItem.type,
-        thumbnailUrl: firstItem.type === 'asset' ? firstItem.thumbnailUrl : null,
-        assetId: shareLink.asset_id,
-        folderId: shareLink.folder_id,
-      })
+      if (lastShareLink && lastItem) {
+        setCreatedResult({
+          token: lastShareLink.token,
+          title: lastShareLink.title || lastItem.name,
+          itemType: lastItem.type,
+          thumbnailUrl: lastItem.type === 'asset' ? lastItem.thumbnailUrl : null,
+          assetId: lastShareLink.asset_id,
+          folderId: lastShareLink.folder_id,
+        })
+      }
 
       onShareCreated()
     } catch (err) {
