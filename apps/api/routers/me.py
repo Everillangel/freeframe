@@ -21,6 +21,7 @@ router = APIRouter(prefix="/me", tags=["me"])
 @router.get("/assets", response_model=list[AssetResponse])
 def list_my_assets(
     filter: Optional[str] = Query(default=None, description="owned|shared|mentioned|assigned|due_soon"),
+    q: Optional[str] = Query(default=None, description="Search by asset name"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -92,6 +93,10 @@ def list_my_assets(
                 Asset.assignee_id == current_user.id,
             )
         )
+
+    # Apply search filter
+    if q and q.strip():
+        query = query.filter(Asset.name.ilike(f"%{q.strip()}%"))
 
     assets = query.order_by(Asset.created_at.desc()).offset(skip).limit(limit).all()
     return _build_asset_responses_bulk(assets, db)

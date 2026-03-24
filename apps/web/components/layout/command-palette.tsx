@@ -17,7 +17,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
-import type { Project } from '@/types'
+import { Film, Music, Image as ImageIcon } from 'lucide-react'
+import type { Project, AssetResponse } from '@/types'
 
 interface CommandPaletteProps {
   open: boolean
@@ -38,15 +39,29 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter()
   const [query, setQuery] = React.useState('')
 
+  const [debouncedQuery, setDebouncedQuery] = React.useState('')
+
   // Fetch projects when palette is open
   const { data: projects } = useSWR<Project[]>(
     open ? '/projects' : null,
     () => api.get<Project[]>('/projects'),
   )
 
+  // Debounce search query for asset search
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 200)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // Search assets when query is present
+  const { data: assets } = useSWR<AssetResponse[]>(
+    open && debouncedQuery.trim().length >= 2 ? `/me/assets?q=${encodeURIComponent(debouncedQuery.trim())}&limit=8` : null,
+    (key: string) => api.get<AssetResponse[]>(key),
+  )
+
   // Reset query when dialog closes
   React.useEffect(() => {
-    if (!open) setQuery('')
+    if (!open) { setQuery(''); setDebouncedQuery('') }
   }, [open])
 
   const staticItems: CommandItem[] = [
@@ -112,6 +127,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     router.push(`/projects/${project.id}`)
   }
 
+  function handleAssetSelect(asset: AssetResponse) {
+    onOpenChange(false)
+    router.push(`/projects/${asset.project_id}/assets/${asset.id}`)
+  }
+
+  function getAssetIcon(type: string) {
+    switch (type) {
+      case 'video': return Film
+      case 'audio': return Music
+      default: return ImageIcon
+    }
+  }
+
   const navItems = staticItems.filter((i) => i.group === 'navigation')
   const actionItems = staticItems.filter((i) => i.group === 'actions')
 
@@ -173,6 +201,45 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                       </span>
                     </Command.Item>
                   ))}
+                </Command.Group>
+              )}
+
+              {/* Assets — show when searching (2+ chars) */}
+              {hasQuery && assets && assets.length > 0 && (
+                <Command.Group
+                  heading="Assets"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                >
+                  {assets.map((asset) => {
+                    const Icon = getAssetIcon(asset.asset_type)
+                    return (
+                      <Command.Item
+                        key={`asset-${asset.id}`}
+                        value={`asset ${asset.name} ${asset.asset_type}`}
+                        onSelect={() => handleAssetSelect(asset)}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary',
+                          'data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary',
+                          'transition-colors',
+                        )}
+                      >
+                        {asset.thumbnail_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset.thumbnail_url} alt="" className="h-6 w-6 rounded object-cover shrink-0" />
+                        ) : (
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-bg-tertiary">
+                            <Icon className="h-3 w-3 text-text-tertiary" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="block truncate">{asset.name}</span>
+                        </div>
+                        <span className="text-2xs text-text-tertiary shrink-0 capitalize">
+                          {asset.asset_type.replace('_', ' ')}
+                        </span>
+                      </Command.Item>
+                    )
+                  })}
                 </Command.Group>
               )}
 
