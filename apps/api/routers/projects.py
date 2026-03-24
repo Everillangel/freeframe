@@ -187,32 +187,26 @@ def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db:
         existing.role = body.role
         db.commit()
         db.refresh(existing)
-        return existing
-    member = ProjectMember(project_id=project_id, user_id=body.user_id, role=body.role, invited_by=current_user.id)
-    db.add(member)
-    db.commit()
-    db.refresh(member)
-    
-    # Send project added email
+        member = existing
+    else:
+        member = ProjectMember(project_id=project_id, user_id=body.user_id, role=body.role, invited_by=current_user.id)
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+
+    # Send project added email (for both new and reactivated members)
     project = _get_project(db, project_id)
     added_user = db.query(User).filter(User.id == body.user_id).first()
     if added_user:
-        import logging
-        logger = logging.getLogger(__name__)
         project_link = f"{settings.frontend_url}/projects/{project_id}"
-        logger.info(f"Sending project added email to {added_user.email}")
-        try:
-            result = send_task_safe(send_project_added_email,
-                to_email=added_user.email,
-                adder_name=current_user.name,
-                project_name=project.name,
-                project_link=project_link,
-                role=body.role.value if body.role else None,
-            )
-            logger.info(f"Email task queued: {result}")
-        except Exception as e:
-            logger.error(f"Failed to queue email: {e}")
-    
+        send_task_safe(send_project_added_email,
+            to_email=added_user.email,
+            adder_name=current_user.name,
+            project_name=project.name,
+            project_link=project_link,
+            role=body.role.value if body.role else None,
+        )
+
     return member
 
 @router.patch("/{project_id}/members/{user_id}", response_model=ProjectMemberResponse)
