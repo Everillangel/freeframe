@@ -9,8 +9,14 @@ import {
   CheckCircle2,
   XCircle,
   Download,
-  ExternalLink,
   ArrowLeft,
+  Columns2,
+  MessageSquare,
+  User,
+  FileText,
+  Image as ImageIcon,
+  Video,
+  Music,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -160,16 +166,16 @@ function ErrorState({ expired }: ErrorStateProps) {
   )
 }
 
-// ─── Guest comment list ───────────────────────────────────────────────────────
+// ─── Guest comment list (for right panel) ────────────────────────────────────
 
 interface GuestCommentListProps {
   token: string
+  refreshKey: number
 }
 
-function GuestCommentList({ token }: GuestCommentListProps) {
+function GuestCommentList({ token, refreshKey }: GuestCommentListProps) {
   const [comments, setComments] = React.useState<GuestComment[]>([])
   const [loading, setLoading] = React.useState(true)
-  const [refreshKey, setRefreshKey] = React.useState(0)
 
   React.useEffect(() => {
     setLoading(true)
@@ -182,234 +188,51 @@ function GuestCommentList({ token }: GuestCommentListProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-4">
-        <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-        <span className="text-sm text-text-tertiary">Loading comments…</span>
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
       </div>
     )
   }
 
   if (comments.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-text-tertiary">No comments yet. Be the first!</p>
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+        <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
+          <MessageSquare className="h-6 w-6 text-zinc-600" />
+        </div>
+        <p className="text-sm font-medium text-zinc-300">No comments — yet</p>
+        <p className="text-xs text-zinc-500 mt-1">
+          Be the first to leave feedback on this asset.
+        </p>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
       {comments.map((comment) => (
         <div
           key={comment.id}
-          className="rounded-lg border border-border bg-bg-secondary p-3"
+          className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2.5"
         >
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-muted text-2xs font-medium text-accent">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-2xs font-medium text-purple-400">
               {comment.guest_name.charAt(0).toUpperCase()}
             </div>
-            <span className="text-xs font-medium text-text-primary">{comment.guest_name}</span>
+            <span className="text-xs font-medium text-zinc-200">{comment.guest_name}</span>
             {comment.timecode_start != null && (
-              <span className="text-2xs text-text-tertiary font-mono">
-                @ {Math.floor(comment.timecode_start / 60)}:{String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
+              <span className="text-2xs text-zinc-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">
+                {Math.floor(comment.timecode_start / 60)}:
+                {String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
               </span>
             )}
-            <span className="ml-auto text-2xs text-text-tertiary">
+            <span className="ml-auto text-2xs text-zinc-600">
               {new Date(comment.created_at).toLocaleDateString()}
             </span>
           </div>
-          <p className="text-sm text-text-secondary leading-relaxed">{comment.body}</p>
+          <p className="text-sm text-zinc-300 leading-relaxed">{comment.body}</p>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ─── Share page viewer ────────────────────────────────────────────────────────
-
-interface ShareViewerProps {
-  token: string
-  asset: Asset & { thumbnail_url?: string; stream_url?: string }
-  permission: SharePermission
-  allowDownload: boolean
-  branding: ProjectBranding | null
-}
-
-function ShareViewer({ token, asset, permission, allowDownload, branding }: ShareViewerProps) {
-  const [streamUrl, setStreamUrl] = React.useState<string | null>(asset.stream_url ?? null)
-  const [streamLoading, setStreamLoading] = React.useState(false)
-  const [commentKey, setCommentKey] = React.useState(0)
-
-  // For video/audio assets, get a stream URL if not already provided
-  React.useEffect(() => {
-    if (asset.stream_url) {
-      setStreamUrl(asset.stream_url)
-      return
-    }
-    if (asset.asset_type !== 'video' && asset.asset_type !== 'audio') return
-    setStreamLoading(true)
-    fetch(`${API_URL}/share/${token}/stream/${asset.id}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.stream_url) setStreamUrl(data.stream_url)
-        else if (data?.url) setStreamUrl(data.url)
-      })
-      .catch(() => null)
-      .finally(() => setStreamLoading(false))
-  }, [token, asset.asset_type, asset.stream_url, asset.id])
-
-  const primaryColor = branding?.primary_color ?? '#6366f1'
-  const brandingTitle = branding?.custom_title ?? 'FreeFrame'
-
-  return (
-    <div className="min-h-screen bg-bg-primary text-text-primary">
-      {/* Brand header */}
-      <header
-        className="flex items-center justify-between border-b border-border px-5 py-3"
-        style={{ borderBottomColor: `${primaryColor}30` }}
-      >
-        <div className="flex items-center gap-3">
-          {branding?.logo_s3_key ? (
-            <img
-              src={`${API_URL}/share/${token}/branding/logo`}
-              alt={brandingTitle}
-              className="h-7 w-auto object-contain"
-            />
-          ) : (
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded text-xs font-bold text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              FF
-            </div>
-          )}
-          <span className="text-sm font-medium text-text-secondary">{brandingTitle}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {allowDownload && (
-            <a
-              href={streamUrl ?? '#'}
-              download
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary',
-                'hover:bg-bg-hover hover:text-text-primary transition-colors',
-                !streamUrl && 'opacity-50 pointer-events-none',
-              )}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download
-            </a>
-          )}
-        </div>
-      </header>
-
-      {/* Asset title */}
-      <div className="border-b border-border px-5 py-3">
-        <h1 className="text-sm font-medium text-text-primary">{asset.name}</h1>
-        {asset.description && (
-          <p className="mt-0.5 text-xs text-text-tertiary">{asset.description}</p>
-        )}
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="rounded-full bg-bg-secondary px-2 py-0.5 text-2xs text-text-tertiary capitalize">
-            {asset.asset_type.replace('_', ' ')}
-          </span>
-          <span className="rounded-full bg-bg-secondary px-2 py-0.5 text-2xs text-text-tertiary capitalize">
-            {permission} access
-          </span>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        {/* Media viewer */}
-        <div className="mb-6 overflow-hidden rounded-xl border border-border bg-bg-secondary">
-          {asset.asset_type === 'video' && (
-            <div className="aspect-video w-full bg-black">
-              {streamLoading ? (
-                <div className="flex h-full items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
-                </div>
-              ) : streamUrl ? (
-                <video
-                  src={streamUrl}
-                  controls
-                  className="h-full w-full"
-                  preload="metadata"
-                >
-                  Your browser does not support video playback.
-                </video>
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-text-tertiary">Video unavailable</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {asset.asset_type === 'audio' && (
-            <div className="p-6">
-              {streamLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
-                </div>
-              ) : streamUrl ? (
-                <audio src={streamUrl} controls className="w-full">
-                  Your browser does not support audio playback.
-                </audio>
-              ) : (
-                <p className="text-center text-sm text-text-tertiary py-6">Audio unavailable</p>
-              )}
-            </div>
-          )}
-
-          {(asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && (
-            <div className="flex items-center justify-center p-4 bg-bg-tertiary">
-              <img
-                src={asset.thumbnail_url || asset.stream_url || `${API_URL}/share/${token}/thumbnail/${asset.id}`}
-                alt={asset.name}
-                className="max-h-[60vh] w-auto rounded object-contain"
-                onError={(e) => {
-                  ;(e.target as HTMLImageElement).style.display = 'none'
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Approval actions (for approve permission) */}
-        {permission === 'approve' && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-border bg-bg-secondary px-4 py-3">
-            <p className="flex-1 text-sm text-text-secondary">Your review decision:</p>
-            <GuestApprovalActions token={token} asset={asset} />
-          </div>
-        )}
-
-        {/* Comments section */}
-        {(permission === 'comment' || permission === 'approve') && (
-          <div className="rounded-xl border border-border bg-bg-secondary overflow-hidden">
-            <div className="border-b border-border px-4 py-3">
-              <h2 className="text-sm font-medium text-text-primary">Comments</h2>
-            </div>
-            <div className="px-4 py-4">
-              <GuestCommentList key={commentKey} token={token} />
-            </div>
-            <GuestCommentInput
-              token={token}
-              onCommentPosted={() => setCommentKey((k) => k + 1)}
-            />
-          </div>
-        )}
-
-        {permission === 'view' && (
-          <div className="rounded-xl border border-border bg-bg-secondary px-4 py-3 text-center">
-            <p className="text-sm text-text-tertiary">View-only access. Comments are disabled.</p>
-          </div>
-        )}
-
-        {/* Custom footer */}
-        {branding?.custom_footer && (
-          <p className="mt-6 text-center text-xs text-text-tertiary">{branding.custom_footer}</p>
-        )}
-      </div>
     </div>
   )
 }
@@ -446,31 +269,31 @@ function GuestApprovalActions({ token, asset }: GuestApprovalActionsProps) {
 
   if (status === 'approved') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-status-success">
-        <CheckCircle2 className="h-4 w-4" />
-        You approved
-      </span>
+      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+        <CheckCircle2 className="h-4 w-4 text-green-400" />
+        <span className="text-sm font-medium text-green-400">Approved</span>
+      </div>
     )
   }
 
   if (status === 'rejected') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-status-error">
-        <XCircle className="h-4 w-4" />
-        You rejected
-      </span>
+      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+        <XCircle className="h-4 w-4 text-red-400" />
+        <span className="text-sm font-medium text-red-400">Rejected</span>
+      </div>
     )
   }
 
   return (
     <div className="flex items-center gap-2">
-      {error && <span className="text-xs text-status-error mr-2">{error}</span>}
+      {error && <span className="text-xs text-red-400 mr-2">{error}</span>}
       <Button
         variant="secondary"
         size="sm"
         onClick={() => handleDecision('rejected')}
         disabled={loading}
-        className="text-status-error border-status-error/30 hover:border-status-error/60 hover:bg-status-error/10"
+        className="text-red-400 border-red-500/30 hover:border-red-500/60 hover:bg-red-500/10"
       >
         <XCircle className="h-4 w-4" />
         Reject
@@ -480,7 +303,7 @@ function GuestApprovalActions({ token, asset }: GuestApprovalActionsProps) {
         size="sm"
         onClick={() => handleDecision('approved')}
         loading={loading}
-        className="bg-status-success hover:opacity-90"
+        className="bg-green-600 hover:bg-green-700"
       >
         <CheckCircle2 className="h-4 w-4" />
         Approve
@@ -489,41 +312,471 @@ function GuestApprovalActions({ token, asset }: GuestApprovalActionsProps) {
   )
 }
 
-// ─── Folder asset viewer (single asset within folder share) ──────────────────
+// ─── Share Top Bar ────────────────────────────────────────────────────────────
+
+interface ShareTopBarProps {
+  shareName: string
+  assetName?: string
+  allowDownload: boolean
+  downloadUrl: string | null
+  sidebarOpen: boolean
+  onToggleSidebar: () => void
+  onBack?: () => void
+  branding: ProjectBranding | null
+}
+
+function ShareTopBar({
+  shareName,
+  assetName,
+  allowDownload,
+  downloadUrl,
+  sidebarOpen,
+  onToggleSidebar,
+  onBack,
+  branding,
+}: ShareTopBarProps) {
+  const primaryColor = branding?.primary_color ?? '#7c3aed'
+
+  return (
+    <div className="flex items-center justify-between border-b border-white/[0.06] px-3 h-12 bg-zinc-950 shrink-0">
+      {/* Left: back + avatar + breadcrumb */}
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* Avatar placeholder */}
+        <div
+          className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+          style={{ backgroundColor: primaryColor }}
+        >
+          {branding?.logo_s3_key ? (
+            <img
+              src={`${API_URL}/share/branding/logo`}
+              alt=""
+              className="h-full w-full rounded-full object-cover"
+              onError={(e) => {
+                ;(e.target as HTMLImageElement).style.display = 'none'
+              }}
+            />
+          ) : (
+            'FF'
+          )}
+        </div>
+
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1 text-[13px] min-w-0">
+          <span className="text-zinc-500 shrink-0 truncate max-w-[200px]">
+            {shareName}
+          </span>
+          {assetName && (
+            <>
+              <span className="text-zinc-600">/</span>
+              <span className="text-white font-medium truncate">{assetName}</span>
+            </>
+          )}
+        </nav>
+      </div>
+
+      {/* Right: download + panel toggle */}
+      <div className="flex items-center gap-2 shrink-0">
+        {allowDownload && downloadUrl && (
+          <a
+            href={downloadUrl}
+            download
+            className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+        )}
+
+        <button
+          onClick={onToggleSidebar}
+          className={cn(
+            'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+            sidebarOpen
+              ? 'bg-white/10 text-white'
+              : 'text-zinc-500 hover:text-white hover:bg-white/10',
+          )}
+          title="Toggle panel"
+        >
+          <Columns2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Share Media Viewer ───────────────────────────────────────────────────────
+
+interface ShareMediaViewerProps {
+  asset: Asset & { thumbnail_url?: string; stream_url?: string }
+  token: string
+  streamUrl: string | null
+  streamLoading: boolean
+}
+
+function ShareMediaViewer({ asset, token, streamUrl, streamLoading }: ShareMediaViewerProps) {
+  return (
+    <div className="flex-1 flex items-center justify-center bg-black min-h-0 overflow-hidden">
+      {asset.asset_type === 'video' && (
+        <div className="w-full h-full flex items-center justify-center">
+          {streamLoading ? (
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          ) : streamUrl ? (
+            <video
+              src={streamUrl}
+              controls
+              className="max-h-full max-w-full"
+              preload="metadata"
+            >
+              Your browser does not support video playback.
+            </video>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Video className="h-10 w-10 text-zinc-700" />
+              <p className="text-sm text-zinc-500">Video unavailable</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {asset.asset_type === 'audio' && (
+        <div className="w-full max-w-2xl px-8">
+          {streamLoading ? (
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mx-auto" />
+          ) : streamUrl ? (
+            <div className="space-y-6">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-24 w-24 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Music className="h-10 w-10 text-zinc-500" />
+                </div>
+                <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
+              </div>
+              <audio src={streamUrl} controls className="w-full">
+                Your browser does not support audio playback.
+              </audio>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Music className="h-10 w-10 text-zinc-700" />
+              <p className="text-sm text-zinc-500">Audio unavailable</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && (
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <img
+            src={asset.thumbnail_url || asset.stream_url || `${API_URL}/share/${token}/thumbnail/${asset.id}`}
+            alt={asset.name}
+            className="max-h-full max-w-full object-contain"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement
+              target.style.display = 'none'
+              const parent = target.parentElement
+              if (parent) {
+                const fallback = document.createElement('div')
+                fallback.className = 'flex flex-col items-center gap-2'
+                fallback.innerHTML = `
+                  <svg class="h-10 w-10 text-zinc-700" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <p class="text-sm text-zinc-500">Image unavailable</p>
+                `
+                parent.appendChild(fallback)
+              }
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Share Right Panel ────────────────────────────────────────────────────────
+
+interface ShareRightPanelProps {
+  token: string
+  asset: Asset & { thumbnail_url?: string; stream_url?: string }
+  permission: SharePermission
+  commentRefreshKey: number
+  onCommentPosted: () => void
+}
+
+function ShareRightPanel({
+  token,
+  asset,
+  permission,
+  commentRefreshKey,
+  onCommentPosted,
+}: ShareRightPanelProps) {
+  const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
+
+  return (
+    <div className="w-[360px] flex flex-col border-l border-white/[0.06] bg-[#141416] shrink-0 animate-in slide-in-from-right-2 duration-150">
+      {/* Tabs */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <div className="flex items-center bg-white/5 rounded-lg p-0.5">
+          <button
+            onClick={() => setActiveTab('comments')}
+            className={cn(
+              'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all flex items-center justify-center gap-1.5',
+              activeTab === 'comments'
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-300',
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Comments
+          </button>
+          <button
+            onClick={() => setActiveTab('fields')}
+            className={cn(
+              'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all flex items-center justify-center gap-1.5',
+              activeTab === 'fields'
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-300',
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Fields
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {activeTab === 'comments' ? (
+          <>
+            {/* Comments header */}
+            <div className="px-4 py-2 shrink-0 flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">All comments</span>
+            </div>
+
+            {/* Comment list */}
+            <GuestCommentList token={token} refreshKey={commentRefreshKey} />
+
+            {/* Approval actions */}
+            {permission === 'approve' && (
+              <div className="px-4 py-3 border-t border-white/[0.06] shrink-0">
+                <GuestApprovalActions token={token} asset={asset} />
+              </div>
+            )}
+
+            {/* Comment input */}
+            {(permission === 'comment' || permission === 'approve') ? (
+              <GuestCommentInput
+                token={token}
+                onCommentPosted={onCommentPosted}
+                className="border-t border-white/[0.06] bg-[#141416]"
+              />
+            ) : (
+              <div className="px-4 py-3 border-t border-white/[0.06] shrink-0">
+                <p className="text-xs text-zinc-600 text-center">View-only access. Comments are disabled.</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="space-y-3">
+              <FieldRow label="Name" value={asset.name} />
+              <FieldRow label="Type" value={asset.asset_type.replace('_', ' ')} capitalize />
+              <FieldRow label="Status" value={asset.status} capitalize />
+              {asset.description && <FieldRow label="Description" value={asset.description} />}
+              {asset.rating != null && <FieldRow label="Rating" value={`${asset.rating}/5`} />}
+              {asset.due_date && (
+                <FieldRow
+                  label="Due date"
+                  value={new Date(asset.due_date).toLocaleDateString()}
+                />
+              )}
+              {asset.keywords && asset.keywords.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs text-zinc-500">Keywords</span>
+                  <div className="flex flex-wrap gap-1">
+                    {asset.keywords.map((kw: string, i: number) => (
+                      <span
+                        key={i}
+                        className="text-2xs bg-white/5 text-zinc-400 rounded px-1.5 py-0.5"
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FieldRow({
+  label,
+  value,
+  capitalize: shouldCapitalize,
+}: {
+  label: string
+  value: string
+  capitalize?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-zinc-500">{label}</span>
+      <span className={cn('text-xs text-zinc-200 font-medium truncate ml-4 max-w-[200px]', shouldCapitalize && 'capitalize')}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+// ─── Share Viewer (single asset — Frame.io layout) ────────────────────────────
+
+interface ShareViewerProps {
+  token: string
+  asset: Asset & { thumbnail_url?: string; stream_url?: string }
+  permission: SharePermission
+  allowDownload: boolean
+  branding: ProjectBranding | null
+  shareName?: string
+  onBack?: () => void
+}
+
+function ShareViewer({
+  token,
+  asset,
+  permission,
+  allowDownload,
+  branding,
+  shareName,
+  onBack,
+}: ShareViewerProps) {
+  const [streamUrl, setStreamUrl] = React.useState<string | null>(asset.stream_url ?? null)
+  const [streamLoading, setStreamLoading] = React.useState(false)
+  const [commentKey, setCommentKey] = React.useState(0)
+  const [sidebarOpen, setSidebarOpen] = React.useState(true)
+
+  // For video/audio assets, get a stream URL if not already provided
+  React.useEffect(() => {
+    if (asset.stream_url) {
+      setStreamUrl(asset.stream_url)
+      return
+    }
+    if (asset.asset_type !== 'video' && asset.asset_type !== 'audio') return
+    setStreamLoading(true)
+    fetch(`${API_URL}/share/${token}/stream/${asset.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.stream_url) setStreamUrl(data.stream_url)
+        else if (data?.url) setStreamUrl(data.url)
+      })
+      .catch(() => null)
+      .finally(() => setStreamLoading(false))
+  }, [token, asset.asset_type, asset.stream_url, asset.id])
+
+  const displayName = shareName || branding?.custom_title || 'FreeFrame'
+
+  return (
+    <div className="absolute inset-0 flex flex-col bg-zinc-950 text-white overflow-hidden">
+      {/* Top bar */}
+      <ShareTopBar
+        shareName={displayName}
+        assetName={asset.name}
+        allowDownload={allowDownload}
+        downloadUrl={streamUrl}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((p) => !p)}
+        onBack={onBack}
+        branding={branding}
+      />
+
+      {/* Main content: viewer + sidebar */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Left: full-screen media viewer */}
+        <ShareMediaViewer
+          asset={asset}
+          token={token}
+          streamUrl={streamUrl}
+          streamLoading={streamLoading}
+        />
+
+        {/* Right: comments panel */}
+        {sidebarOpen && (
+          <ShareRightPanel
+            token={token}
+            asset={asset}
+            permission={permission}
+            commentRefreshKey={commentKey}
+            onCommentPosted={() => setCommentKey((k) => k + 1)}
+          />
+        )}
+      </div>
+
+      {/* Custom footer */}
+      {branding?.custom_footer && (
+        <div className="shrink-0 border-t border-white/[0.06] px-4 py-1.5 text-center">
+          <p className="text-2xs text-zinc-600">{branding.custom_footer}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Folder Asset Viewer (single asset within folder share) ──────────────────
 
 interface FolderAssetViewerProps {
   token: string
   assetId: string
+  permission: SharePermission
   allowDownload: boolean
   branding: any
+  folderName: string
   onBack: () => void
 }
 
-function FolderAssetViewer({ token, assetId, allowDownload, branding, onBack }: FolderAssetViewerProps) {
+function FolderAssetViewer({
+  token,
+  assetId,
+  permission,
+  allowDownload,
+  branding,
+  folderName,
+  onBack,
+}: FolderAssetViewerProps) {
   const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = React.useState<string | null>(null)
-  const [assetInfo, setAssetInfo] = React.useState<{ name: string; asset_type: string; description?: string } | null>(null)
+  const [assetInfo, setAssetInfo] = React.useState<{
+    name: string
+    asset_type: string
+    description?: string
+    status?: string
+    keywords?: string[]
+  } | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     let cancelled = false
     setLoading(true)
 
-    // Fetch stream URL (which may also include asset info)
     const streamPromise = fetch(`${API_URL}/share/${token}/stream/${assetId}`)
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
 
-    // Fetch thumbnail URL
     const thumbPromise = fetch(`${API_URL}/share/${token}/thumbnail/${assetId}`)
       .then((r) => {
         if (!r.ok) return null
-        // If the endpoint returns JSON with a url field
         const contentType = r.headers.get('content-type')
         if (contentType?.includes('application/json')) {
           return r.json()
         }
-        // If it redirects or returns image directly, use the request URL
         return { url: `${API_URL}/share/${token}/thumbnail/${assetId}` }
       })
       .catch(() => null)
@@ -531,124 +784,56 @@ function FolderAssetViewer({ token, assetId, allowDownload, branding, onBack }: 
     Promise.all([streamPromise, thumbPromise]).then(([streamData, thumbData]) => {
       if (cancelled) return
       if (streamData?.url) setStreamUrl(streamData.url)
-      if (streamData?.name) setAssetInfo({ name: streamData.name, asset_type: streamData.asset_type ?? 'image', description: streamData.description })
+      if (streamData?.name)
+        setAssetInfo({
+          name: streamData.name,
+          asset_type: streamData.asset_type ?? 'image',
+          description: streamData.description,
+          status: streamData.status,
+          keywords: streamData.keywords,
+        })
       else setAssetInfo({ name: 'Asset', asset_type: 'image' })
       if (thumbData?.url) setThumbnailUrl(thumbData.url)
       setLoading(false)
     })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [token, assetId])
-
-  const primaryColor = branding?.primary_color ?? '#6366f1'
-  const brandingTitle = branding?.custom_title ?? 'FreeFrame'
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary">
-        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
       </div>
     )
   }
 
   const assetType = assetInfo?.asset_type ?? 'image'
 
+  // Build a pseudo-asset object for the viewer
+  const pseudoAsset = {
+    id: assetId,
+    name: assetInfo?.name ?? 'Asset',
+    asset_type: assetType,
+    description: assetInfo?.description,
+    status: assetInfo?.status ?? 'draft',
+    keywords: assetInfo?.keywords ?? [],
+    thumbnail_url: thumbnailUrl,
+    stream_url: streamUrl,
+  } as Asset & { thumbnail_url?: string; stream_url?: string }
+
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary">
-      {/* Brand header */}
-      <header
-        className="flex items-center justify-between border-b border-border px-5 py-3"
-        style={{ borderBottomColor: `${primaryColor}30` }}
-      >
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to folder
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {allowDownload && streamUrl && (
-            <a
-              href={streamUrl}
-              download
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary',
-                'hover:bg-bg-hover hover:text-text-primary transition-colors',
-              )}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download
-            </a>
-          )}
-        </div>
-      </header>
-
-      {/* Asset title */}
-      <div className="border-b border-border px-5 py-3">
-        <h1 className="text-sm font-medium text-text-primary">{assetInfo?.name ?? 'Asset'}</h1>
-        {assetInfo?.description && (
-          <p className="mt-0.5 text-xs text-text-tertiary">{assetInfo.description}</p>
-        )}
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="rounded-full bg-bg-secondary px-2 py-0.5 text-2xs text-text-tertiary capitalize">
-            {assetType.replace('_', ' ')}
-          </span>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className="mb-6 overflow-hidden rounded-xl border border-border bg-bg-secondary">
-          {assetType === 'video' && (
-            <div className="aspect-video w-full bg-black">
-              {streamUrl ? (
-                <video src={streamUrl} controls className="h-full w-full" preload="metadata">
-                  Your browser does not support video playback.
-                </video>
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-text-tertiary">Video unavailable</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {assetType === 'audio' && (
-            <div className="p-6">
-              {streamUrl ? (
-                <audio src={streamUrl} controls className="w-full">
-                  Your browser does not support audio playback.
-                </audio>
-              ) : (
-                <p className="text-center text-sm text-text-tertiary py-6">Audio unavailable</p>
-              )}
-            </div>
-          )}
-
-          {(assetType === 'image' || assetType === 'image_carousel') && (
-            <div className="flex items-center justify-center p-4 bg-bg-tertiary">
-              <img
-                src={thumbnailUrl ?? `${API_URL}/share/${token}/thumbnail/${assetId}`}
-                alt={assetInfo?.name ?? 'Asset'}
-                className="max-h-[60vh] w-auto rounded object-contain"
-                onError={(e) => {
-                  ;(e.target as HTMLImageElement).style.display = 'none'
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Custom footer */}
-        {branding?.custom_footer && (
-          <p className="mt-6 text-center text-xs text-text-tertiary">{branding.custom_footer}</p>
-        )}
-      </div>
-    </div>
+    <ShareViewer
+      token={token}
+      asset={pseudoAsset}
+      permission={permission}
+      allowDownload={allowDownload}
+      branding={branding}
+      shareName={folderName}
+      onBack={onBack}
+    />
   )
 }
 
@@ -757,8 +942,8 @@ export default function SharePage({
 
   if (state.stage === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary">
-        <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
       </div>
     )
   }
@@ -803,8 +988,10 @@ export default function SharePage({
       <FolderAssetViewer
         token={token}
         assetId={viewingAssetInFolder}
+        permission={state.permission}
         allowDownload={state.allowDownload}
         branding={state.branding}
+        folderName={state.folderName}
         onBack={() => setViewingAssetInFolder(null)}
       />
     )
