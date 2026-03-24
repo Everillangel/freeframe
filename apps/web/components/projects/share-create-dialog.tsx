@@ -112,8 +112,29 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
   const [suggestions, setSuggestions] = React.useState<InviteUser[]>([])
   const [showDrop, setShowDrop] = React.useState(false)
   const [sent, setSent] = React.useState<string | null>(null)
+  const [invitedUsers, setInvitedUsers] = React.useState<InviteUser[]>([])
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const ref = React.useRef<HTMLDivElement>(null)
+
+  // Fetch already invited users
+  React.useEffect(() => {
+    async function loadInvited() {
+      try {
+        const targetId = shareLink.folder_id || shareLink.asset_id
+        if (!targetId) return
+        const type = shareLink.folder_id ? 'folders' : 'assets'
+        const shares = await api.get<Array<{ shared_with_user_id: string | null; permission: string }>>(`/${type}/${targetId}/direct-shares`)
+        if (shares?.length) {
+          const userIds = shares.filter(s => s.shared_with_user_id).map(s => s.shared_with_user_id).join(',')
+          if (userIds) {
+            const users = await api.get<InviteUser[]>(`/users?ids=${userIds}`)
+            setInvitedUsers(users)
+          }
+        }
+      } catch {}
+    }
+    loadInvited()
+  }, [shareLink.asset_id, shareLink.folder_id])
 
   function search(q: string) {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -137,7 +158,12 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
       } else if (shareLink.asset_id) {
         await api.post(`/assets/${shareLink.asset_id}/share/user`, body)
       }
-      setSent(email || 'user')
+      const name = suggestions.find(s => s.id === userId)?.name || email || 'user'
+      setSent(name)
+      if (userId) {
+        const u = suggestions.find(s => s.id === userId)
+        if (u) setInvitedUsers(prev => [...prev.filter(p => p.id !== u.id), u])
+      }
       setQuery('')
       setSuggestions([])
       setShowDrop(false)
@@ -185,10 +211,22 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
           ))}
         </div>
       )}
-      {sent ? (
-        <p className="text-2xs text-status-success mt-1">Invited {sent}</p>
-      ) : (
-        <p className="text-2xs text-text-tertiary mt-1">Type to search or enter email</p>
+      {sent && <p className="text-2xs text-status-success mt-1">Invited {sent}</p>}
+      {!sent && !invitedUsers.length && <p className="text-2xs text-text-tertiary mt-1">Type to search or enter email</p>}
+
+      {/* Invited users list */}
+      {invitedUsers.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {invitedUsers.map((u) => (
+            <div key={u.id} className="flex items-center gap-2 rounded-md bg-bg-tertiary px-2.5 py-1.5">
+              <div className="h-5 w-5 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-2xs font-medium text-accent">{(u.name || u.email).charAt(0).toUpperCase()}</span>
+              </div>
+              <span className="text-xs text-text-primary truncate flex-1">{u.name || u.email}</span>
+              <span className="text-2xs text-text-tertiary">{u.email}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

@@ -534,6 +534,40 @@ def share_folder_with_team(
 
 # ── Delete folder share ──────────────────────────────────────────────────────
 
+@router.get("/folders/{folder_id}/direct-shares")
+def list_folder_direct_shares(
+    folder_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List direct user shares for a folder."""
+    folder = _get_folder(db, folder_id)
+    require_project_role(db, folder.project_id, current_user, ProjectRole.viewer)
+    shares = db.query(AssetShare).filter(
+        AssetShare.folder_id == folder_id,
+        AssetShare.deleted_at.is_(None),
+        AssetShare.shared_with_user_id.isnot(None),
+    ).all()
+    return [{"id": str(s.id), "shared_with_user_id": str(s.shared_with_user_id), "permission": s.permission.value} for s in shares]
+
+
+@router.get("/assets/{asset_id}/direct-shares")
+def list_asset_direct_shares(
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List direct user shares for an asset."""
+    asset = _get_asset(db, asset_id)
+    require_project_role(db, asset.project_id, current_user, ProjectRole.viewer)
+    shares = db.query(AssetShare).filter(
+        AssetShare.asset_id == asset_id,
+        AssetShare.deleted_at.is_(None),
+        AssetShare.shared_with_user_id.isnot(None),
+    ).all()
+    return [{"id": str(s.id), "shared_with_user_id": str(s.shared_with_user_id), "permission": s.permission.value} for s in shares]
+
+
 @router.delete("/folders/{folder_id}/shares/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_folder_share(
     folder_id: uuid.UUID,

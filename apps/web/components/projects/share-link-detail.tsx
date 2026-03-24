@@ -168,14 +168,49 @@ interface UserSuggestion {
   avatar_url?: string | null
 }
 
+interface InvitedUser {
+  id: string
+  name: string
+  email: string
+  permission: string
+}
+
 function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
   const [query, setQuery] = React.useState('')
   const [suggestions, setSuggestions] = React.useState<UserSuggestion[]>([])
   const [showSuggestions, setShowSuggestions] = React.useState(false)
   const [sending, setSending] = React.useState(false)
   const [sent, setSent] = React.useState<string | null>(null)
+  const [invitedUsers, setInvitedUsers] = React.useState<InvitedUser[]>([])
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
+
+  // Fetch already-invited users from direct shares
+  React.useEffect(() => {
+    async function fetchInvited() {
+      try {
+        const targetId = shareLink.folder_id || shareLink.asset_id
+        if (!targetId) return
+        const type = shareLink.folder_id ? 'folders' : 'assets'
+        const shares = await api.get<Array<{ id: string; shared_with_user_id: string | null; permission: string }>>(`/${type}/${targetId}/direct-shares`)
+        if (shares && shares.length > 0) {
+          const userIds = shares.filter(s => s.shared_with_user_id).map(s => s.shared_with_user_id).join(',')
+          if (userIds) {
+            const users = await api.get<Array<{ id: string; name: string; email: string }>>(`/users?ids=${userIds}`)
+            setInvitedUsers(users.map(u => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              permission: shares.find(s => s.shared_with_user_id === u.id)?.permission || 'view',
+            })))
+          }
+        }
+      } catch {
+        // Endpoint may not exist yet — silently fail
+      }
+    }
+    fetchInvited()
+  }, [shareLink.asset_id, shareLink.folder_id])
 
   function searchUsers(q: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -215,6 +250,7 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
       setQuery('')
       setSuggestions([])
       setShowSuggestions(false)
+      setInvitedUsers(prev => [...prev.filter(u => u.id !== user.id), { id: user.id, name: user.name, email: user.email, permission: shareLink.permission || 'view' }])
       setTimeout(() => setSent(null), 3000)
     } catch {
       // Could show error
@@ -311,8 +347,30 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
       {sent && (
         <p className="text-2xs text-green-400 mt-1">Invited {sent}</p>
       )}
-      {!sent && (
+      {!sent && !invitedUsers.length && (
         <p className="text-2xs text-zinc-600 mt-1">Type to search users or enter email</p>
+      )}
+
+      {/* Invited users list */}
+      {invitedUsers.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {invitedUsers.map((user) => (
+            <div
+              key={user.id}
+              className="flex items-center gap-2 rounded-md bg-white/[0.04] px-2.5 py-1.5"
+            >
+              <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-2xs font-medium text-accent">
+                  {(user.name || user.email).charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-zinc-200 truncate">{user.name}</p>
+              </div>
+              <span className="text-2xs text-zinc-500 capitalize shrink-0">{user.permission}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
