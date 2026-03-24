@@ -87,8 +87,13 @@ function MentionDropdown({
     if (!projectId) return
     setLoading(true)
     api
-      .get<{ members: Array<{ user: User }> }>(`/projects/${projectId}/members`)
-      .then((res) => setMembers(res.members.map((m) => m.user)))
+      .get<Array<{ user_id: string; role: string }>>(`/projects/${projectId}/members`)
+      .then(async (memberList) => {
+        if (!memberList || memberList.length === 0) { setMembers([]); return }
+        const userIds = memberList.map((m) => m.user_id).join(',')
+        const users = await api.get<User[]>(`/users?ids=${userIds}`)
+        setMembers(users)
+      })
       .catch(() => setMembers([]))
       .finally(() => setLoading(false))
   }, [projectId])
