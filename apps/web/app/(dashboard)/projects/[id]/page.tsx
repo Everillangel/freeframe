@@ -5,11 +5,13 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   Upload, X, FolderOpen,
   Link as LinkIcon, Download, Share2, Plus,
   Trash2, ChevronDown, MessageSquare,
   FolderPlus, Folder as FolderIcon, FileText,
+  MoreHorizontal, MinusCircle, ExternalLink,
 } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -92,7 +94,7 @@ export default function ProjectDetailPage() {
   } = useFolders(projectId)
 
   const { trash, mutateTrash } = useTrash(projectId)
-  const { shareLinks, toggleEnabled, createFolderShare, mutateShareLinks } = useShareLinks(projectId)
+  const { shareLinks, toggleEnabled, deleteShareLink, createFolderShare, mutateShareLinks } = useShareLinks(projectId)
 
   // Comments for the selected asset
   const selectedVersionId = selectedAsset?.latest_version?.id || null
@@ -369,23 +371,73 @@ export default function ProjectDetailPage() {
                 <span>All Share Links ({shareLinks.length})</span>
               </button>
               {shareLinks.map((link) => (
-                <button
+                <div
                   key={link.token}
-                  onClick={() => { setShowShareLinks(true); setSelectedShareLink(link.token); setShowTrash(false); setCurrentFolderId(null) }}
                   className={cn(
-                    'w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors',
+                    'group w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer',
                     selectedShareLink === link.token
                       ? 'bg-bg-hover text-text-primary'
                       : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
                   )}
+                  onClick={() => { setShowShareLinks(true); setSelectedShareLink(link.token); setShowTrash(false); setCurrentFolderId(null) }}
                 >
                   {link.share_type === 'folder' ? (
-                    <FolderIcon className="h-4 w-4" />
+                    <FolderIcon className="h-4 w-4 shrink-0" />
                   ) : (
-                    <FileText className="h-4 w-4" />
+                    <FileText className="h-4 w-4 shrink-0" />
                   )}
-                  <span className="truncate">{link.title || link.target_name}</span>
-                </button>
+                  <span className="truncate flex-1">{link.title || link.target_name}</span>
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        className="h-5 w-5 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        onClick={(e) => { e.stopPropagation() }}
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        className="z-50 min-w-[180px] rounded-xl border border-border bg-bg-secondary p-1 shadow-xl"
+                        sideOffset={4}
+                        align="end"
+                      >
+                        <DropdownMenu.Item
+                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                          onSelect={() => window.open(`${window.location.origin}/share/${link.token}`, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4 text-text-tertiary" />
+                          Open Share
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                          onSelect={() => navigator.clipboard.writeText(`${window.location.origin}/share/${link.token}`)}
+                        >
+                          <LinkIcon className="h-4 w-4 text-text-tertiary" />
+                          Copy Link
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                        <DropdownMenu.Item
+                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                          onSelect={() => toggleEnabled(link.token, !link.is_enabled)}
+                        >
+                          <MinusCircle className="h-4 w-4 text-text-tertiary" />
+                          {link.is_enabled ? 'Disable Access' : 'Enable Access'}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                          onSelect={async () => {
+                            await deleteShareLink(link.token)
+                            if (selectedShareLink === link.token) setSelectedShareLink(null)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                </div>
               ))}
             </div>
           )}
