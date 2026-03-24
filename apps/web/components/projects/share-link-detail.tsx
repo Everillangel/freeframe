@@ -101,10 +101,10 @@ function Section({
   const [open, setOpen] = React.useState(defaultOpen)
 
   return (
-    <div className="border-b border-white/[0.06]">
+    <div className="border-b border-border">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-300 transition-colors"
+        className="flex w-full items-center gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors"
       >
         {icon}
         <span className="flex-1 text-left">{title}</span>
@@ -135,9 +135,9 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm text-zinc-200">{label}</p>
+        <p className="text-sm text-text-primary">{label}</p>
         {description && (
-          <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
+          <p className="text-xs text-text-tertiary mt-0.5">{description}</p>
         )}
       </div>
       <Switch.Root
@@ -145,7 +145,7 @@ function ToggleRow({
         onCheckedChange={onCheckedChange}
         className={cn(
           'relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors',
-          checked ? 'bg-accent' : 'bg-white/15',
+          checked ? 'bg-accent' : 'bg-bg-hover',
         )}
       >
         <Switch.Thumb
@@ -307,17 +307,17 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         }}
         placeholder="Send to name or email"
         disabled={sending}
-        className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
+        className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
       />
 
       {/* Suggestions dropdown — rendered inline to avoid overflow clipping */}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl">
+        <div className="mt-1 rounded-lg border border-border bg-bg-tertiary shadow-xl">
           {suggestions.map((user) => (
             <button
               key={user.id}
               onClick={() => inviteUser(user)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors first:rounded-t-lg last:rounded-b-lg"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-bg-hover transition-colors first:rounded-t-lg last:rounded-b-lg"
             >
               <div className="h-7 w-7 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
                 <span className="text-xs font-medium text-accent">
@@ -325,8 +325,8 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-zinc-200 truncate">{user.name}</p>
-                <p className="text-2xs text-zinc-500 truncate">{user.email}</p>
+                <p className="text-sm text-text-primary truncate">{user.name}</p>
+                <p className="text-2xs text-text-tertiary truncate">{user.email}</p>
               </div>
             </button>
           ))}
@@ -338,7 +338,7 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         <p className="text-2xs text-green-400 mt-1">Invited {sent}</p>
       )}
       {!sent && !invitedUsers.length && (
-        <p className="text-2xs text-zinc-600 mt-1">Type to search users or enter email</p>
+        <p className="text-2xs text-text-tertiary mt-1">Type to search users or enter email</p>
       )}
 
       {/* Invited users list */}
@@ -347,7 +347,7 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
           {invitedUsers.map((user) => (
             <div
               key={user.id}
-              className="flex items-center gap-2 rounded-md bg-white/[0.04] px-2.5 py-1.5"
+              className="flex items-center gap-2 rounded-md bg-bg-tertiary px-2.5 py-1.5"
             >
               <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
                 <span className="text-2xs font-medium text-accent">
@@ -355,9 +355,9 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-zinc-200 truncate">{user.name}</p>
+                <p className="text-xs text-text-primary truncate">{user.name}</p>
               </div>
-              <span className="text-2xs text-zinc-500 capitalize shrink-0">{user.permission}</span>
+              <span className="text-2xs text-text-tertiary capitalize shrink-0">{user.permission}</span>
               <button
                 onClick={async () => {
                   try {
@@ -375,7 +375,7 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                     setInvitedUsers(prev => prev.filter(u => u.id !== user.id))
                   }
                 }}
-                className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                className="text-text-tertiary hover:text-red-400 transition-colors shrink-0"
                 title="Remove access"
               >
                 <X className="h-3.5 w-3.5" />
@@ -407,7 +407,7 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
     <button
       onClick={handleCopy}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 transition-colors',
+        'inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors',
         className,
       )}
       title="Copy to clipboard"
@@ -449,7 +449,7 @@ function CopyLinkButton({ text }: { text: string }) {
         'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
         copied
           ? 'border-green-500/30 text-green-400'
-          : 'border-white/[0.08] text-zinc-300 hover:bg-white/[0.04] hover:text-zinc-100',
+          : 'border-border text-text-primary hover:bg-bg-tertiary hover:text-text-primary',
       )}
     >
       {copied ? (
@@ -535,7 +535,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
   if (!shareLink) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex items-center gap-2 text-zinc-500">
+        <div className="flex items-center gap-2 text-text-tertiary">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
           <span className="text-sm">Loading...</span>
         </div>
@@ -549,7 +549,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
         {/* Back button */}
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           All Share Links
@@ -566,7 +566,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
             }
           }}
           placeholder="Untitled Share Link"
-          className="w-full bg-transparent text-2xl font-semibold text-zinc-100 placeholder:text-zinc-600 outline-none border-none focus:ring-0"
+          className="w-full bg-transparent text-2xl font-semibold text-text-primary placeholder:text-text-tertiary outline-none border-none focus:ring-0"
         />
 
         {/* Editable description */}
@@ -580,7 +580,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           }}
           placeholder="Add a description..."
           rows={2}
-          className="w-full bg-transparent text-sm text-zinc-400 placeholder:text-zinc-600 outline-none border-none resize-none focus:ring-0"
+          className="w-full bg-transparent text-sm text-text-secondary placeholder:text-text-tertiary outline-none border-none resize-none focus:ring-0"
         />
 
         {/* Content preview — matches project view style */}
@@ -595,7 +595,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
                 <div className="grid grid-cols-3 gap-3">
                   {previewFolders.map((folder) => (
                     <div key={folder.id} className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden">
-                      <div className="aspect-[4/3] flex items-center justify-center bg-white/[0.02]">
+                      <div className="aspect-[4/3] flex items-center justify-center bg-bg-tertiary">
                         <svg className="h-10 w-10 text-text-tertiary/50" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
                       </div>
                       <div className="px-3 py-2">
@@ -635,10 +635,10 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-bg-tertiary/50 p-8 flex flex-col items-center justify-center text-center space-y-3">
-            <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
-              <Eye className="h-6 w-6 text-zinc-500" />
+            <div className="h-12 w-12 rounded-full bg-bg-tertiary flex items-center justify-center">
+              <Eye className="h-6 w-6 text-text-tertiary" />
             </div>
-            <p className="text-sm font-medium text-zinc-300">No content yet</p>
+            <p className="text-sm font-medium text-text-primary">No content yet</p>
           </div>
         )}
 
@@ -646,7 +646,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.open(shareUrl, '_blank')}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent/90 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
             Open Share Link
@@ -682,7 +682,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
   if (!shareLink) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex items-center gap-2 text-zinc-500">
+        <div className="flex items-center gap-2 text-text-tertiary">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
           <span className="text-sm">Loading...</span>
         </div>
@@ -723,22 +723,22 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 onCheckedChange={(checked) => immediateUpdate({ is_enabled: checked })}
               />
               {/* URL + Visibility dropdown */}
-              <div className="flex items-center gap-2 rounded-md bg-white/[0.04] px-3 py-2 mt-2">
-                <span className="flex-1 truncate font-mono text-xs text-zinc-400">
+              <div className="flex items-center gap-2 rounded-md bg-bg-tertiary px-3 py-2 mt-2">
+                <span className="flex-1 truncate font-mono text-xs text-text-secondary">
                   {shareUrl}
                 </span>
                 <CopyButton text={shareUrl} />
                 <select
                   value={shareLink.visibility || 'public'}
                   onChange={(e) => immediateUpdate({ visibility: e.target.value })}
-                  className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-2xs font-medium text-zinc-300 outline-none cursor-pointer [color-scheme:dark]"
+                  className="rounded-full border border-border bg-bg-tertiary px-2.5 py-1 text-2xs font-medium text-text-primary outline-none cursor-pointer [color-scheme:auto]"
                 >
                   <option value="public">🌐 Public</option>
                   <option value="secure">🔒 Secure</option>
                 </select>
               </div>
               {shareLink.visibility === 'secure' && (
-                <p className="text-2xs text-zinc-500 mt-1">
+                <p className="text-2xs text-text-tertiary mt-1">
                   Only project members and people you invite can view this link.
                 </p>
               )}
@@ -797,11 +797,11 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                       debouncedUpdate({ password: e.target.value.trim() || null })
                     }}
                     placeholder="Enter passphrase"
-                    className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 pr-12 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
+                    className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 pr-12 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
                   />
                   <button
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary transition-colors"
                     title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
@@ -815,15 +815,15 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm text-zinc-200">Expiration</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-sm text-text-primary">Expiration</p>
+                  <p className="text-xs text-text-tertiary mt-0.5">
                     {shareLink.expires_at
                       ? `Expires ${new Date(shareLink.expires_at).toLocaleDateString()}`
                       : 'Not set'}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-zinc-500" />
+                  <Calendar className="h-3.5 w-3.5 text-text-tertiary" />
                   <input
                     type="date"
                     value={
@@ -837,7 +837,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                         expires_at: val ? new Date(val).toISOString() : null,
                       })
                     }}
-                    className="w-[130px] rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs text-zinc-300 outline-none focus:border-accent/50 [color-scheme:dark]"
+                    className="w-[130px] rounded border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary outline-none focus:border-accent/50 [color-scheme:auto]"
                   />
                 </div>
               </div>
@@ -854,7 +854,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
             <Section title="Appearance" icon={<Paintbrush className="h-3.5 w-3.5" />} defaultOpen={false}>
               {/* Layout — Grid / List */}
               <div className="space-y-1.5">
-                <p className="text-xs text-zinc-400">Layout</p>
+                <p className="text-xs text-text-secondary">Layout</p>
                 <div className="flex gap-2">
                   {(['grid', 'list'] as const).map((layout) => (
                     <button
@@ -864,7 +864,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                         'flex-1 flex flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium capitalize transition-colors',
                         appearance.layout === layout
                           ? 'bg-accent/10 border-accent text-accent'
-                          : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:border-white/15',
+                          : 'border-border text-text-secondary hover:text-text-primary hover:border-border-focus',
                       )}
                     >
                       {layout === 'grid' ? <LayoutGrid className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
@@ -884,8 +884,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               {/* Theme — Dark / Light */}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-200">Theme</p>
-                <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
+                <p className="text-sm text-text-primary">Theme</p>
+                <div className="flex rounded-lg border border-border overflow-hidden">
                   {(['dark', 'light'] as const).map((theme) => (
                     <button
                       key={theme}
@@ -893,8 +893,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                       className={cn(
                         'px-4 py-1.5 text-xs font-medium capitalize transition-colors',
                         appearance.theme === theme
-                          ? 'bg-accent text-white'
-                          : 'text-zinc-400 hover:text-zinc-200',
+                          ? 'bg-accent text-text-inverse'
+                          : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       {theme === 'dark' ? '🌙' : '☀️'}
@@ -905,9 +905,9 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               {/* Accent color */}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-200">Accent Color</p>
+                <p className="text-sm text-text-primary">Accent Color</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500">#</span>
+                  <span className="text-xs text-text-tertiary">#</span>
                   <input
                     type="text"
                     value={localAccentColor}
@@ -920,9 +920,9 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                     }}
                     placeholder="None"
                     maxLength={7}
-                    className="w-20 rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-accent/50 font-mono"
+                    className="w-20 rounded border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 font-mono"
                   />
-                  <label className="relative h-6 w-6 rounded-full border border-white/10 cursor-pointer overflow-hidden shrink-0">
+                  <label className="relative h-6 w-6 rounded-full border border-border cursor-pointer overflow-hidden shrink-0">
                     <div
                       className="absolute inset-0 rounded-full"
                       style={{ backgroundColor: localAccentColor ? `#${localAccentColor.replace('#', '')}` : '#6366f1' }}
@@ -943,8 +943,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               {/* Card Size — S / M / L */}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-200">Card Size</p>
-                <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
+                <p className="text-sm text-text-primary">Card Size</p>
+                <div className="flex rounded-lg border border-border overflow-hidden">
                   {(['s', 'm', 'l'] as const).map((size) => (
                     <button
                       key={size}
@@ -952,8 +952,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                       className={cn(
                         'px-4 py-1.5 text-xs font-medium uppercase transition-colors',
                         (appearance.card_size || 'm') === size
-                          ? 'bg-accent text-white'
-                          : 'text-zinc-400 hover:text-zinc-200',
+                          ? 'bg-accent text-text-inverse'
+                          : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       {size}
@@ -964,8 +964,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               {/* Aspect Ratio */}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-200">Aspect Ratio</p>
-                <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
+                <p className="text-sm text-text-primary">Aspect Ratio</p>
+                <div className="flex rounded-lg border border-border overflow-hidden">
                   {([
                     { value: 'landscape' as const, icon: '▭' },
                     { value: 'square' as const, icon: '□' },
@@ -977,8 +977,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                       className={cn(
                         'px-4 py-1.5 text-sm transition-colors',
                         (appearance.aspect_ratio || 'landscape') === value
-                          ? 'bg-accent text-white'
-                          : 'text-zinc-400 hover:text-zinc-200',
+                          ? 'bg-accent text-text-inverse'
+                          : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       {icon}
@@ -989,8 +989,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
               {/* Thumbnail Scale — Fit / Fill */}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-200">Thumbnail Scale</p>
-                <div className="flex rounded-lg border border-white/[0.08] overflow-hidden">
+                <p className="text-sm text-text-primary">Thumbnail Scale</p>
+                <div className="flex rounded-lg border border-border overflow-hidden">
                   {(['fit', 'fill'] as const).map((scale) => (
                     <button
                       key={scale}
@@ -998,8 +998,8 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                       className={cn(
                         'px-4 py-1.5 text-xs font-medium capitalize transition-colors',
                         (appearance.thumbnail_scale || 'fill') === scale
-                          ? 'bg-accent text-white'
-                          : 'text-zinc-400 hover:text-zinc-200',
+                          ? 'bg-accent text-text-inverse'
+                          : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       {scale}
@@ -1026,7 +1026,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                     sort_by: e.target.value as ShareLinkAppearance['sort_by'],
                   })
                 }
-                className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-accent/50 [color-scheme:dark]"
+                className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 [color-scheme:auto]"
               >
                 <option value="name">Name</option>
                 <option value="created_at">Date created</option>
@@ -1043,7 +1043,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
       <div className="border-t border-border p-3 shrink-0 flex items-center gap-2">
         <button
           onClick={() => window.open(shareUrl, '_blank')}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-text-inverse hover:bg-accent/90 transition-colors"
         >
           <ExternalLink className="h-4 w-4" />
           Open Share Link
