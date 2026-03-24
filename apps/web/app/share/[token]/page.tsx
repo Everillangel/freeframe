@@ -74,7 +74,19 @@ async function fetchShareInfo(
   const qs = params.toString() ? `?${params.toString()}` : ''
   const url = `${API_URL}/share/${token}${qs}`
 
-  const response = await fetch(url)
+  // Include auth token if user is already logged in (for secure links)
+  const headers: Record<string, string> = {}
+  let accessToken: string | null = null
+  try {
+    if (typeof window !== 'undefined') {
+      accessToken = localStorage.getItem('ff_access_token')
+    }
+  } catch {}
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`
+  }
+
+  const response = await fetch(url, { headers })
   if (!response.ok) {
     if (response.status === 403) {
       const data = await response.json().catch(() => ({}))

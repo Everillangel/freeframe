@@ -51,6 +51,8 @@ interface CreatedShareResult {
   title: string
   itemType: 'asset' | 'folder'
   thumbnailUrl: string | null
+  assetId?: string | null
+  folderId?: string | null
 }
 
 // ─── Asset type icon helper ──────────────────────────────────────────────────
@@ -98,6 +100,97 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
         </>
       )}
     </Button>
+  )
+}
+
+// ─── Share Invite Input (autocomplete for user search) ──────────────────────
+
+interface InviteUser { id: string; name: string; email: string }
+
+function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { asset_id: string | null; folder_id: string | null; permission: string } }) {
+  const [query, setQuery] = React.useState('')
+  const [suggestions, setSuggestions] = React.useState<InviteUser[]>([])
+  const [showDrop, setShowDrop] = React.useState(false)
+  const [sent, setSent] = React.useState<string | null>(null)
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ref = React.useRef<HTMLDivElement>(null)
+
+  function search(q: string) {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (!q.trim()) { setSuggestions([]); setShowDrop(false); return }
+    timerRef.current = setTimeout(async () => {
+      try {
+        const r = await api.get<InviteUser[]>(`/users/search?q=${encodeURIComponent(q.trim())}`)
+        setSuggestions(r)
+        setShowDrop(r.length > 0)
+      } catch { setSuggestions([]) }
+    }, 250)
+  }
+
+  async function invite(userId?: string, email?: string) {
+    try {
+      const body: Record<string, unknown> = { permission: shareLink.permission || 'view' }
+      if (userId) body.user_id = userId
+      if (email) body.email = email
+      if (shareLink.folder_id) {
+        await api.post(`/folders/${shareLink.folder_id}/share/user`, body)
+      } else if (shareLink.asset_id) {
+        await api.post(`/assets/${shareLink.asset_id}/share/user`, body)
+      }
+      setSent(email || 'user')
+      setQuery('')
+      setSuggestions([])
+      setShowDrop(false)
+      setTimeout(() => setSent(null), 3000)
+    } catch {}
+  }
+
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShowDrop(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); search(e.target.value) }}
+        onFocus={() => suggestions.length > 0 && setShowDrop(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && query.includes('@') && !showDrop) invite(undefined, query.trim())
+        }}
+        placeholder="Send to name or email"
+        className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+      />
+      {showDrop && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-border bg-bg-secondary shadow-xl overflow-hidden">
+          {suggestions.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => invite(u.id, u.email)}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover transition-colors"
+            >
+              <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-2xs font-medium text-accent">{(u.name || u.email).charAt(0).toUpperCase()}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-text-primary truncate">{u.name}</p>
+                <p className="text-2xs text-text-tertiary truncate">{u.email}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {sent ? (
+        <p className="text-2xs text-status-success mt-1">Invited {sent}</p>
+      ) : (
+        <p className="text-2xs text-text-tertiary mt-1">Type to search or enter email</p>
+      )}
+    </div>
   )
 }
 
@@ -263,8 +356,8 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
   const [title, setTitle] = React.useState(result.title)
   const [editingTitle, setEditingTitle] = React.useState(false)
   const [savingTitle, setSavingTitle] = React.useState(false)
-  const [emailInput, setEmailInput] = React.useState('')
   const [showSettings, setShowSettings] = React.useState(false)
+  const [visibility, setVisibility] = React.useState<'public' | 'secure'>('public')
   const [allowComments, setAllowComments] = React.useState(false)
   const [allowDownloads, setAllowDownloads] = React.useState(false)
   const [passphrase, setPassphrase] = React.useState(false)
@@ -285,6 +378,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
       setWatermark(data.show_watermark)
       setExpiresAt(data.expires_at ? new Date(data.expires_at).toISOString().split('T')[0] : '')
       setLayout((data.appearance as ShareLinkAppearance | null)?.layout || 'grid')
+      setVisibility(data.visibility === 'secure' ? 'secure' : 'public')
     }).catch(() => {})
   }, [result.token])
 
@@ -379,7 +473,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
 
       {/* Content */}
       <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-        {/* Share URL */}
+        {/* Share URL + Visibility */}
         <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary px-3 py-2">
           <span className="flex-1 truncate font-mono text-xs text-text-primary">{shareUrl}</span>
           <button
@@ -390,20 +484,22 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
-          <div className="flex items-center gap-1 shrink-0 rounded-full bg-bg-secondary border border-border px-2 py-0.5">
-            <Globe className="h-3 w-3 text-status-success" />
-            <span className="text-2xs font-medium text-text-primary">Public</span>
-          </div>
+          <select
+            value={visibility}
+            onChange={(e) => {
+              const v = e.target.value as 'public' | 'secure'
+              setVisibility(v)
+              patchLink({ visibility: v })
+            }}
+            className="shrink-0 rounded-full border border-border bg-bg-secondary px-2 py-0.5 text-2xs font-medium text-text-primary outline-none cursor-pointer"
+          >
+            <option value="public">🌐 Public</option>
+            <option value="secure">🔒 Secure</option>
+          </select>
         </div>
 
-        {/* Send to email */}
-        <input
-          type="text"
-          value={emailInput}
-          onChange={(e) => setEmailInput(e.target.value)}
-          placeholder="Send to name or email"
-          className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
-        />
+        {/* Send to name or email — with autocomplete */}
+        <ShareInviteInput token={result.token} shareLink={{ asset_id: result.assetId ?? null, folder_id: result.folderId ?? null, permission: 'view' } as any} />
 
         {/* Preview thumbnail or Settings */}
         {!showSettings ? (
@@ -664,6 +760,8 @@ export function ShareCreateDialog({
         title: shareLink.title || firstItem.name,
         itemType: firstItem.type,
         thumbnailUrl: firstItem.type === 'asset' ? firstItem.thumbnailUrl : null,
+        assetId: shareLink.asset_id,
+        folderId: shareLink.folder_id,
       })
 
       onShareCreated()
