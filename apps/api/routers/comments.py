@@ -505,6 +505,56 @@ def comment_deep_link(
 
 # ── Guest comments (via share link) ───────────────────────────────────────────
 
+@router.get("/share/{token}/comments")
+def list_share_comments(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Public endpoint — list comments for a shared asset. No auth required."""
+    link = validate_share_link(db, token)
+
+    # Determine the asset_id to list comments for
+    asset_id = link.asset_id
+    if not asset_id:
+        # For folder shares, return empty (comments are per-asset)
+        return {"comments": []}
+
+    # Get top-level comments for this asset
+    top_level = db.query(Comment).filter(
+        Comment.asset_id == asset_id,
+        Comment.parent_id.is_(None),
+        Comment.deleted_at.is_(None),
+    ).order_by(Comment.created_at).all()
+
+    comments = []
+    for c in top_level:
+        # Get guest author info
+        guest_name = None
+        guest_email = None
+        author_name = None
+        if c.guest_author_id:
+            guest = db.query(GuestUser).filter(GuestUser.id == c.guest_author_id).first()
+            if guest:
+                guest_name = guest.name
+                guest_email = guest.email
+        elif c.author_id:
+            from ..models.user import User as UserModel
+            author = db.query(UserModel).filter(UserModel.id == c.author_id).first()
+            if author:
+                author_name = author.name
+
+        comments.append({
+            "id": str(c.id),
+            "body": c.body,
+            "guest_name": guest_name or author_name or "Anonymous",
+            "guest_email": guest_email or "",
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "timecode_start": c.timecode_start,
+        })
+
+    return {"comments": comments}
+
+
 @router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
 def guest_comment(
     token: str,
