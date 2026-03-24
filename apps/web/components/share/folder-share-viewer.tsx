@@ -432,7 +432,7 @@ export function FolderShareViewer({
     setSubfolders([])
 
     fetch(
-      `${API_URL}/share/${token}/assets?folder_id=${currentSubfolderId ?? ''}&page=1&per_page=${perPage}`,
+      `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=1&per_page=${perPage}`,
     )
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load assets')
@@ -462,7 +462,7 @@ export function FolderShareViewer({
     setLoadingMore(true)
     try {
       const r = await fetch(
-        `${API_URL}/share/${token}/assets?folder_id=${currentSubfolderId ?? ''}&page=${nextPage}&per_page=${perPage}`,
+        `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=${nextPage}&per_page=${perPage}`,
       )
       if (!r.ok) throw new Error('Failed to load more')
       const data = (await r.json()) as FolderShareAssetsResponse
