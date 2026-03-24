@@ -57,11 +57,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? 'justify-center px-0' : 'px-4 gap-2.5',
         )}
       >
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent shrink-0">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-white">
-            <path d="M3 3h4v4H3V3zm6 0h4v4H9V3zm-6 6h4v4H3V9zm6 2a2 2 0 104 0 2 2 0 00-4 0z" fill="currentColor" />
-          </svg>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-icon.png"
+          alt="FreeFrame"
+          className="h-7 w-7 shrink-0 object-contain"
+        />
         {!collapsed && (
           <span className="text-sm font-semibold text-text-primary tracking-tight">
             FreeFrame
