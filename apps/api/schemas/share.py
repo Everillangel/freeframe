@@ -136,6 +136,8 @@ class DirectShareCreate(BaseModel):
     permission: SharePermission = SharePermission.view
     user_id: Optional[uuid.UUID] = None
     team_id: Optional[uuid.UUID] = None
+    email: Optional[str] = None  # Alternative to user_id — invite by email
+    share_token: Optional[str] = None  # If sharing from a share link context, include token for email link
 
 
 class DirectShareResponse(BaseModel):

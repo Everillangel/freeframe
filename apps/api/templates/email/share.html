@@ -1,15 +1,23 @@
 {% extends "email/base.html" %}
 
 {% block content %}
-<h2>{{ sharer_name }} shared something with you</h2>
-<p><strong>{{ sharer_name }}</strong> has shared <strong>{{ asset_name }}</strong> with you.</p>
+<h2>{{ sharer_name }} shared "{{ asset_name }}" with you</h2>
+<p>Please leave your comments and notes in FreeFrame.</p>
 {% if message %}
 <div class="quote">{{ message }}</div>
 {% endif %}
-<p>
-    <a href="{{ asset_link }}" class="button">View Asset</a>
+<p style="text-align: center; margin: 24px 0;">
+    <a href="{{ asset_link }}" class="button" style="padding: 14px 32px; font-size: 16px;">Review Now</a>
 </p>
-{% if permission %}
-<p class="muted">You have <strong>{{ permission }}</strong> access.</p>
-{% endif %}
+<div class="footer-note" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #eee;">
+    <p class="muted" style="font-size: 13px; color: #888;">
+        You have received this email because <strong>{{ sharer_name }}</strong> invited you to review content on FreeFrame.
+        If you don't recognize this email, please verify before accepting the invitation.
+    </p>
+    {% if permission %}
+    <p class="muted" style="font-size: 13px; color: #888;">
+        Share link creators may be able to see when you've viewed or downloaded assets.
+    </p>
+    {% endif %}
+</div>
 {% endblock %}

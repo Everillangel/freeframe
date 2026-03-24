@@ -436,15 +436,25 @@ def share_folder_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not body.user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
+    # Resolve user_id from email if not provided
+    user_id = body.user_id
+    if not user_id and body.email:
+        from ..services.auth_service import get_user_by_email
+        user = get_user_by_email(db, body.email)
+        if user:
+            user_id = user.id
+        else:
+            raise HTTPException(status_code=404, detail="User not found with that email")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id or email required")
+
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
 
     # Upsert: reactivate if soft-deleted
     existing = db.query(AssetShare).filter(
         AssetShare.folder_id == folder_id,
-        AssetShare.shared_with_user_id == body.user_id,
+        AssetShare.shared_with_user_id == user_id,
     ).first()
     if existing:
         if existing.deleted_at is None:
@@ -458,7 +468,7 @@ def share_folder_with_user(
 
     share = AssetShare(
         folder_id=folder_id,
-        shared_with_user_id=body.user_id,
+        shared_with_user_id=user_id,
         permission=body.permission,
         shared_by=current_user.id,
     )
@@ -467,12 +477,15 @@ def share_folder_with_user(
     db.refresh(share)
 
     # Send share email
-    shared_user = db.query(User).filter(User.id == body.user_id).first()
+    shared_user = db.query(User).filter(User.id == user_id).first()
     if shared_user:
-        folder_link = f"{settings.frontend_url}/folders/{folder_id}"
+        if body.share_token:
+            folder_link = f"{settings.frontend_url}/share/{body.share_token}"
+        else:
+            folder_link = f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
         send_share_email.delay(
             to_email=shared_user.email,
-            sharer_name=current_user.name,
+            sharer_name=current_user.name or current_user.email,
             asset_name=folder.name,
             asset_link=folder_link,
             permission=body.permission.value if body.permission else None,
@@ -552,15 +565,25 @@ def share_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not body.user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
+    # Resolve user_id from email if not provided
+    user_id = body.user_id
+    if not user_id and body.email:
+        from ..services.auth_service import get_user_by_email
+        user = get_user_by_email(db, body.email)
+        if user:
+            user_id = user.id
+        else:
+            raise HTTPException(status_code=404, detail="User not found with that email")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id or email required")
+
     asset = _get_asset(db, asset_id)
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
 
     # Upsert: reactivate if soft-deleted
     existing = db.query(AssetShare).filter(
         AssetShare.asset_id == asset_id,
-        AssetShare.shared_with_user_id == body.user_id,
+        AssetShare.shared_with_user_id == user_id,
     ).first()
     if existing:
         if existing.deleted_at is None:
@@ -574,7 +597,7 @@ def share_with_user(
 
     share = AssetShare(
         asset_id=asset_id,
-        shared_with_user_id=body.user_id,
+        shared_with_user_id=user_id,
         permission=body.permission,
         shared_by=current_user.id,
     )
@@ -584,12 +607,16 @@ def share_with_user(
     db.refresh(share)
 
     # Send share email
-    shared_user = db.query(User).filter(User.id == body.user_id).first()
+    shared_user = db.query(User).filter(User.id == user_id).first()
     if shared_user:
-        asset_link = f"{settings.frontend_url}/assets/{asset_id}"
+        # Use share link URL if token provided, otherwise internal URL
+        if body.share_token:
+            asset_link = f"{settings.frontend_url}/share/{body.share_token}"
+        else:
+            asset_link = f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset_id}"
         send_share_email.delay(
             to_email=shared_user.email,
-            sharer_name=current_user.name,
+            sharer_name=current_user.name or current_user.email,
             asset_name=asset.name,
             asset_link=asset_link,
             permission=body.permission.value if body.permission else None,

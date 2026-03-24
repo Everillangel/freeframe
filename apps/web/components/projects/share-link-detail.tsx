@@ -202,11 +202,13 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         await api.post(`/folders/${shareLink.folder_id}/share/user`, {
           permission: shareLink.permission || 'view',
           user_id: user.id,
+          share_token: shareLink.token,
         })
       } else if (shareLink.asset_id) {
         await api.post(`/assets/${shareLink.asset_id}/share/user`, {
           permission: shareLink.permission || 'view',
           user_id: user.id,
+          share_token: shareLink.token,
         })
       }
       setSent(user.name || user.email)
@@ -228,11 +230,13 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         await api.post(`/folders/${shareLink.folder_id}/share/user`, {
           permission: shareLink.permission || 'view',
           email,
+          share_token: shareLink.token,
         })
       } else if (shareLink.asset_id) {
         await api.post(`/assets/${shareLink.asset_id}/share/user`, {
           permission: shareLink.permission || 'view',
           email,
+          share_token: shareLink.token,
         })
       }
       setSent(email)
