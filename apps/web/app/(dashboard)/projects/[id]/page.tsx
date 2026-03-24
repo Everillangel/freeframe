@@ -28,7 +28,7 @@ import { useFolders, useTrash } from '@/hooks/use-folders'
 import { useShareLinks } from '@/hooks/use-share-links'
 import { FolderTree } from '@/components/projects/folder-tree'
 import { ShareLinksTable } from '@/components/projects/share-links-table'
-import { ShareLinkDetail } from '@/components/projects/share-link-detail'
+import { ShareLinkContent, ShareLinkSettingsPanel } from '@/components/projects/share-link-detail'
 import { NameDialog } from '@/components/projects/name-dialog'
 import { ShareCreateDialog } from '@/components/projects/share-create-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
@@ -411,7 +411,7 @@ export default function ProjectDetailPage() {
               frontendUrl={typeof window !== 'undefined' ? window.location.origin : ''}
             />
           ) : showShareLinks && selectedShareLink ? (
-            <ShareLinkDetail
+            <ShareLinkContent
               token={selectedShareLink}
               projectId={projectId}
               onBack={() => setSelectedShareLink(null)}
@@ -553,9 +553,13 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* ─── Right Panel (Comments + Fields tabs) ───────────────────────── */}
+      {/* ─── Right Panel (Comments + Fields tabs, or Share Link Settings) ─ */}
       {rightPanelOpen && (
       <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
+        {showShareLinks && selectedShareLink ? (
+          <ShareLinkSettingsPanel token={selectedShareLink} />
+        ) : (
+        <>
         {/* Tabs */}
         <div className="flex items-center border-b border-border">
           <button
@@ -690,6 +694,8 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-text-secondary">Select an asset to view comments</p>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
       )}
