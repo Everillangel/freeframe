@@ -264,8 +264,9 @@ function SelectionPhase({
   creating,
 }: SelectionPhaseProps) {
   const hasItems = folders.length > 0 || assets.length > 0
-  const hasSelection = selectedItems.size > 0
   const totalItems = folders.length + assets.length
+  const folderCount = folders.length
+  const assetCount = assets.length
 
   return (
     <>
@@ -280,123 +281,54 @@ function SelectionPhase({
       </div>
 
       {/* Content */}
-      <div className="px-5 py-4 max-h-[50vh] overflow-y-auto">
-        {/* Share all info */}
-        <div className="mb-3 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5">
-          <p className="text-sm text-text-primary font-medium">
-            {currentFolderId ? 'Share this folder' : 'Share project'}
-          </p>
-          <p className="text-xs text-text-tertiary mt-0.5">
-            Creates one link with all {totalItems} item{totalItems !== 1 ? 's' : ''} in the current view.
-            {hasItems && ' Or select a specific item below.'}
-          </p>
-        </div>
-
-        {hasItems && (
-          <div className="space-y-1">
-            {/* Folders */}
-            {folders.map((folder) => {
-              const key = `folder:${folder.id}`
-              const isSelected = selectedItems.has(key)
-              return (
-                <label
-                  key={key}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors',
-                    isSelected ? 'bg-accent/10 border border-accent/30' : 'hover:bg-bg-hover border border-transparent',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() =>
-                      onToggle({ type: 'folder', id: folder.id, name: folder.name })
-                    }
-                    className="rounded border-border accent-accent h-4 w-4 shrink-0"
-                  />
-                  <FolderIcon className="h-5 w-5 text-text-tertiary shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-text-primary truncate">{folder.name}</p>
-                    <p className="text-2xs text-text-tertiary">
-                      {folder.item_count} item{folder.item_count !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </label>
-              )
-            })}
-
-            {/* Assets */}
-            {assets.map((asset) => {
-              const key = `asset:${asset.id}`
-              const isSelected = selectedItems.has(key)
-              return (
-                <label
-                  key={key}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors',
-                    isSelected ? 'bg-accent/10 border border-accent/30' : 'hover:bg-bg-hover border border-transparent',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() =>
-                      onToggle({
-                        type: 'asset',
-                        id: asset.id,
-                        name: asset.name,
-                        thumbnailUrl: asset.thumbnail_url,
-                        assetType: asset.asset_type,
-                      })
-                    }
-                    className="rounded border-border accent-accent h-4 w-4 shrink-0"
-                  />
-                  {/* Thumbnail */}
-                  <div className="h-10 w-10 rounded bg-bg-tertiary border border-border overflow-hidden flex items-center justify-center shrink-0">
-                    {asset.thumbnail_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={asset.thumbnail_url}
-                        alt={asset.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <AssetTypeIcon type={asset.asset_type} className="h-4 w-4 text-text-tertiary" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-text-primary truncate">{asset.name}</p>
-                    <p className="text-2xs text-text-tertiary capitalize">
-                      {asset.asset_type.replace('_', ' ')}
-                    </p>
-                  </div>
-                </label>
-              )
-            })}
+      <div className="px-5 py-4">
+        <div className="rounded-lg border border-border bg-bg-tertiary px-4 py-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 shrink-0">
+              <FolderIcon className="h-5 w-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">
+                {currentFolderId ? 'Share this folder' : 'Share project'}
+              </p>
+              <p className="text-xs text-text-tertiary">
+                One link with all contents included
+              </p>
+            </div>
           </div>
-        )}
+
+          {/* Item summary */}
+          <div className="flex items-center gap-3 text-xs text-text-secondary">
+            {folderCount > 0 && (
+              <span className="flex items-center gap-1">
+                <FolderIcon className="h-3.5 w-3.5 text-text-tertiary" />
+                {folderCount} folder{folderCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {assetCount > 0 && (
+              <span className="flex items-center gap-1">
+                <Image className="h-3.5 w-3.5 text-text-tertiary" />
+                {assetCount} asset{assetCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {totalItems === 0 && <span>Empty — no items to share</span>}
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-border px-5 py-3">
-        <span className="text-xs text-text-tertiary">
-          {hasSelection
-            ? `${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''} selected`
-            : `Sharing all ${totalItems} items`}
-        </span>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={onCreate}
-            disabled={creating}
-            loading={creating}
-          >
-            Create Share Link
-          </Button>
-        </div>
+      <div className="flex items-center justify-end border-t border-border px-5 py-3 gap-2">
+        <Button variant="secondary" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={onCreate}
+          disabled={creating || totalItems === 0}
+          loading={creating}
+        >
+          Create Share Link
+        </Button>
       </div>
     </>
   )
