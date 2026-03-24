@@ -69,9 +69,10 @@ def send_task_safe(task, *args, **kwargs):
     In uvicorn's reload mode, the Celery connection pool can become stale.
     This wrapper catches connection errors and retries with a fresh connection.
     """
+    from kombu.exceptions import OperationalError
     try:
         return task.delay(*args, **kwargs)
-    except Exception:
+    except (OperationalError, ConnectionError, OSError):
         # Force fresh connection by acquiring a new producer
         with celery_app.producer_or_acquire() as producer:
             return task.apply_async(args=args, kwargs=kwargs, producer=producer)
