@@ -23,9 +23,14 @@ export default function LoginPage() {
       }
     }
 
-    // If already authenticated, redirect to dashboard
-    if (getAccessToken()) {
-      router.replace('/projects')
+    // If already authenticated, set cookie and redirect to dashboard
+    const token = getAccessToken()
+    if (token) {
+      document.cookie = `ff_access_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+      // Check the 'from' param for redirect target
+      const params = new URLSearchParams(window.location.search)
+      const from = params.get('from')
+      router.replace(from || '/projects')
       return
     }
 

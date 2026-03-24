@@ -18,11 +18,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for access token in cookies (middleware runs on server, no localStorage)
-  // We use a cookie set alongside localStorage for SSR route protection
-  const token = request.cookies.get('ff_access_token')?.value
+  // Check for auth tokens in cookies (middleware runs on server, no localStorage)
+  // Allow through if either access token or refresh token exists
+  // (client-side JS will handle token refresh if access token is expired)
+  const accessToken = request.cookies.get('ff_access_token')?.value
+  const refreshToken = request.cookies.get('ff_refresh_token')?.value
 
-  if (!token) {
+  if (!accessToken && !refreshToken) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)

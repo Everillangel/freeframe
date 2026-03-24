@@ -17,16 +17,18 @@ export function setTokens(access: string, refresh: string): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(ACCESS_TOKEN_KEY, access)
   localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
-  // Set cookie so middleware can check auth on server side
+  // Set cookies so middleware can check auth on server side
   document.cookie = `${ACCESS_TOKEN_KEY}=${access}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+  document.cookie = `${REFRESH_TOKEN_KEY}=${refresh}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
 }
 
 export function clearTokens(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(ACCESS_TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
-  // Clear the auth cookie
+  // Clear auth cookies
   document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
   window.location.href = '/login'
 }
 
