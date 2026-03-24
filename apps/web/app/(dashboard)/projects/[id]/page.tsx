@@ -34,24 +34,7 @@ import { ShareLinkContent, ShareLinkSettingsPanel } from '@/components/projects/
 import { NameDialog } from '@/components/projects/name-dialog'
 import { ShareCreateDialog } from '@/components/projects/share-create-dialog'
 import { ProjectMembersDialog } from '@/components/projects/project-members-dialog'
-import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
-
-// ─── Collection icon colors (Frame.io style) ──────────────────────────────────
-const collectionIcons: Record<string, { icon: string; color: string }> = {
-  'needs review': { icon: '👀', color: 'text-yellow-400' },
-  'audio': { icon: '🎵', color: 'text-blue-400' },
-  'images': { icon: '🖼️', color: 'text-pink-400' },
-  'videos': { icon: '🎬', color: 'text-purple-400' },
-  'approved': { icon: '🎉', color: 'text-green-400' },
-}
-
-function getCollectionIcon(name: string) {
-  const lower = name.toLowerCase()
-  for (const [key, val] of Object.entries(collectionIcons)) {
-    if (lower.includes(key)) return val
-  }
-  return { icon: '📁', color: 'text-text-tertiary' }
-}
+import type { Project, AssetResponse, ProjectMember, User, Folder } from '@/types'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -63,7 +46,6 @@ export default function ProjectDetailPage() {
   const [assetName, setAssetName] = React.useState('')
   const [pendingFiles, setPendingFiles] = React.useState<File[]>([])
   const [selectedAsset, setSelectedAsset] = React.useState<AssetResponse | null>(null)
-  const [collectionsExpanded, setCollectionsExpanded] = React.useState(true)
   const [shareLinksExpanded, setShareLinksExpanded] = React.useState(true)
   const [rightTab, setRightTab] = React.useState<'comments' | 'fields'>('comments')
   const { rightPanelOpen } = useViewStore()
@@ -129,11 +111,6 @@ export default function ProjectDetailPage() {
   const { data: subfolders, mutate: mutateSubfolders } = useSWR<Folder[]>(
     showTrash ? null : `/projects/${projectId}/folders?parent_id=${currentFolderId ?? 'root'}`,
     (key: string) => api.get<Folder[]>(key),
-  )
-
-  const { data: collections } = useSWR<Collection[]>(
-    `/projects/${projectId}/collections`,
-    () => api.get<Collection[]>(`/projects/${projectId}/collections`),
   )
 
   const thumbnails = React.useMemo(() => {
@@ -270,7 +247,10 @@ export default function ProjectDetailPage() {
               setFolderDialogParentId(parentId)
               setFolderDialogOpen(true)
             }}
-            onRenameFolder={renameFolder}
+            onRenameFolder={async (id, name) => {
+              await renameFolder(id, name)
+              mutateSubfolders()
+            }}
             onDeleteFolder={async (id) => {
               await deleteFolder(id)
               if (currentFolderId === id) handleSelectFolder(null)
@@ -283,59 +263,6 @@ export default function ProjectDetailPage() {
               mutateSubfolders()
             }}
           />
-        </div>
-
-        {/* Collections section */}
-        <div className="px-3 py-2 border-t border-border">
-          <div className="w-full flex items-center justify-between px-2 mb-1">
-            <span
-              className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider cursor-pointer"
-              onClick={() => setCollectionsExpanded(!collectionsExpanded)}
-            >
-              Collections
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => { e.stopPropagation() }}
-                className="text-text-tertiary hover:text-text-primary transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => setCollectionsExpanded(!collectionsExpanded)}
-                className="text-text-tertiary hover:text-text-primary transition-colors"
-              >
-                <ChevronDown className={cn('h-3 w-3 transition-transform', !collectionsExpanded && '-rotate-90')} />
-              </button>
-            </div>
-          </div>
-
-          {collectionsExpanded && (
-            <div className="space-y-0.5">
-              {collections && collections.length > 0 ? (
-                collections.map((c) => {
-                  const { icon } = getCollectionIcon(c.name)
-                  return (
-                    <Link
-                      key={c.id}
-                      href={`/projects/${projectId}/collections?id=${c.id}`}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-                    >
-                      <span className="text-sm">{icon}</span>
-                      <span className="truncate">{c.name}</span>
-                    </Link>
-                  )
-                })
-              ) : null}
-              <Link
-                href={`/projects/${projectId}/collections`}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-text-tertiary hover:bg-bg-hover hover:text-text-secondary transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                <span>New Collection</span>
-              </Link>
-            </div>
-          )}
         </div>
 
         {/* Share Links section */}
@@ -542,7 +469,10 @@ export default function ProjectDetailPage() {
               onAssetSelect={(asset, e) => { e?.stopPropagation(); setSelectedAsset(asset as AssetResponse) }}
               onAssetOpen={(asset) => router.push(`/projects/${projectId}/assets/${asset.id}`)}
               onFolderOpen={(folder) => handleSelectFolder(folder.id)}
-              onFolderRename={renameFolder}
+              onFolderRename={async (id, name) => {
+                await renameFolder(id, name)
+                mutateSubfolders()
+              }}
               onFolderDelete={async (id) => {
                 await deleteFolder(id)
                 mutateAssets()

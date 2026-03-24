@@ -67,14 +67,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       shortcut: 'G P',
     },
     {
-      id: 'assets',
-      label: 'My Assets',
-      icon: FolderOpen,
-      href: '/assets',
-      group: 'navigation',
-      shortcut: 'G A',
-    },
-    {
       id: 'notifications',
       label: 'Notifications',
       icon: Bell,

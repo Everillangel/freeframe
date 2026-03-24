@@ -327,6 +327,7 @@ export interface FolderShareSubfolder {
   id: string
   name: string
   item_count: number
+  thumbnail_urls: string[]
 }
 
 export interface FolderShareAssetsResponse {

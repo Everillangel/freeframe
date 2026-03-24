@@ -122,6 +122,7 @@ class FolderShareSubfolder(BaseModel):
     id: uuid.UUID
     name: str
     item_count: int = 0
+    thumbnail_urls: list[str] = []
 
 
 class FolderShareAssetsResponse(BaseModel):

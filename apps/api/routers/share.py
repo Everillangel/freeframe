@@ -850,10 +850,25 @@ def get_folder_share_assets(
             Folder.parent_id == sf.id,
             Folder.deleted_at.is_(None),
         ).scalar() or 0
+
+        # Fetch up to 4 thumbnail previews from assets inside this subfolder
+        thumb_urls: list[str] = []
+        preview_assets = db.query(Asset).filter(
+            Asset.folder_id == sf.id,
+            Asset.deleted_at.is_(None),
+        ).order_by(Asset.created_at.desc()).limit(4).all()
+        for pa in preview_assets:
+            mf = _get_latest_media_file(db, pa.id)
+            if mf and mf.s3_key_thumbnail:
+                thumb_urls.append(generate_presigned_get_url(mf.s3_key_thumbnail))
+            if len(thumb_urls) >= 4:
+                break
+
         subfolder_items.append(FolderShareSubfolder(
             id=sf.id,
             name=sf.name,
             item_count=asset_count + child_folder_count,
+            thumbnail_urls=thumb_urls,
         ))
 
     # Get assets in this folder

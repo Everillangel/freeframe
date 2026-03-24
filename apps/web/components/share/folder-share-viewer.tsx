@@ -132,6 +132,8 @@ interface SubfolderCardProps {
 }
 
 function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }: SubfolderCardProps) {
+  const thumbs = subfolder.thumbnail_urls ?? []
+
   return (
     <button
       className={cn(
@@ -144,17 +146,60 @@ function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }:
     >
       <div
         className={cn(
-          'w-full flex items-center justify-center',
+          'w-full relative overflow-hidden',
           aspectRatio === 'landscape' && 'aspect-[16/10]',
           aspectRatio === 'square' && 'aspect-square',
           aspectRatio === 'portrait' && 'aspect-[3/4]',
           isDark ? 'bg-white/[0.02]' : 'bg-zinc-100/50',
         )}
       >
-        <Folder
-          className="h-10 w-10 transition-transform group-hover:scale-110"
-          style={{ color: accentColor, opacity: 0.7 }}
-        />
+        {thumbs.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Folder
+              className="h-10 w-10 transition-transform group-hover:scale-110"
+              style={{ color: accentColor, opacity: 0.7 }}
+            />
+          </div>
+        ) : thumbs.length === 1 ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={thumbs[0]}
+            alt={subfolder.name}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <div className={cn(
+            'absolute inset-0 grid gap-[1px]',
+            thumbs.length === 2 && 'grid-cols-2',
+            thumbs.length === 3 && 'grid-cols-2 grid-rows-2',
+            thumbs.length >= 4 && 'grid-cols-2 grid-rows-2',
+          )}>
+            {thumbs.slice(0, 4).map((url, i) => (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                key={i}
+                src={url}
+                alt=""
+                className={cn(
+                  'h-full w-full object-cover',
+                  thumbs.length === 3 && i === 0 && 'row-span-2',
+                )}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Folder icon overlay badge */}
+        {thumbs.length > 0 && (
+          <div className={cn(
+            'absolute bottom-1.5 left-1.5 flex items-center justify-center h-6 w-6 rounded-md backdrop-blur-sm',
+            isDark ? 'bg-black/50' : 'bg-white/70',
+          )}>
+            <Folder className="h-3.5 w-3.5" style={{ color: accentColor }} />
+          </div>
+        )}
       </div>
       <div className="px-3 py-2">
         <p

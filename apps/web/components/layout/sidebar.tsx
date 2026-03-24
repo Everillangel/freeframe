@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   LayoutDashboard,
-  FolderOpen,
   Layers,
   Bell,
   Upload,
@@ -28,7 +27,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
-  { href: '/assets', label: 'My Assets', icon: FolderOpen },
   { href: '/projects', label: 'Projects', icon: Layers },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ]

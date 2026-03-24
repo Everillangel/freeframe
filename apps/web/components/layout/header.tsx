@@ -13,7 +13,6 @@ interface HeaderProps {
 }
 
 const LABEL_MAP: Record<string, string> = {
-  assets: 'My Assets',
   projects: 'Projects',
   notifications: 'Notifications',
   settings: 'Settings',
