@@ -111,8 +111,8 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* Backdrop — offset to not cover sidebar */}
+      <div className="fixed top-0 right-0 bottom-0 left-[52px] z-40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed left-[52px] top-0 z-50 h-full w-[380px] border-r border-border bg-bg-primary shadow-2xl flex flex-col animate-in slide-in-from-left-2 duration-150">

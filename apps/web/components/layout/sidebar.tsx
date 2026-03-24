@@ -94,6 +94,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setNotifOpen(false)}
               className={cn(
                 'group relative flex items-center rounded-md transition-colors duration-100',
                 collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
@@ -142,7 +143,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* Uploads button */}
         <button
-          onClick={togglePanel}
+          onClick={() => { setNotifOpen(false); togglePanel() }}
           className={cn(
             'group relative flex w-full items-center rounded-md transition-colors duration-100',
             collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
