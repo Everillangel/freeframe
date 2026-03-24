@@ -33,8 +33,8 @@ from ..schemas.comment import (
 )
 from ..services import s3_service
 from ..services.permissions import require_asset_access, validate_share_link
-from ..tasks.email_tasks import send_mention_email
-from ..tasks.celery_app import send_task_safe, send_comment_email
+from ..tasks.email_tasks import send_mention_email, send_comment_email
+from ..tasks.celery_app import send_task_safe
 
 router = APIRouter(tags=["comments"])
 
