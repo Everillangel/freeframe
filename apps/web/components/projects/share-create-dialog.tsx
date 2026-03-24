@@ -223,7 +223,14 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
                 <span className="text-2xs font-medium text-accent">{(u.name || u.email).charAt(0).toUpperCase()}</span>
               </div>
               <span className="text-xs text-text-primary truncate flex-1">{u.name || u.email}</span>
-              <span className="text-2xs text-text-tertiary">{u.email}</span>
+              <span className="text-2xs text-text-tertiary shrink-0">{u.email}</span>
+              <button
+                onClick={() => setInvitedUsers(prev => prev.filter(p => p.id !== u.id))}
+                className="text-text-tertiary hover:text-status-error transition-colors shrink-0"
+                title="Remove"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
         </div>

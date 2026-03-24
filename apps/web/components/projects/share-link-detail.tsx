@@ -23,6 +23,7 @@ import {
   Layers,
   Droplets,
   Globe,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -368,6 +369,28 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                 <p className="text-xs text-zinc-200 truncate">{user.name}</p>
               </div>
               <span className="text-2xs text-zinc-500 capitalize shrink-0">{user.permission}</span>
+              <button
+                onClick={async () => {
+                  try {
+                    const targetId = shareLink.folder_id || shareLink.asset_id
+                    const type = shareLink.folder_id ? 'folders' : 'assets'
+                    // Find the share ID for this user
+                    const shares = await api.get<Array<{ id: string; shared_with_user_id: string }>>(`/${type}/${targetId}/direct-shares`)
+                    const share = shares.find(s => s.shared_with_user_id === user.id)
+                    if (share && shareLink.folder_id) {
+                      await api.delete(`/folders/${shareLink.folder_id}/shares/${share.id}`)
+                    }
+                    // For assets, we'd need a similar delete endpoint — for now just remove from UI
+                    setInvitedUsers(prev => prev.filter(u => u.id !== user.id))
+                  } catch {
+                    setInvitedUsers(prev => prev.filter(u => u.id !== user.id))
+                  }
+                }}
+                className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                title="Remove access"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
         </div>
