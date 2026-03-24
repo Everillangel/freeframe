@@ -30,6 +30,21 @@ def get_users_batch(
     return users
 
 
+@router.get("/search", response_model=list[UserResponse])
+def search_users(
+    q: str = Query(..., min_length=1, description="Search by name or email"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Search users by name or email. Returns up to 10 matching users."""
+    pattern = f"%{q}%"
+    users = db.query(User).filter(
+        User.deleted_at.is_(None),
+        (User.name.ilike(pattern) | User.email.ilike(pattern)),
+    ).limit(10).all()
+    return users
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_superadmin:
         raise HTTPException(status_code=403, detail="Admin access required")

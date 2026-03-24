@@ -159,6 +159,161 @@ function ToggleRow({
   )
 }
 
+// ─── Share User Search (autocomplete) ───────────────────────────────────────
+
+interface UserSuggestion {
+  id: string
+  name: string
+  email: string
+  avatar_url?: string | null
+}
+
+function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
+  const [query, setQuery] = React.useState('')
+  const [suggestions, setSuggestions] = React.useState<UserSuggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = React.useState(false)
+  const [sending, setSending] = React.useState(false)
+  const [sent, setSent] = React.useState<string | null>(null)
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+
+  function searchUsers(q: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!q.trim()) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await api.get<UserSuggestion[]>(`/users/search?q=${encodeURIComponent(q.trim())}`)
+        setSuggestions(results)
+        setShowSuggestions(results.length > 0)
+      } catch {
+        setSuggestions([])
+      }
+    }, 250)
+  }
+
+  async function inviteUser(user: UserSuggestion) {
+    setSending(true)
+    try {
+      if (shareLink.folder_id) {
+        await api.post(`/folders/${shareLink.folder_id}/share/user`, {
+          permission: shareLink.permission || 'view',
+          user_id: user.id,
+        })
+      } else if (shareLink.asset_id) {
+        await api.post(`/assets/${shareLink.asset_id}/share/user`, {
+          permission: shareLink.permission || 'view',
+          user_id: user.id,
+        })
+      }
+      setSent(user.name || user.email)
+      setQuery('')
+      setSuggestions([])
+      setShowSuggestions(false)
+      setTimeout(() => setSent(null), 3000)
+    } catch {
+      // Could show error
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function inviteByEmail(email: string) {
+    setSending(true)
+    try {
+      if (shareLink.folder_id) {
+        await api.post(`/folders/${shareLink.folder_id}/share/user`, {
+          permission: shareLink.permission || 'view',
+          email,
+        })
+      } else if (shareLink.asset_id) {
+        await api.post(`/assets/${shareLink.asset_id}/share/user`, {
+          permission: shareLink.permission || 'view',
+          email,
+        })
+      }
+      setSent(email)
+      setQuery('')
+      setSuggestions([])
+      setShowSuggestions(false)
+      setTimeout(() => setSent(null), 3000)
+    } catch {
+      // Could show error
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Close suggestions on outside click
+  React.useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div className="mt-2 relative" ref={containerRef}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          searchUsers(e.target.value)
+        }}
+        onFocus={() => {
+          if (suggestions.length > 0) setShowSuggestions(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && query.includes('@') && !showSuggestions) {
+            inviteByEmail(query.trim())
+          }
+        }}
+        placeholder="Send to name or email"
+        disabled={sending}
+        className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
+      />
+
+      {/* Suggestions dropdown */}
+      {showSuggestions && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-white/[0.08] bg-zinc-900 shadow-xl overflow-hidden">
+          {suggestions.map((user) => (
+            <button
+              key={user.id}
+              onClick={() => inviteUser(user)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors"
+            >
+              <div className="h-7 w-7 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-xs font-medium text-accent">
+                  {(user.name || user.email).charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-zinc-200 truncate">{user.name}</p>
+                <p className="text-2xs text-zinc-500 truncate">{user.email}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Success message */}
+      {sent && (
+        <p className="text-2xs text-green-400 mt-1">Invited {sent}</p>
+      )}
+      {!sent && (
+        <p className="text-2xs text-zinc-600 mt-1">Type to search users or enter email</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Copy Button (small, inline) ────────────────────────────────────────────
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
@@ -440,33 +595,9 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 </p>
               )}
               {/* Send to name or email */}
-              <div className="mt-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    placeholder="Send to name or email"
-                    className="flex-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
-                    onKeyDown={async (e) => {
-                      if (e.key === 'Enter') {
-                        const input = e.currentTarget
-                        const email = input.value.trim()
-                        if (!email) return
-                        try {
-                          if (shareLink.folder_id) {
-                            await api.post(`/folders/${shareLink.folder_id}/share/user`, { email, permission: shareLink.permission || 'view' })
-                          } else if (shareLink.asset_id) {
-                            await api.post(`/assets/${shareLink.asset_id}/share/user`, { permission: shareLink.permission || 'view', user_id: null, email })
-                          }
-                          input.value = ''
-                        } catch {
-                          // Could show error toast
-                        }
-                      }
-                    }}
-                  />
-                </div>
-                <p className="text-2xs text-zinc-600 mt-1">Press Enter to send invite</p>
-              </div>
+              <ShareUserSearch
+                shareLink={shareLink}
+              />
             </Section>
 
             {/* Permissions */}
