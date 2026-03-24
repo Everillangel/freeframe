@@ -314,8 +314,10 @@ interface GuestComment {
   body: string
   guest_name: string
   guest_email: string
+  author_name?: string
   created_at: string
   timecode_start?: number | null
+  replies?: GuestComment[]
 }
 
 function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAsset }: RightPanelProps) {
@@ -434,6 +436,20 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
                   </span>
                 </div>
                 <p className="text-sm text-zinc-300 leading-relaxed">{comment.body}</p>
+                {/* Nested replies */}
+                {comment.replies && comment.replies.length > 0 && (
+                  <div className="mt-2 pl-3 border-l border-white/10 space-y-1.5">
+                    {comment.replies.map((r) => (
+                      <div key={r.id} className="pt-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-medium text-zinc-300">{r.guest_name || r.author_name || 'User'}</span>
+                          <span className="text-[10px] text-zinc-600">{formatShortDate(r.created_at)}</span>
+                        </div>
+                        <p className="text-xs text-zinc-400">{r.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -448,6 +464,7 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
 interface AssetViewerProps {
   token: string
   asset: FolderShareAssetItem
+  permission: SharePermission
   allowDownload: boolean
   onBack: () => void
 }
@@ -482,96 +499,138 @@ function HlsVideo({ src, className }: { src: string; className?: string }) {
   return <video ref={videoRef} controls className={className} />
 }
 
-function AssetViewer({ token, asset, allowDownload, onBack }: AssetViewerProps) {
+function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetViewerProps) {
   const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [sidebarOpen, setSidebarOpen] = React.useState(true)
+  const [comments, setComments] = React.useState<GuestComment[]>([])
+  const [loadingComments, setLoadingComments] = React.useState(false)
+  const [commentRefresh, setCommentRefresh] = React.useState(0)
 
   React.useEffect(() => {
     setLoading(true)
-    // Include auth token if logged in
     const headers: Record<string, string> = {}
     try {
-      const accessToken = localStorage.getItem('ff_access_token')
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const t = localStorage.getItem('ff_access_token')
+      if (t) headers['Authorization'] = `Bearer ${t}`
     } catch {}
-
     fetch(`${API_URL}/share/${token}/stream/${asset.id}`, { headers })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.url) setStreamUrl(data.url)
-      })
+      .then((data) => { if (data?.url) setStreamUrl(data.url) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [token, asset.id])
+
+  // Fetch comments for this asset
+  React.useEffect(() => {
+    setLoadingComments(true)
+    fetch(`${API_URL}/share/${token}/comments?asset_id=${asset.id}`)
+      .then((r) => (r.ok ? r.json() : { comments: [] }))
+      .then((data) => setComments(data.comments ?? []))
+      .catch(() => setComments([]))
+      .finally(() => setLoadingComments(false))
+  }, [token, asset.id, commentRefresh])
+
+  const canComment = permission === 'comment' || permission === 'approve'
 
   return (
     <div className="flex-1 min-h-screen flex flex-col bg-black text-white">
       {/* Top bar */}
       <header className="flex items-center gap-3 border-b border-white/[0.06] px-4 h-12 bg-zinc-950 shrink-0">
-        <button
-          onClick={onBack}
-          className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-        >
+        <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-medium text-white truncate">{asset.name}</span>
         <div className="flex-1" />
         {allowDownload && (
-          <button
-            className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
-            onClick={() => handleDownload(token, asset.id, asset.name)}
-          >
-            <Download className="h-3 w-3" />
-            Download
+          <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors" onClick={() => handleDownload(token, asset.id, asset.name)}>
+            <Download className="h-3 w-3" /> Download
           </button>
         )}
+        <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+          {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+        </button>
       </header>
 
-      {/* Media viewer */}
-      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
-        {loading ? (
-          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-        ) : asset.asset_type === 'video' ? (
-          streamUrl ? (
-            <HlsVideo src={streamUrl} className="max-h-full max-w-full rounded-lg" />
-          ) : (
-            <div className="text-center text-zinc-500">
-              <Video className="h-12 w-12 mx-auto mb-2" />
-              <p className="text-sm">Video unavailable</p>
-            </div>
-          )
-        ) : asset.asset_type === 'audio' ? (
-          streamUrl ? (
-            <div className="w-full max-w-lg space-y-4">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-20 w-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <Music className="h-8 w-8 text-zinc-500" />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Media viewer */}
+        <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+          {loading ? (
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          ) : asset.asset_type === 'video' ? (
+            streamUrl ? <HlsVideo src={streamUrl} className="max-h-full max-w-full rounded-lg" /> : (
+              <div className="text-center text-zinc-500"><Video className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Video unavailable</p></div>
+            )
+          ) : asset.asset_type === 'audio' ? (
+            streamUrl ? (
+              <div className="w-full max-w-lg space-y-4">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-20 w-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center"><Music className="h-8 w-8 text-zinc-500" /></div>
+                  <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
                 </div>
-                <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
+                <audio src={streamUrl} controls autoPlay className="w-full" />
               </div>
-              <audio src={streamUrl} controls autoPlay className="w-full" />
-            </div>
+            ) : <div className="text-center text-zinc-500"><Music className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Audio unavailable</p></div>
           ) : (
-            <div className="text-center text-zinc-500">
-              <Music className="h-12 w-12 mx-auto mb-2" />
-              <p className="text-sm">Audio unavailable</p>
+            (streamUrl || asset.thumbnail_url) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={streamUrl || asset.thumbnail_url!} alt={asset.name} className="max-h-full max-w-full object-contain rounded-lg" />
+            ) : <div className="text-center text-zinc-500"><ImageIcon className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Image unavailable</p></div>
+          )}
+        </div>
+
+        {/* Comment sidebar */}
+        {sidebarOpen && (
+          <div className="w-[320px] shrink-0 border-l border-white/[0.06] bg-[#111113] flex flex-col overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
+              <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Comments ({comments.length})</h4>
             </div>
-          )
-        ) : (
-          /* Image */
-          streamUrl || asset.thumbnail_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={streamUrl || asset.thumbnail_url!}
-              alt={asset.name}
-              className="max-h-full max-w-full object-contain rounded-lg"
-            />
-          ) : (
-            <div className="text-center text-zinc-500">
-              <ImageIcon className="h-12 w-12 mx-auto mb-2" />
-              <p className="text-sm">Image unavailable</p>
+
+            <div className="flex-1 overflow-y-auto">
+              {loadingComments ? (
+                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-zinc-500" /></div>
+              ) : comments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                  <MessageSquare className="h-8 w-8 text-zinc-700 mb-2" />
+                  <p className="text-xs text-zinc-500">{canComment ? 'Be the first to comment' : 'No comments yet'}</p>
+                </div>
+              ) : (
+                <div className="px-3 py-2 space-y-2">
+                  {comments.map((c) => (
+                    <div key={c.id} className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-[10px] font-medium text-purple-400">
+                          {(c.guest_name || 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-xs font-medium text-zinc-200">{c.guest_name || c.author_name || 'User'}</span>
+                        {c.timecode_start != null && (
+                          <span className="text-[10px] text-zinc-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">
+                            {Math.floor(c.timecode_start / 60)}:{String(Math.floor(c.timecode_start % 60)).padStart(2, '0')}
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-zinc-600">{formatShortDate(c.created_at)}</span>
+                      </div>
+                      <p className="text-sm text-zinc-300 leading-relaxed">{c.body}</p>
+                      {/* Nested replies */}
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="mt-2 pl-4 border-l border-white/10 space-y-2">
+                          {c.replies.map((r: any) => (
+                            <div key={r.id} className="pt-1">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-[10px] font-medium text-zinc-300">{r.guest_name || r.author_name || 'User'}</span>
+                                <span className="text-[10px] text-zinc-600">{formatShortDate(r.created_at)}</span>
+                              </div>
+                              <p className="text-xs text-zinc-400">{r.body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )
+          </div>
         )}
       </div>
     </div>
@@ -735,6 +794,7 @@ export function FolderShareViewer({
       <AssetViewer
         token={token}
         asset={viewingAsset}
+        permission={permission}
         allowDownload={allowDownload}
         onBack={() => setViewingAsset(null)}
       />
