@@ -198,7 +198,9 @@ def apply_watermark_to_asset(
         watermark_text = wm.custom_text or ""
 
     from ..tasks.watermark_tasks import apply_watermark
-    apply_watermark.delay(
+    from ..tasks.celery_app import send_task_safe
+    send_task_safe(
+        apply_watermark,
         str(asset_id),
         watermark_text,
         wm.position,

@@ -13,6 +13,7 @@ from ..models.project import ProjectRole
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..services.permissions import require_asset_access, require_project_role
 from ..tasks.email_tasks import send_approval_email
+from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(tags=["approvals"])
@@ -82,7 +83,8 @@ def approve_asset(
         creator = db.query(User).filter(User.id == asset.created_by).first()
         if creator:
             asset_link = f"{settings.frontend_url}/assets/{asset_id}"
-            send_approval_email.delay(
+            send_task_safe(
+                send_approval_email,
                 to_email=creator.email,
                 reviewer_name=current_user.name,
                 asset_name=asset.name,
@@ -114,7 +116,8 @@ def reject_asset(
         creator = db.query(User).filter(User.id == asset.created_by).first()
         if creator:
             asset_link = f"{settings.frontend_url}/assets/{asset_id}"
-            send_approval_email.delay(
+            send_task_safe(
+                send_approval_email,
                 to_email=creator.email,
                 reviewer_name=current_user.name,
                 asset_name=asset.name,

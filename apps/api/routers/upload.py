@@ -145,7 +145,8 @@ def complete_upload(
 def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
     """Dispatch Celery task to process the uploaded asset."""
     from ..tasks.transcode_tasks import process_asset
-    process_asset.delay(str(asset_id), str(version_id))
+    from ..tasks.celery_app import send_task_safe
+    send_task_safe(process_asset, str(asset_id), str(version_id))
 
 
 @router.post("/abort", status_code=status.HTTP_204_NO_CONTENT)

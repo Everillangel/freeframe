@@ -9,6 +9,7 @@ from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services.auth_service import hash_password, get_user_by_email
 from ..tasks.email_tasks import send_invite_email
+from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -72,7 +73,7 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
     
     # Send invite email
     invite_url = f"{settings.frontend_url}/invite/{invite_token}"
-    send_invite_email.delay(user.email, current_user.name or "Admin", "FreeFrame", invite_url)
+    send_task_safe(send_invite_email, user.email, current_user.name or "Admin", "FreeFrame", invite_url)
     
     return user
 
