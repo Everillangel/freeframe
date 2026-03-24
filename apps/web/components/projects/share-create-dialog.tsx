@@ -803,42 +803,49 @@ export function ShareCreateDialog({
     setCreating(true)
     setError(null)
 
-    try {
-      const items = Array.from(selectedItems.values())
-      let lastShareLink: ShareLink | null = null
-      let lastItem: SelectedItem | null = null
+    const items = Array.from(selectedItems.values())
+    const errors: string[] = []
+    let lastShareLink: ShareLink | null = null
+    let lastItem: SelectedItem | null = null
 
-      // Create a share link for each selected item
-      for (const item of items) {
+    // Create a share link for each selected item independently
+    for (const item of items) {
+      try {
+        let shareLink: ShareLink
         if (item.type === 'folder') {
-          lastShareLink = await api.post<ShareLink>(`/folders/${item.id}/share`, {
+          shareLink = await api.post<ShareLink>(`/folders/${item.id}/share`, {
             title: item.name,
           })
         } else {
-          lastShareLink = await api.post<ShareLink>(`/assets/${item.id}/share`, {
+          shareLink = await api.post<ShareLink>(`/assets/${item.id}/share`, {
             title: item.name,
           })
         }
+        lastShareLink = shareLink
         lastItem = item
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        errors.push(`Failed to share "${item.name}": ${msg}`)
       }
-
-      if (lastShareLink && lastItem) {
-        setCreatedResult({
-          token: lastShareLink.token,
-          title: lastShareLink.title || lastItem.name,
-          itemType: lastItem.type,
-          thumbnailUrl: lastItem.type === 'asset' ? lastItem.thumbnailUrl : null,
-          assetId: lastShareLink.asset_id,
-          folderId: lastShareLink.folder_id,
-        })
-      }
-
-      onShareCreated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create share link')
-    } finally {
-      setCreating(false)
     }
+
+    if (lastShareLink && lastItem) {
+      setCreatedResult({
+        token: lastShareLink.token,
+        title: lastShareLink.title || lastItem.name,
+        itemType: lastItem.type,
+        thumbnailUrl: lastItem.type === 'asset' ? lastItem.thumbnailUrl : null,
+        assetId: lastShareLink.asset_id,
+        folderId: lastShareLink.folder_id,
+      })
+      onShareCreated()
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join('\n'))
+    }
+
+    setCreating(false)
   }
 
   function handleDone() {
