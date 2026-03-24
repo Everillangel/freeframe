@@ -511,6 +511,32 @@ export default function ProjectDetailPage() {
                   mutateShareLinks()
                 } catch {}
               }}
+              onBulkDelete={async (assetIds, folderIds) => {
+                const total = assetIds.length + folderIds.length
+                if (!confirm(`Delete ${total} item${total !== 1 ? 's' : ''}?`)) return
+                for (const id of folderIds) await deleteFolder(id)
+                for (const id of assetIds) await api.delete(`/assets/${id}`)
+                mutateAssets()
+                mutateSubfolders()
+                mutateTree()
+              }}
+              onBulkDownload={async (assetIds) => {
+                for (const id of assetIds) {
+                  const asset = assets?.find(a => a.id === id)
+                  if (!asset) continue
+                  try {
+                    const data = await api.get<{ url: string }>(`/assets/${id}/stream`)
+                    if (data?.url) {
+                      const a = document.createElement('a')
+                      a.href = data.url
+                      a.download = asset.name
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                    }
+                  } catch {}
+                }
+              }}
               actions={
                 <>
                   <Button variant="secondary" size="sm" onClick={() => setMembersDialogOpen(true)}>
