@@ -280,8 +280,14 @@ export default function ProjectDetailPage() {
             </span>
             <div className="flex items-center gap-1">
               <button
-                onClick={(e) => { e.stopPropagation() }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowShareLinks(false)
+                  setShowTrash(false)
+                  setShareMode(true)
+                }}
                 className="text-text-tertiary hover:text-text-primary transition-colors"
+                title="Create share link"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
