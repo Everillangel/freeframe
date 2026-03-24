@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
-from sqlalchemy import String, Enum, DateTime, func
+from sqlalchemy import String, Enum, DateTime, JSON, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 try:
@@ -28,6 +28,7 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(default=False)
     invite_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     invite_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    preferences: Mapped[dict] = mapped_column(JSON, nullable=False, server_default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

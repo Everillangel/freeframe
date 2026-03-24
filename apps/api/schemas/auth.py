@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     email_verified: bool = False
     is_superadmin: bool = False
     invite_token: str | None = None
+    preferences: dict = {}
 
     model_config = {"from_attributes": True}
 

@@ -227,3 +227,21 @@ def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/me/preferences", response_model=UserResponse)
+def update_preferences(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update user preferences (theme, etc). Merges with existing preferences."""
+    current_prefs = current_user.preferences or {}
+    current_prefs.update(body)
+    current_user.preferences = current_prefs
+    # Force SQLAlchemy to detect the JSON change
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(current_user, "preferences")
+    db.commit()
+    db.refresh(current_user)
+    return current_user

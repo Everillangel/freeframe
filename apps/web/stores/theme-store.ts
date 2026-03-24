@@ -6,6 +6,7 @@ export type Theme = 'dark' | 'light' | 'system'
 interface ThemeState {
   theme: Theme
   setTheme: (theme: Theme) => void
+  syncFromServer: (preferences: Record<string, unknown>) => void
 }
 
 function getResolvedTheme(theme: Theme): 'dark' | 'light' {
@@ -24,6 +25,24 @@ function applyTheme(theme: Theme) {
   document.documentElement.setAttribute('data-theme', resolved)
 }
 
+async function saveToServer(theme: Theme) {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('ff_access_token') : null
+    if (!token) return
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    await fetch(`${API_URL}/auth/me/preferences`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ theme }),
+    })
+  } catch {
+    // Silent fail — localStorage still has the value
+  }
+}
+
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
@@ -31,6 +50,14 @@ export const useThemeStore = create<ThemeState>()(
       setTheme: (theme) => {
         applyTheme(theme)
         set({ theme })
+        saveToServer(theme)
+      },
+      syncFromServer: (preferences) => {
+        const serverTheme = preferences?.theme as Theme | undefined
+        if (serverTheme && ['dark', 'light', 'system'].includes(serverTheme)) {
+          applyTheme(serverTheme)
+          set({ theme: serverTheme })
+        }
       },
     }),
     {

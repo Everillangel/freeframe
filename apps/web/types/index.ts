@@ -52,6 +52,7 @@ export interface User {
   is_superadmin: boolean;
   email_verified: boolean;
   invite_token?: string | null;
+  preferences: Record<string, unknown>;
   created_at: string;
   deleted_at: string | null;
 }
