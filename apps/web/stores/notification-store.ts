@@ -29,7 +29,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
   },
 
   markAsRead: async (id: string) => {
-    await api.patch(`/notifications/${id}/read`, {})
+    await api.post(`/me/notifications/${id}/read`)
     set((state) => {
       const notifications = state.notifications.map((n) =>
         n.id === id ? { ...n, read: true } : n
@@ -40,7 +40,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
   },
 
   markAllRead: async () => {
-    await api.patch('/notifications/read-all', {})
+    await api.post('/me/notifications/read-all')
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, read: true })),
       unreadCount: 0,

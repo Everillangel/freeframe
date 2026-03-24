@@ -233,6 +233,15 @@ def create_comment(
 
     _create_mentions(db, comment, asset, body.body, current_user.name)
 
+    # Notify asset creator about the comment (unless they're the commenter)
+    if asset.created_by and asset.created_by != current_user.id:
+        db.add(Notification(
+            user_id=asset.created_by,
+            type=NotificationType.comment,
+            asset_id=asset_id,
+            comment_id=comment.id,
+        ))
+
     # Activity log
     activity = ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.commented)
     db.add(activity)
@@ -267,6 +276,16 @@ def reply_to_comment(
     db.add(reply)
     db.flush()
     _create_mentions(db, reply, asset, body.body, current_user.name)
+
+    # Notify parent comment author about the reply (unless they're the replier)
+    if parent.author_id and parent.author_id != current_user.id:
+        db.add(Notification(
+            user_id=parent.author_id,
+            type=NotificationType.comment,
+            asset_id=asset_id,
+            comment_id=reply.id,
+        ))
+
     db.commit()
     db.refresh(reply)
     return _build_comment_response(reply, db, current_user_id=current_user.id)
