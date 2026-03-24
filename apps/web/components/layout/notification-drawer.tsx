@@ -29,13 +29,13 @@ function getNotificationText(n: Notification): { title: string; subtitle: string
   const asset = n.asset_name || 'an asset'
   switch (n.type) {
     case 'mention':
-      return { title: `${actor} mentioned you`, subtitle: n.comment_preview || `on ${asset}` }
+      return { title: `${actor} mentioned you on ${asset}`, subtitle: n.comment_preview || null }
     case 'comment':
-      return { title: `${actor} commented`, subtitle: n.comment_preview || `on ${asset}` }
+      return { title: `${actor} commented on ${asset}`, subtitle: n.comment_preview || null }
     case 'assignment':
-      return { title: `${actor} assigned you`, subtitle: `to ${asset}` }
+      return { title: `${actor} assigned you to ${asset}`, subtitle: null }
     case 'approval':
-      return { title: `${actor} updated approval`, subtitle: `on ${asset}` }
+      return { title: `${actor} updated approval on ${asset}`, subtitle: null }
     case 'due_soon':
       return { title: `${asset} is due soon`, subtitle: null }
     default:
