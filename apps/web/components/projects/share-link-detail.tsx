@@ -415,20 +415,57 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
             <Section title="Link Visibility" icon={<Globe className="h-3.5 w-3.5" />}>
               <ToggleRow
                 label="Enabled"
-                description="Anyone with the link can access"
+                description={shareLink.visibility === 'secure' ? 'Only invited users can access' : 'Anyone with the link can access'}
                 checked={shareLink.is_enabled}
                 onCheckedChange={(checked) => immediateUpdate({ is_enabled: checked })}
               />
+              {/* URL + Visibility dropdown */}
               <div className="flex items-center gap-2 rounded-md bg-white/[0.04] px-3 py-2 mt-2">
                 <span className="flex-1 truncate font-mono text-xs text-zinc-400">
                   {shareUrl}
                 </span>
                 <CopyButton text={shareUrl} />
+                <select
+                  value={shareLink.visibility || 'public'}
+                  onChange={(e) => immediateUpdate({ visibility: e.target.value })}
+                  className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-2xs font-medium text-zinc-300 outline-none cursor-pointer [color-scheme:dark]"
+                >
+                  <option value="public">🌐 Public</option>
+                  <option value="secure">🔒 Secure</option>
+                </select>
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-flex items-center rounded-full bg-green-500/10 px-2 py-0.5 text-2xs font-medium text-green-400">
-                  Public
-                </span>
+              {shareLink.visibility === 'secure' && (
+                <p className="text-2xs text-zinc-500 mt-1">
+                  Only project members and people you invite can view this link.
+                </p>
+              )}
+              {/* Send to name or email */}
+              <div className="mt-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    placeholder="Send to name or email"
+                    className="flex-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        const input = e.currentTarget
+                        const email = input.value.trim()
+                        if (!email) return
+                        try {
+                          if (shareLink.folder_id) {
+                            await api.post(`/folders/${shareLink.folder_id}/share/user`, { email, permission: shareLink.permission || 'view' })
+                          } else if (shareLink.asset_id) {
+                            await api.post(`/assets/${shareLink.asset_id}/share/user`, { permission: shareLink.permission || 'view', user_id: null, email })
+                          }
+                          input.value = ''
+                        } catch {
+                          // Could show error toast
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <p className="text-2xs text-zinc-600 mt-1">Press Enter to send invite</p>
               </div>
             </Section>
 

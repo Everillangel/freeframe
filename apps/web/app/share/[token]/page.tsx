@@ -38,7 +38,9 @@ interface ShareValidateResponse {
   show_versions?: boolean
   show_watermark?: boolean
   appearance?: ShareLinkAppearance | null
+  visibility?: string
   requires_password?: boolean
+  requires_auth?: boolean
   expired?: boolean
   branding?: ProjectBranding | null
   error?: string
@@ -851,6 +853,7 @@ export default function SharePage({
     | { stage: 'password_required'; error?: string; loading?: boolean }
     | { stage: 'expired' }
     | { stage: 'invalid' }
+    | { stage: 'auth_required'; title?: string }
     | {
         stage: 'ready'
         asset: Asset & { thumbnail_url?: string; stream_url?: string }
@@ -881,6 +884,10 @@ export default function SharePage({
     try {
       const isFirstLoad = !password
       const data = await fetchShareInfo(token, password, isFirstLoad)
+      if (data.requires_auth) {
+        setState({ stage: 'auth_required', title: data.title })
+        return
+      }
       if (data.requires_password) {
         setState({ stage: 'password_required', error: data.error || undefined })
         return
@@ -964,6 +971,30 @@ export default function SharePage({
 
   if (state.stage === 'invalid') {
     return <ErrorState />
+  }
+
+  if (state.stage === 'auth_required') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-primary p-4">
+        <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-6 shadow-xl text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-muted">
+            <Lock className="h-6 w-6 text-accent" />
+          </div>
+          <h1 className="text-lg font-semibold text-text-primary">
+            {state.title || 'Secure Share Link'}
+          </h1>
+          <p className="mt-2 text-sm text-text-tertiary">
+            This link is private. Please sign in to view the shared content.
+          </p>
+          <a
+            href="/login"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+          >
+            Sign in to continue
+          </a>
+        </div>
+      </div>
+    )
   }
 
   if (state.stage === 'folder_ready' && !viewingAssetInFolder) {

@@ -15,6 +15,10 @@ class SharePermission(str, PyEnum):
     comment = "comment"
     approve = "approve"
 
+class ShareVisibility(str, PyEnum):
+    public = "public"
+    secure = "secure"
+
 class ShareLink(Base):
     __tablename__ = "share_links"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -29,6 +33,7 @@ class ShareLink(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     permission: Mapped[SharePermission] = mapped_column(Enum(SharePermission), default=SharePermission.view)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, server_default="public")
     allow_download: Mapped[bool] = mapped_column(Boolean, default=False)
     show_versions: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     show_watermark: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

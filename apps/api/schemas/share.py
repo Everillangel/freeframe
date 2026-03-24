@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 from typing import Optional, Literal
-from ..models.share import SharePermission
+from ..models.share import SharePermission, ShareVisibility
 
 
 class ShareLinkAppearance(BaseModel):
@@ -19,6 +19,7 @@ class ShareLinkAppearance(BaseModel):
 
 class ShareLinkCreate(BaseModel):
     permission: SharePermission = SharePermission.view
+    visibility: str = "public"
     expires_at: Optional[datetime] = None
     password: Optional[str] = None
     allow_download: bool = False
@@ -38,6 +39,7 @@ class ShareLinkResponse(BaseModel):
     description: Optional[str] = None
     is_enabled: bool
     permission: SharePermission
+    visibility: str = "public"
     allow_download: bool
     show_versions: bool
     show_watermark: bool
@@ -60,7 +62,9 @@ class ShareLinkValidateResponse(BaseModel):
     show_versions: bool = True
     show_watermark: bool = False
     appearance: Optional[dict] = None
+    visibility: str = "public"
     requires_password: bool
+    requires_auth: bool = False  # True when visibility=secure and user not authenticated
     asset: Optional[dict] = None  # Full asset details for asset shares
     branding: Optional[dict] = None  # Project branding info
 
@@ -69,6 +73,7 @@ class ShareLinkUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     permission: Optional[SharePermission] = None
+    visibility: Optional[str] = None
     is_enabled: Optional[bool] = None
     show_versions: Optional[bool] = None
     show_watermark: Optional[bool] = None

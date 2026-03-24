@@ -10,7 +10,7 @@ from sqlalchemy import func as sa_func, case
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..middleware.auth import get_current_user
+from ..middleware.auth import get_current_user, get_optional_user
 from ..models.user import User
 from ..models.asset import Asset
 from ..models.folder import Folder
@@ -185,9 +185,21 @@ def validate_share_link_endpoint(
     password: Optional[str] = None,
     log_open: bool = False,
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Public endpoint — no auth required. Validates token and optional password."""
+    """Public endpoint — optional auth. For secure links, requires authenticated user."""
     link = validate_share_link(db, token)
+
+    # Check secure visibility — requires authenticated user
+    if link.visibility == "secure":
+        if not current_user:
+            return ShareLinkValidateResponse(
+                requires_auth=True,
+                requires_password=False,
+                title=link.title,
+                permission=link.permission,
+                visibility=link.visibility,
+            )
 
     # Resolve folder name if this is a folder share
     folder_name = None
@@ -259,6 +271,7 @@ def validate_share_link_endpoint(
         title=link.title,
         description=link.description,
         permission=link.permission,
+        visibility=link.visibility,
         allow_download=link.allow_download,
         show_versions=link.show_versions,
         show_watermark=link.show_watermark,

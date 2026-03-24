@@ -267,6 +267,7 @@ export interface ShareLink {
   permission: SharePermission;
   allow_download: boolean;
   is_enabled: boolean;
+  visibility: "public" | "secure";
   show_versions: boolean;
   show_watermark: boolean;
   appearance: ShareLinkAppearance | null;
