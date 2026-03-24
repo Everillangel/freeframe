@@ -27,7 +27,7 @@ import * as Switch from '@radix-ui/react-switch'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
-import type { AssetResponse, Folder, ShareLink } from '@/types'
+import type { AssetResponse, Folder, ShareLink, ShareLinkAppearance } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -265,11 +265,28 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
   const [savingTitle, setSavingTitle] = React.useState(false)
   const [emailInput, setEmailInput] = React.useState('')
   const [showSettings, setShowSettings] = React.useState(false)
-  const [allowComments, setAllowComments] = React.useState(true)
+  const [allowComments, setAllowComments] = React.useState(false)
   const [allowDownloads, setAllowDownloads] = React.useState(false)
   const [passphrase, setPassphrase] = React.useState(false)
+  const [passphraseValue, setPassphraseValue] = React.useState('')
+  const [showPassphraseInput, setShowPassphraseInput] = React.useState(false)
   const [watermark, setWatermark] = React.useState(false)
+  const [expiresAt, setExpiresAt] = React.useState<string>('')
+  const [layout, setLayout] = React.useState<'grid' | 'list'>('grid')
   const titleInputRef = React.useRef<HTMLInputElement>(null)
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch share link details to initialize settings
+  React.useEffect(() => {
+    api.get<ShareLink>(`/share/${result.token}/details`).then((data) => {
+      setAllowComments(data.permission === 'comment' || data.permission === 'approve')
+      setAllowDownloads(data.allow_download)
+      setPassphrase(data.has_password ?? false)
+      setWatermark(data.show_watermark)
+      setExpiresAt(data.expires_at ? new Date(data.expires_at).toISOString().split('T')[0] : '')
+      setLayout((data.appearance as ShareLinkAppearance | null)?.layout || 'grid')
+    }).catch(() => {})
+  }, [result.token])
 
   const shareUrl =
     typeof window !== 'undefined'
@@ -293,26 +310,17 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
     }
   }
 
-  async function handleToggle(field: string, value: boolean) {
+  async function patchLink(updates: Record<string, unknown>) {
     try {
-      const updates: Record<string, unknown> = {}
-      if (field === 'allowComments') {
-        setAllowComments(value)
-        updates.permission = value ? 'comment' : 'view'
-      } else if (field === 'allowDownloads') {
-        setAllowDownloads(value)
-        updates.allow_download = value
-      } else if (field === 'passphrase') {
-        setPassphrase(value)
-        if (!value) updates.password = null
-      } else if (field === 'watermark') {
-        setWatermark(value)
-        updates.show_watermark = value
-      }
       await api.patch(`/share/${result.token}`, updates)
     } catch {
-      // revert on error
+      // silent fail
     }
+  }
+
+  function debouncedPatch(updates: Record<string, unknown>) {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => patchLink(updates), 400)
   }
 
   React.useEffect(() => {
@@ -324,7 +332,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
 
   // Compute settings summary
   const settingsSummary = [
-    allowComments ? 'view' : null,
+    'view',
     allowDownloads ? 'download' : null,
     allowComments ? 'comment' : null,
   ].filter(Boolean)
@@ -449,8 +457,13 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                   <span className="text-sm text-text-primary">Layout</span>
                 </div>
                 <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-tertiary p-0.5">
-                  <button className="rounded-md bg-accent px-3 py-1 text-2xs font-medium text-white">Grid</button>
-                  <button className="rounded-md px-3 py-1 text-2xs font-medium text-text-tertiary hover:text-text-primary">List</button>
+                  {(['grid', 'list'] as const).map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => { setLayout(l); patchLink({ appearance: { layout: l, theme: 'dark', accent_color: null, open_in_viewer: true, sort_by: 'created_at' } }) }}
+                      className={cn('rounded-md px-3 py-1 text-2xs font-medium capitalize', layout === l ? 'bg-accent text-white' : 'text-text-tertiary hover:text-text-primary')}
+                    >{l}</button>
+                  ))}
                 </div>
               </div>
 
@@ -462,7 +475,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                 </div>
                 <Switch.Root
                   checked={allowComments}
-                  onCheckedChange={(v) => handleToggle('allowComments', v)}
+                  onCheckedChange={(v) => { setAllowComments(v); patchLink({ permission: v ? 'comment' : 'view' }) }}
                   className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
                 >
                   <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
@@ -477,7 +490,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                 </div>
                 <Switch.Root
                   checked={allowDownloads}
-                  onCheckedChange={(v) => handleToggle('allowDownloads', v)}
+                  onCheckedChange={(v) => { setAllowDownloads(v); patchLink({ allow_download: v }) }}
                   className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
                 >
                   <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
@@ -485,18 +498,33 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
               </div>
 
               {/* Passphrase */}
-              <div className="flex items-center justify-between py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <Key className="h-4 w-4 text-text-tertiary" />
-                  <span className="text-sm text-text-primary">Passphrase</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <Key className="h-4 w-4 text-text-tertiary" />
+                    <span className="text-sm text-text-primary">Passphrase</span>
+                  </div>
+                  <Switch.Root
+                    checked={passphrase}
+                    onCheckedChange={(v) => {
+                      setPassphrase(v)
+                      setShowPassphraseInput(v)
+                      if (!v) { setPassphraseValue(''); patchLink({ password: null }) }
+                    }}
+                    className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+                  >
+                    <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+                  </Switch.Root>
                 </div>
-                <Switch.Root
-                  checked={passphrase}
-                  onCheckedChange={(v) => handleToggle('passphrase', v)}
-                  className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
-                >
-                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
-                </Switch.Root>
+                {passphrase && (
+                  <input
+                    type="text"
+                    value={passphraseValue}
+                    onChange={(e) => { setPassphraseValue(e.target.value); debouncedPatch({ password: e.target.value || null }) }}
+                    placeholder={passphrase && !passphraseValue ? '••••••••' : 'Enter passphrase'}
+                    className="w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+                  />
+                )}
               </div>
 
               {/* Expiration date */}
@@ -505,10 +533,19 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                   <Clock className="h-4 w-4 text-text-tertiary" />
                   <span className="text-sm text-text-primary">Expiration date</span>
                 </div>
-                <button className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors">
-                  Not set
-                  <ChevronRight className="h-3 w-3" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => { setExpiresAt(e.target.value); patchLink({ expires_at: e.target.value ? new Date(e.target.value).toISOString() : null }) }}
+                    className="w-[120px] rounded border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary outline-none focus:border-accent [color-scheme:dark]"
+                  />
+                  {expiresAt && (
+                    <button onClick={() => { setExpiresAt(''); patchLink({ expires_at: null }) }} className="text-text-tertiary hover:text-text-primary">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Watermark */}
@@ -519,7 +556,7 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                 </div>
                 <Switch.Root
                   checked={watermark}
-                  onCheckedChange={(v) => handleToggle('watermark', v)}
+                  onCheckedChange={(v) => { setWatermark(v); patchLink({ show_watermark: v }) }}
                   className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
                 >
                   <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
