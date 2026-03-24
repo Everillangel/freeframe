@@ -129,7 +129,7 @@ function SubfolderCard({ subfolder, isDark, accentColor, onClick }: SubfolderCar
     >
       <div
         className={cn(
-          'aspect-[4/3] w-full flex items-center justify-center',
+          'aspect-[16/10] w-full flex items-center justify-center',
           isDark ? 'bg-white/[0.02]' : 'bg-zinc-100/50',
         )}
       >
@@ -235,8 +235,8 @@ function AssetGridCard({
         )}
       </div>
 
-      {/* Info */}
-      <div className="px-3 py-2 flex flex-col gap-1">
+      {/* Info — fixed height for uniform cards */}
+      <div className="px-3 py-2.5 flex flex-col gap-1 min-h-[60px]">
         <p
           className={cn(
             'text-sm font-medium line-clamp-1',
