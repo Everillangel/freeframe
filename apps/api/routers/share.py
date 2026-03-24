@@ -37,6 +37,7 @@ from ..services.s3_service import generate_presigned_get_url
 from ..services.crypto_service import encrypt_password, decrypt_password
 from ..models.project import Project, ProjectRole
 from ..tasks.email_tasks import send_share_email
+from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(tags=["sharing"])
@@ -500,7 +501,7 @@ def share_project_with_user(
             project_link = f"{settings.frontend_url}/share/{body.share_token}"
         else:
             project_link = f"{settings.frontend_url}/projects/{project_id}"
-        send_share_email.delay(
+        send_task_safe(send_share_email,
             to_email=shared_user.email,
             sharer_name=current_user.name or current_user.email,
             asset_name=project.name,
@@ -590,7 +591,7 @@ def share_folder_with_user(
             folder_link = f"{settings.frontend_url}/share/{body.share_token}"
         else:
             folder_link = f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
-        send_share_email.delay(
+        send_task_safe(send_share_email,
             to_email=shared_user.email,
             sharer_name=current_user.name or current_user.email,
             asset_name=folder.name,
@@ -755,7 +756,7 @@ def share_with_user(
             asset_link = f"{settings.frontend_url}/share/{body.share_token}"
         else:
             asset_link = f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset_id}"
-        send_share_email.delay(
+        send_task_safe(send_share_email,
             to_email=shared_user.email,
             sharer_name=current_user.name or current_user.email,
             asset_name=asset.name,

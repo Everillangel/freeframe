@@ -74,4 +74,4 @@ def send_task_safe(task, *args, **kwargs):
     except Exception:
         # Force fresh connection by acquiring a new producer
         with celery_app.producer_or_acquire() as producer:
-            return task.apply_async(args=args, producer=producer)
+            return task.apply_async(args=args, kwargs=kwargs, producer=producer)
