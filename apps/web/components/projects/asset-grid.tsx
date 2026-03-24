@@ -254,39 +254,40 @@ export function AssetGrid({
             </span>
           </div>
           <div className={cn('grid gap-3', gridColsMap[cardSize])}>
-            {folders!.map((folder) => (
-              <div
-                key={folder.id}
-                className={cn(
-                  'relative',
-                  shareMode && selectedFolderIds.has(folder.id) && 'ring-2 ring-accent rounded-lg',
-                )}
-                onClick={shareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
-              >
-                {/* Selection checkbox overlay */}
-                {(shareMode || selectedFolderIds.has(folder.id)) && (
+            {folders!.map((folder) => {
+              const isFolderSelected = selectedFolderIds.has(folder.id)
+              return (
+                <div
+                  key={folder.id}
+                  className={cn(
+                    'group/folder relative',
+                    isFolderSelected && 'ring-2 ring-accent rounded-lg',
+                  )}
+                  onClick={shareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
+                >
+                  {/* Selection checkbox overlay — always visible on hover */}
                   <button
                     className={cn(
-                      'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-colors',
-                      selectedFolderIds.has(folder.id)
-                        ? 'bg-accent border-accent text-white'
-                        : 'bg-black/40 border-white/30 text-transparent hover:border-white/60',
+                      'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-all',
+                      isFolderSelected
+                        ? 'bg-accent border-accent text-white opacity-100'
+                        : 'bg-black/40 border-white/30 text-transparent opacity-0 group-hover/folder:opacity-100',
                     )}
                     onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                   >
-                    {selectedFolderIds.has(folder.id) && <Check className="h-3 w-3" />}
+                    {isFolderSelected && <Check className="h-3 w-3" />}
                   </button>
-                )}
-                <FolderCard
-                  folder={folder}
-                  onOpen={shareMode ? () => {} : onFolderOpen!}
-                  onRename={shareMode ? undefined : onFolderRename}
-                  onDelete={shareMode ? undefined : onFolderDelete}
-                  onShare={shareMode ? undefined : onFolderShare}
-                  onDropItems={shareMode ? undefined : onDropToFolder}
-                />
-              </div>
-            ))}
+                  <FolderCard
+                    folder={folder}
+                    onOpen={shareMode ? () => {} : onFolderOpen!}
+                    onRename={shareMode ? undefined : onFolderRename}
+                    onDelete={shareMode ? undefined : onFolderDelete}
+                    onShare={shareMode ? undefined : onFolderShare}
+                    onDropItems={shareMode ? undefined : onDropToFolder}
+                  />
+                </div>
+              )
+            })}
           </div>
           {filtered.length > 0 && (
             <div className="flex items-center gap-2 mt-2">
