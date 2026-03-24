@@ -173,12 +173,6 @@ function SubfolderCard({ subfolder, onClick }: SubfolderCardProps) {
             ))}
           </div>
         )}
-        {/* Download icon */}
-        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center justify-center h-6 w-6 rounded-md bg-black/60 backdrop-blur-sm">
-            <Download className="h-3 w-3 text-white" />
-          </div>
-        </div>
       </div>
 
       {/* Info */}
@@ -458,13 +452,50 @@ interface AssetViewerProps {
   onBack: () => void
 }
 
+function HlsVideo({ src, className }: { src: string; className?: string }) {
+  const videoRef = React.useRef<HTMLVideoElement>(null)
+
+  React.useEffect(() => {
+    const video = videoRef.current
+    if (!video || !src) return
+
+    if (src.includes('.m3u8')) {
+      // HLS stream — use HLS.js
+      import('hls.js').then(({ default: Hls }) => {
+        if (Hls.isSupported()) {
+          const hls = new Hls()
+          hls.loadSource(src)
+          hls.attachMedia(video)
+          hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}))
+          return () => hls.destroy()
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = src
+          video.play().catch(() => {})
+        }
+      })
+    } else {
+      video.src = src
+      video.play().catch(() => {})
+    }
+  }, [src])
+
+  return <video ref={videoRef} controls className={className} />
+}
+
 function AssetViewer({ token, asset, allowDownload, onBack }: AssetViewerProps) {
   const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     setLoading(true)
-    fetch(`${API_URL}/share/${token}/stream/${asset.id}`)
+    // Include auth token if logged in
+    const headers: Record<string, string> = {}
+    try {
+      const accessToken = localStorage.getItem('ff_access_token')
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+    } catch {}
+
+    fetch(`${API_URL}/share/${token}/stream/${asset.id}`, { headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.url) setStreamUrl(data.url)
@@ -502,9 +533,7 @@ function AssetViewer({ token, asset, allowDownload, onBack }: AssetViewerProps) 
           <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
         ) : asset.asset_type === 'video' ? (
           streamUrl ? (
-            <video src={streamUrl} controls autoPlay className="max-h-full max-w-full rounded-lg">
-              Your browser does not support video playback.
-            </video>
+            <HlsVideo src={streamUrl} className="max-h-full max-w-full rounded-lg" />
           ) : (
             <div className="text-center text-zinc-500">
               <Video className="h-12 w-12 mx-auto mb-2" />

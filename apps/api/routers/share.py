@@ -1106,6 +1106,10 @@ def get_share_stream_url(
     elif link.asset_id:
         if asset.id != link.asset_id:
             raise HTTPException(status_code=403, detail="Asset does not match share link")
+    elif link.project_id:
+        # Project root share: asset must belong to this project
+        if asset.project_id != link.project_id:
+            raise HTTPException(status_code=403, detail="Asset is not within the shared project")
     else:
         raise HTTPException(status_code=400, detail="Invalid share link")
 
