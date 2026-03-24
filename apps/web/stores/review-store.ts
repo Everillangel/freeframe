@@ -8,7 +8,7 @@ interface ReviewState {
   currentAsset: Asset | null
   currentVersion: AssetVersion | null
   playheadTime: number
-  seekTarget: { time: number; id: number } | null
+  seekTarget: { time: number; id: number; pause?: boolean } | null
   focusedCommentId: string | null
   pendingAnnotation: Record<string, unknown> | null
   activeAnnotation: Record<string, unknown> | null
@@ -20,7 +20,7 @@ interface ReviewState {
   setCurrentAsset: (asset: Asset) => void
   setCurrentVersion: (version: AssetVersion) => void
   setPlayheadTime: (time: number) => void
-  seekTo: (time: number) => void
+  seekTo: (time: number, pause?: boolean) => void
   setFocusedCommentId: (id: string | null) => void
   setPendingAnnotation: (data: Record<string, unknown> | null) => void
   setActiveAnnotation: (data: Record<string, unknown> | null) => void
@@ -62,8 +62,8 @@ export const useReviewStore = create<ReviewState>()((set) => ({
     set({ playheadTime: time })
   },
 
-  seekTo: (time: number) => {
-    set({ seekTarget: { time, id: Date.now() }, playheadTime: time })
+  seekTo: (time: number, pause?: boolean) => {
+    set({ seekTarget: { time, id: Date.now(), pause }, playheadTime: time })
   },
 
   setFocusedCommentId: (id: string | null) => {

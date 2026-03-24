@@ -353,7 +353,7 @@ function CommentItem({
       onClick={() => {
         setFocusedCommentId(comment.id)
         if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
-          seekTo(comment.timecode_start)
+          seekTo(comment.timecode_start, true)
         }
         setActiveAnnotation(comment.annotation ? comment.annotation.drawing_data : null)
       }}
@@ -398,7 +398,7 @@ function CommentItem({
             <button
               className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
               onClick={() => {
-                seekTo(comment.timecode_start!)
+                seekTo(comment.timecode_start!, true)
                 setFocusedCommentId(comment.id)
                 if (comment.annotation) {
                   setActiveAnnotation(comment.annotation.drawing_data)
@@ -420,7 +420,7 @@ function CommentItem({
                 setActiveAnnotation(comment.annotation!.drawing_data)
                 setFocusedCommentId(comment.id)
                 if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
-                  seekTo(comment.timecode_start)
+                  seekTo(comment.timecode_start, true)
                 }
               }}
               title="Show annotation"

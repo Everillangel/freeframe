@@ -35,7 +35,7 @@ import type { Project, AssetResponse } from '@/types'
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
   const { asset, versions, isLoading, refetchComments } = useReview()
-  const { currentVersion, isDrawingMode } = useReviewStore()
+  const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
   const { user } = useAuthStore()
   usePageTitle(asset?.name ?? null)
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
@@ -187,7 +187,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             className="flex-1 min-h-0"
             overlay={
               <>
-                <AnnotationOverlay />
+                <AnnotationOverlay key={focusedCommentId ?? 'none'} />
                 {isDrawingMode && (
                   <AnnotationCanvas
                     onSave={(data) => setAnnotationData(data)}

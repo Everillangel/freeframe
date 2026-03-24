@@ -91,6 +91,10 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       const clamped = Math.max(0, Math.min(seekTarget.time, dur))
       video.currentTime = clamped
       setCurrentTime(clamped)
+      if (seekTarget.pause) {
+        video.pause()
+        setIsPlaying(false)
+      }
     } else {
       // Queue seek for after metadata loads
       const onLoaded = () => {
@@ -99,6 +103,10 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
           const clamped = Math.max(0, Math.min(seekTarget.time, d))
           video.currentTime = clamped
           setCurrentTime(clamped)
+          if (seekTarget.pause) {
+            video.pause()
+            setIsPlaying(false)
+          }
         }
         video.removeEventListener('loadedmetadata', onLoaded)
       }
