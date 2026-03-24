@@ -243,7 +243,8 @@ export function CommentInput({
   function handleMentionSelect(user: User) {
     const before = body.slice(0, mentionStart)
     const after = body.slice(mentionStart + 1 + (mentionQuery?.length ?? 0))
-    setBody(`${before}@${user.name} ${after}`)
+    // Insert @email so backend can parse mentions, display shows name
+    setBody(`${before}@${user.email} ${after}`)
     setMentionQuery(null)
     textareaRef.current?.focus()
   }

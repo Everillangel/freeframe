@@ -17,7 +17,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUploadStore } from '@/stores/upload-store'
+import { useNotificationStore } from '@/stores/notification-store'
 import { Avatar } from '@/components/shared/avatar'
+import { NotificationDrawer } from './notification-drawer'
 
 interface NavItem {
   href: string
@@ -28,7 +30,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: Layers },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
 ]
 
 interface SidebarProps {
@@ -40,9 +41,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuthStore()
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
+  const { unreadCount, fetchNotifications } = useNotificationStore()
+  const [notifOpen, setNotifOpen] = React.useState(false)
   const activeUploads = uploadFiles.filter((f) => f.status === 'uploading' || f.status === 'pending' || f.status === 'processing').length
 
+  // Fetch notifications on mount
+  React.useEffect(() => { fetchNotifications() }, [fetchNotifications])
+
   return (
+    <>
     <aside
       className={cn(
         'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-border',
@@ -105,6 +112,33 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </Link>
           )
         })}
+
+        {/* Notifications button */}
+        <button
+          onClick={() => setNotifOpen((v) => !v)}
+          className={cn(
+            'group relative flex w-full items-center rounded-md transition-colors duration-100',
+            collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2.5 px-2.5 h-9',
+            notifOpen
+              ? 'bg-bg-hover text-text-primary'
+              : 'text-text-secondary hover:bg-bg-hover/60 hover:text-text-primary',
+          )}
+          title={collapsed ? 'Notifications' : undefined}
+        >
+          <div className="relative shrink-0">
+            <Bell className="h-[18px] w-[18px]" strokeWidth={notifOpen ? 2 : 1.5} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-status-error px-0.5 text-[9px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          {!collapsed && (
+            <span className={cn('text-[13px]', notifOpen && 'font-medium')}>
+              Notifications
+            </span>
+          )}
+        </button>
 
         {/* Uploads button */}
         <button
@@ -215,5 +249,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
     </aside>
+
+    {/* Notification Drawer */}
+    <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
+  </>
   )
 }
