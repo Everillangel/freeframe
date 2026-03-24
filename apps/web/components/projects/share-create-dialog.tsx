@@ -517,13 +517,22 @@ function LinkCreatedPhase({ result, onDone, onAdvancedSettings }: LinkCreatedPha
                   </Switch.Root>
                 </div>
                 {passphrase && (
-                  <input
-                    type="text"
-                    value={passphraseValue}
-                    onChange={(e) => { setPassphraseValue(e.target.value); debouncedPatch({ password: e.target.value || null }) }}
-                    placeholder={passphrase && !passphraseValue ? '••••••••' : 'Enter passphrase'}
-                    className="w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassphraseInput ? 'text' : 'password'}
+                      value={passphraseValue}
+                      onChange={(e) => { setPassphraseValue(e.target.value); debouncedPatch({ password: e.target.value || null }) }}
+                      placeholder={passphrase && !passphraseValue ? '••••••••' : 'Enter passphrase'}
+                      className="w-full rounded-md border border-border bg-bg-secondary px-3 py-2 pr-14 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassphraseInput(!showPassphraseInput)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-text-tertiary hover:text-text-primary transition-colors px-1 py-0.5"
+                    >
+                      {showPassphraseInput ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 )}
               </div>
 
