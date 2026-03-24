@@ -34,6 +34,7 @@ import { ShareLinkContent, ShareLinkSettingsPanel } from '@/components/projects/
 import { NameDialog } from '@/components/projects/name-dialog'
 import { ShareCreateDialog } from '@/components/projects/share-create-dialog'
 import { ProjectMembersDialog } from '@/components/projects/project-members-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Folder } from '@/types'
 
 export default function ProjectDetailPage() {
@@ -62,6 +63,7 @@ export default function ProjectDetailPage() {
   const [shareDialogPreselect, setShareDialogPreselect] = React.useState<{ type: 'folder' | 'asset'; id: string; name: string } | null>(null)
   const [shareMode, setShareMode] = React.useState(false)
   const [membersDialogOpen, setMembersDialogOpen] = React.useState(false)
+  const [pendingBulkDelete, setPendingBulkDelete] = React.useState<{ assetIds: string[]; folderIds: string[] } | null>(null)
 
   const { files: uploadFiles, startUpload } = useUploadStore()
   const { user } = useAuthStore()
@@ -511,14 +513,8 @@ export default function ProjectDetailPage() {
                   mutateShareLinks()
                 } catch {}
               }}
-              onBulkDelete={async (assetIds, folderIds) => {
-                const total = assetIds.length + folderIds.length
-                if (!confirm(`Delete ${total} item${total !== 1 ? 's' : ''}?`)) return
-                for (const id of folderIds) await deleteFolder(id)
-                for (const id of assetIds) await api.delete(`/assets/${id}`)
-                mutateAssets()
-                mutateSubfolders()
-                mutateTree()
+              onBulkDelete={(assetIds, folderIds) => {
+                setPendingBulkDelete({ assetIds, folderIds })
               }}
               onBulkDownload={async (assetIds) => {
                 for (const id of assetIds) {
@@ -787,6 +783,25 @@ export default function ProjectDetailPage() {
         onOpenChange={setMembersDialogOpen}
         projectId={projectId}
         projectName={project?.name ?? ''}
+      />
+
+      {/* Bulk delete confirmation */}
+      <ConfirmDialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingBulkDelete(null) }}
+        title={`Delete ${(pendingBulkDelete?.assetIds.length ?? 0) + (pendingBulkDelete?.folderIds.length ?? 0)} item${((pendingBulkDelete?.assetIds.length ?? 0) + (pendingBulkDelete?.folderIds.length ?? 0)) !== 1 ? 's' : ''}?`}
+        description="This will move the selected items to the trash. You can restore them later from Recently Deleted."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => {
+          if (!pendingBulkDelete) return
+          for (const id of pendingBulkDelete.folderIds) await deleteFolder(id)
+          for (const id of pendingBulkDelete.assetIds) await api.delete(`/assets/${id}`)
+          mutateAssets()
+          mutateSubfolders()
+          mutateTree()
+          setPendingBulkDelete(null)
+        }}
       />
     </div>
   )
