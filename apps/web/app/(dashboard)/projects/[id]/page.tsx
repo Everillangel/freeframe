@@ -501,22 +501,26 @@ export default function ProjectDetailPage() {
               onShareModeChange={setShareMode}
               onCreateShareLink={async (assetIds, folderIds) => {
                 try {
+                  let result
                   if (folderIds.length === 1 && assetIds.length === 0) {
-                    // Single folder selected — share that folder
                     const folder = subfolders?.find(f => f.id === folderIds[0])
-                    await api.post(`/folders/${folderIds[0]}/share`, { title: folder?.name || 'Shared Folder' })
+                    result = await api.post<{ token: string }>(`/folders/${folderIds[0]}/share`, { title: folder?.name || 'Shared Folder' })
                   } else if (assetIds.length === 1 && folderIds.length === 0) {
-                    // Single asset selected — share that asset
                     const asset = assets?.find(a => a.id === assetIds[0])
-                    await api.post(`/assets/${assetIds[0]}/share`, { title: asset?.name || 'Shared Asset' })
+                    result = await api.post<{ token: string }>(`/assets/${assetIds[0]}/share`, { title: asset?.name || 'Shared Asset' })
                   } else if (currentFolderId) {
-                    // Multiple items in a folder — share the folder
-                    await api.post(`/folders/${currentFolderId}/share`, { title: 'Shared Folder' })
+                    const folder = subfolders?.find(f => f.id === currentFolderId)
+                    result = await api.post<{ token: string }>(`/folders/${currentFolderId}/share`, { title: folder?.name || 'Shared Folder' })
                   } else {
-                    // Multiple items at root — share the project
-                    await api.post(`/projects/${projectId}/share`, { title: project?.name || 'Shared Project' })
+                    result = await api.post<{ token: string }>(`/projects/${projectId}/share`, { title: project?.name || 'Shared Project' })
                   }
                   mutateShareLinks()
+                  // Navigate to the created share link
+                  if (result?.token) {
+                    setShowShareLinks(true)
+                    setSelectedShareLink(result.token)
+                    setShowTrash(false)
+                  }
                 } catch {}
               }}
               onBulkDelete={(assetIds, folderIds) => {

@@ -506,7 +506,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
     }
   }, [shareLink])
 
-  // Fetch preview thumbnails for folder shares
+  // Fetch preview thumbnails for shares
   React.useEffect(() => {
     if (!shareLink) return
     if (shareLink.folder_id) {
@@ -522,6 +522,13 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
         `/assets/${shareLink.asset_id}`,
       )
         .then((asset) => setPreviewThumbnails([asset]))
+        .catch(() => setPreviewThumbnails([]))
+    } else {
+      // Project root share: fetch root-level assets
+      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }[]>(
+        `/projects/${projectId}/assets?folder_id=root`,
+      )
+        .then((assets) => setPreviewThumbnails(assets.slice(0, 4)))
         .catch(() => setPreviewThumbnails([]))
     }
   }, [shareLink, projectId])
