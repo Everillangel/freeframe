@@ -129,17 +129,6 @@ export function VideoPlayer({ assetId, comments = [], overlay, className }: Vide
   const [timeFormatOpen, setTimeFormatOpen] = useState(false)
   const timeFormatRef = useRef<HTMLDivElement>(null)
 
-  // Sync video currentTime to review store so comment input shows same timecode
-  const lastSyncRef = useRef(0)
-  useEffect(() => {
-    // Throttle to avoid excessive store updates — sync every 100ms
-    const now = Date.now()
-    if (now - lastSyncRef.current > 100) {
-      setPlayheadTime(currentTime)
-      lastSyncRef.current = now
-    }
-  }, [currentTime, setPlayheadTime])
-
   // Close time format dropdown on outside click
   useEffect(() => {
     if (!timeFormatOpen) return
@@ -193,6 +182,16 @@ export function VideoPlayer({ assetId, comments = [], overlay, className }: Vide
     toggleMute,
     toggleFullscreen,
   } = player
+
+  // Sync video currentTime to review store so comment input shows same timecode
+  const lastSyncRef = useRef(0)
+  useEffect(() => {
+    const now = Date.now()
+    if (now - lastSyncRef.current > 100) {
+      setPlayheadTime(currentTime)
+      lastSyncRef.current = now
+    }
+  }, [currentTime, setPlayheadTime])
 
   // Keyboard shortcuts
   useEffect(() => {
