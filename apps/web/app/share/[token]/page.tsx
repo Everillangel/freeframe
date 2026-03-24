@@ -35,6 +35,7 @@ interface ShareValidateResponse {
   requires_password?: boolean
   expired?: boolean
   branding?: ProjectBranding | null
+  error?: string
 }
 
 interface GuestComment {
@@ -59,17 +60,21 @@ async function fetchShareInfo(
   password?: string,
   logOpen?: boolean,
 ): Promise<ShareValidateResponse> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const body = password ? JSON.stringify({ password }) : undefined
-  const method = password ? 'POST' : 'GET'
-  const logParam = logOpen ? '?log_open=true' : ''
-  const url = password
-    ? `${API_URL}/share/${token}/validate`
-    : `${API_URL}/share/${token}${logParam}`
+  const params = new URLSearchParams()
+  if (password) params.set('password', password)
+  if (logOpen) params.set('log_open', 'true')
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  const url = `${API_URL}/share/${token}${qs}`
 
-  const response = await fetch(url, { method, headers, body })
+  const response = await fetch(url)
   if (!response.ok) {
-    if (response.status === 401) return { requires_password: true }
+    if (response.status === 403) {
+      const data = await response.json().catch(() => ({}))
+      if (data.detail === 'Incorrect password') {
+        return { requires_password: true, error: 'Incorrect password' }
+      }
+      return { requires_password: true }
+    }
     if (response.status === 410) return { expired: true }
     return {}
   }
@@ -691,8 +696,8 @@ export default function SharePage({
     try {
       const isFirstLoad = !password
       const data = await fetchShareInfo(token, password, isFirstLoad)
-      if (data.requires_password && !password) {
-        setState({ stage: 'password_required' })
+      if (data.requires_password) {
+        setState({ stage: 'password_required', error: data.error || undefined })
         return
       }
       if (data.expired) {

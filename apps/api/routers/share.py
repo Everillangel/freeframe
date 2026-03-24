@@ -265,6 +265,13 @@ def validate_share_link_endpoint(
     )
 
 
+def _share_link_response(link: ShareLink) -> ShareLinkResponse:
+    """Build ShareLinkResponse from ORM model, computing has_password."""
+    response = ShareLinkResponse.model_validate(link)
+    response.has_password = link.password_hash is not None and link.password_hash != ''
+    return response
+
+
 # ── Authenticated share link details (for settings panel) ────────────────────
 
 @router.get("/share/{token}/details", response_model=ShareLinkResponse)
@@ -282,9 +289,7 @@ def get_share_link_details(
         raise HTTPException(status_code=404, detail="Share link not found")
     project_id = _get_project_id_from_link(db, link)
     require_project_role(db, project_id, current_user, ProjectRole.viewer)
-    response = ShareLinkResponse.model_validate(link)
-    response.has_password = link.password_hash is not None and link.password_hash != ''
-    return response
+    return _share_link_response(link)
 
 
 # ── PATCH share link ─────────────────────────────────────────────────────────
@@ -323,7 +328,7 @@ def update_share_link(
 
     db.commit()
     db.refresh(link)
-    return link
+    return _share_link_response(link)
 
 
 @router.delete("/share/{token}", status_code=status.HTTP_204_NO_CONTENT)
