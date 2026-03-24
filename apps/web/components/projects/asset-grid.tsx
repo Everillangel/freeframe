@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { X, Copy, Download, MoreHorizontal, Layers } from 'lucide-react'
+import { X, Copy, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -41,6 +41,14 @@ interface AssetGridProps {
   onFolderDelete?: (folderId: string) => Promise<void>
   onFolderShare?: (folderId: string, folderName: string) => Promise<void>
   onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
+  /** Share selection mode */
+  shareMode?: boolean
+  onShareModeChange?: (active: boolean) => void
+  onCreateShareLink?: (selectedAssetIds: string[], selectedFolderIds: string[]) => void
+  /** Bulk actions */
+  onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
+  onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
+  onBulkDownload?: (assetIds: string[]) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
 }
@@ -79,10 +87,27 @@ export function AssetGrid({
   onFolderDelete,
   onFolderShare,
   onDropToFolder,
+  shareMode = false,
+  onShareModeChange,
+  onCreateShareLink,
+  onBulkDelete,
+  onBulkMove,
+  onBulkDownload,
   actions,
 }: AssetGridProps) {
   const [searchQuery] = React.useState('')
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set())
+  const [selectedFolderIds, setSelectedFolderIds] = React.useState<Set<string>>(new Set())
+
+  // Legacy alias
+  const selectedIds = selectedAssetIds
+
+  // Clear selection when share mode changes
+  React.useEffect(() => {
+    if (!shareMode) return
+    setSelectedAssetIds(new Set())
+    setSelectedFolderIds(new Set())
+  }, [shareMode])
 
   const {
     layout,
@@ -96,8 +121,8 @@ export function AssetGrid({
     sortDirection,
   } = useViewStore()
 
-  const toggleSelect = (assetId: string) => {
-    setSelectedIds((prev) => {
+  const toggleAssetSelect = (assetId: string) => {
+    setSelectedAssetIds((prev) => {
       const next = new Set(prev)
       if (next.has(assetId)) next.delete(assetId)
       else next.add(assetId)
@@ -105,7 +130,22 @@ export function AssetGrid({
     })
   }
 
-  const clearSelection = () => setSelectedIds(new Set())
+  const toggleFolderSelect = (folderId: string) => {
+    setSelectedFolderIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(folderId)) next.delete(folderId)
+      else next.add(folderId)
+      return next
+    })
+  }
+
+  const clearSelection = () => {
+    setSelectedAssetIds(new Set())
+    setSelectedFolderIds(new Set())
+  }
+
+  const totalSelected = selectedAssetIds.size + selectedFolderIds.size
+  const selectedTotalSize = Array.from(selectedAssetIds).reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 
   const filtered = React.useMemo(() => {
     let result = [...assets]
@@ -151,25 +191,59 @@ export function AssetGrid({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
-      <div className="flex items-center gap-1 border-b border-border pb-2.5">
-        {/* Left group: Appearance + Fields + Sort */}
-        <AppearancePopover />
-
-        <div className="h-4 w-px bg-border mx-0.5" />
-
-        <SortPopover />
-
-        <div className="flex-1" />
-
-        {/* Right group: action buttons passed from parent */}
-        {actions && (
+    <div className="flex flex-col gap-3 relative">
+      {/* ─── Share Selection Mode Bar ──────────────────────────────────── */}
+      {shareMode && (
+        <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-2.5">
+          <span className="text-sm font-medium text-text-primary">
+            Select items to share
+          </span>
           <div className="flex items-center gap-2">
-            {actions}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                clearSelection()
+                onShareModeChange?.(false)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={totalSelected === 0}
+              onClick={() => {
+                onCreateShareLink?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds))
+                clearSelection()
+                onShareModeChange?.(false)
+              }}
+            >
+              Create Share Link
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
+      {!shareMode && (
+        <div className="flex items-center gap-1 border-b border-border pb-2.5">
+          {/* Left group: Appearance + Fields + Sort */}
+          <AppearancePopover />
+
+          <div className="h-4 w-px bg-border mx-0.5" />
+
+          <SortPopover />
+
+          <div className="flex-1" />
+
+          {/* Right group: action buttons passed from parent */}
+          {actions && (
+            <div className="flex items-center gap-2">
+              {actions}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Folders section ────────────────────────────────────────────── */}
       {showFolders && (
@@ -181,15 +255,37 @@ export function AssetGrid({
           </div>
           <div className={cn('grid gap-3', gridColsMap[cardSize])}>
             {folders!.map((folder) => (
-              <FolderCard
+              <div
                 key={folder.id}
-                folder={folder}
-                onOpen={onFolderOpen!}
-                onRename={onFolderRename}
-                onDelete={onFolderDelete}
-                onShare={onFolderShare}
-                onDropItems={onDropToFolder}
-              />
+                className={cn(
+                  'relative',
+                  shareMode && selectedFolderIds.has(folder.id) && 'ring-2 ring-accent rounded-lg',
+                )}
+                onClick={shareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
+              >
+                {/* Selection checkbox overlay */}
+                {(shareMode || selectedFolderIds.has(folder.id)) && (
+                  <button
+                    className={cn(
+                      'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-colors',
+                      selectedFolderIds.has(folder.id)
+                        ? 'bg-accent border-accent text-white'
+                        : 'bg-black/40 border-white/30 text-transparent hover:border-white/60',
+                    )}
+                    onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
+                  >
+                    {selectedFolderIds.has(folder.id) && <Check className="h-3 w-3" />}
+                  </button>
+                )}
+                <FolderCard
+                  folder={folder}
+                  onOpen={shareMode ? () => {} : onFolderOpen!}
+                  onRename={shareMode ? undefined : onFolderRename}
+                  onDelete={shareMode ? undefined : onFolderDelete}
+                  onShare={shareMode ? undefined : onFolderShare}
+                  onDropItems={shareMode ? undefined : onDropToFolder}
+                />
+              </div>
             ))}
           </div>
           {filtered.length > 0 && (
@@ -231,14 +327,14 @@ export function AssetGrid({
                 assignee={asset.assignee_id ? assignees[asset.assignee_id] : null}
                 authorName={authorNames[asset.created_by]}
                 thumbnailUrl={thumbnails[asset.id]}
-                selected={selectedIds.has(asset.id)}
-                onSelect={() => toggleSelect(asset.id)}
+                selected={selectedAssetIds.has(asset.id)}
+                onSelect={() => toggleAssetSelect(asset.id)}
                 showInfo={showCardInfo}
                 titleLines={titleLines}
                 aspectRatio={aspectRatio}
                 thumbnailScale={thumbnailScale}
                 onDragStart={(e: React.DragEvent) => {
-                  const ids = selectedIds.has(asset.id)
+                  const ids = selectedAssetIds.has(asset.id)
                     ? Array.from(selectedIds)
                     : [asset.id]
                   e.dataTransfer.setData(
@@ -280,7 +376,7 @@ export function AssetGrid({
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
                   i !== filtered.length - 1 && 'border-b border-border',
-                  selectedAssetId === asset.id ? 'bg-accent/10' : selectedIds.has(asset.id) && 'bg-accent/5',
+                  selectedAssetId === asset.id ? 'bg-accent/10' : selectedAssetIds.has(asset.id) && 'bg-accent/5',
                 )}
               >
                 {/* Thumbnail */}
@@ -344,25 +440,42 @@ export function AssetGrid({
         </div>
       )}
 
-      {/* Bottom selection bar */}
-      {selectedIds.size > 0 && (
+      {/* Bottom selection action bar (Frame.io style) */}
+      {!shareMode && totalSelected > 0 && (
         <div className="sticky bottom-0 z-20 flex items-center gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
           <button onClick={clearSelection} className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
           </button>
           <span className="text-sm text-text-primary font-medium">
-            {selectedIds.size} asset{selectedIds.size !== 1 ? 's' : ''} selected
+            {totalSelected} Item{totalSelected !== 1 ? 's' : ''} selected
           </span>
+          {selectedTotalSize > 0 && (
+            <span className="text-xs text-text-tertiary">
+              &middot; {formatBytes(selectedTotalSize)}
+            </span>
+          )}
           <div className="flex-1" />
-          <Button variant="ghost" size="sm" className="gap-1.5">
-            <MoreHorizontal className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => onBulkDelete?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds))}
+          >
+            <Trash2 className="h-4 w-4" /> Delete
           </Button>
           <Button variant="ghost" size="sm" className="gap-1.5">
-            <Copy className="h-4 w-4" /> Copy to
+            <FolderInput className="h-4 w-4" /> Move to
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1.5">
-            <Download className="h-4 w-4" /> Download
-          </Button>
+          {selectedAssetIds.size > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => onBulkDownload?.(Array.from(selectedAssetIds))}
+            >
+              <Download className="h-4 w-4" /> Download
+            </Button>
+          )}
         </div>
       )}
     </div>

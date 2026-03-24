@@ -60,6 +60,7 @@ export default function ProjectDetailPage() {
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<string | null>(null)
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
   const [shareDialogPreselect, setShareDialogPreselect] = React.useState<{ type: 'folder' | 'asset'; id: string; name: string } | null>(null)
+  const [shareMode, setShareMode] = React.useState(false)
   const [membersDialogOpen, setMembersDialogOpen] = React.useState(false)
 
   const { files: uploadFiles, startUpload } = useUploadStore()
@@ -488,12 +489,34 @@ export default function ProjectDetailPage() {
                 mutateAssets()
                 mutateSubfolders()
               }}
+              shareMode={shareMode}
+              onShareModeChange={setShareMode}
+              onCreateShareLink={async (assetIds, folderIds) => {
+                try {
+                  if (folderIds.length === 1 && assetIds.length === 0) {
+                    // Single folder selected — share that folder
+                    const folder = subfolders?.find(f => f.id === folderIds[0])
+                    await api.post(`/folders/${folderIds[0]}/share`, { title: folder?.name || 'Shared Folder' })
+                  } else if (assetIds.length === 1 && folderIds.length === 0) {
+                    // Single asset selected — share that asset
+                    const asset = assets?.find(a => a.id === assetIds[0])
+                    await api.post(`/assets/${assetIds[0]}/share`, { title: asset?.name || 'Shared Asset' })
+                  } else if (currentFolderId) {
+                    // Multiple items in a folder — share the folder
+                    await api.post(`/folders/${currentFolderId}/share`, { title: 'Shared Folder' })
+                  } else {
+                    // Multiple items at root — share the project
+                    await api.post(`/projects/${projectId}/share`, { title: project?.name || 'Shared Project' })
+                  }
+                  mutateShareLinks()
+                } catch {}
+              }}
               actions={
                 <>
                   <Button variant="secondary" size="sm" onClick={() => setMembersDialogOpen(true)}>
                     <Users className="h-4 w-4" />
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setShareDialogOpen(true)}>
+                  <Button variant="secondary" size="sm" onClick={() => setShareMode(true)}>
                     <Share2 className="h-4 w-4" />
                     Share
                   </Button>
