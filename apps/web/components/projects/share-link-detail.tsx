@@ -647,11 +647,10 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           <div className="rounded-xl border border-border bg-bg-tertiary/50 p-8 flex flex-col items-center justify-center text-center space-y-3">
             <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
               <Eye className="h-6 w-6 text-zinc-500" />
-              </div>
-              <p className="text-sm font-medium text-zinc-300">No content yet</p>
             </div>
-          )}
-        </div>
+            <p className="text-sm font-medium text-zinc-300">No content yet</p>
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex items-center gap-3">
