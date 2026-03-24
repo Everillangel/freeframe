@@ -33,6 +33,7 @@ from ..schemas.share import (
 )
 from ..services.permissions import require_project_role, validate_share_link
 from ..services.s3_service import generate_presigned_get_url
+from ..services.crypto_service import encrypt_password, decrypt_password
 from ..models.project import ProjectRole
 from ..tasks.email_tasks import send_share_email
 from ..config import settings
@@ -137,8 +138,10 @@ def create_share_link(
         pwd_bytes = body.password[:72].encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+        password_encrypted = encrypt_password(body.password)
     else:
         password_hash = None
+        password_encrypted = None
 
     link = ShareLink(
         asset_id=asset_id,
@@ -148,6 +151,7 @@ def create_share_link(
         description=body.description,
         expires_at=body.expires_at,
         password_hash=password_hash,
+        password_encrypted=password_encrypted,
         permission=body.permission,
         allow_download=body.allow_download,
         show_versions=body.show_versions,
@@ -266,9 +270,14 @@ def validate_share_link_endpoint(
 
 
 def _share_link_response(link: ShareLink) -> ShareLinkResponse:
-    """Build ShareLinkResponse from ORM model, computing has_password."""
+    """Build ShareLinkResponse from ORM model, computing has_password and decrypting password."""
     response = ShareLinkResponse.model_validate(link)
     response.has_password = link.password_hash is not None and link.password_hash != ''
+    if link.password_encrypted:
+        try:
+            response.password_value = decrypt_password(link.password_encrypted)
+        except Exception:
+            response.password_value = None
     return response
 
 
@@ -309,15 +318,17 @@ def update_share_link(
 
     updates = body.model_dump(exclude_unset=True)
 
-    # Handle password separately — hash it
+    # Handle password separately — hash + encrypt for reversible admin display
     if "password" in updates:
         raw_password = updates.pop("password")
         if raw_password:
             pwd_bytes = raw_password[:72].encode('utf-8')
             salt = bcrypt.gensalt()
             link.password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+            link.password_encrypted = encrypt_password(raw_password)
         else:
             link.password_hash = None
+            link.password_encrypted = None
 
     # Convert appearance Pydantic model to dict
     if "appearance" in updates and updates["appearance"] is not None:
@@ -363,8 +374,10 @@ def create_folder_share_link(
         pwd_bytes = body.password[:72].encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+        password_encrypted = encrypt_password(body.password)
     else:
         password_hash = None
+        password_encrypted = None
 
     link = ShareLink(
         folder_id=folder_id,
@@ -374,6 +387,7 @@ def create_folder_share_link(
         description=body.description,
         expires_at=body.expires_at,
         password_hash=password_hash,
+        password_encrypted=password_encrypted,
         permission=body.permission,
         allow_download=body.allow_download,
         show_versions=body.show_versions,

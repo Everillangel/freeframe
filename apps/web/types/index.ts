@@ -269,6 +269,7 @@ export interface ShareLink {
   created_at: string;
   deleted_at: string | null;
   has_password: boolean;
+  password_value: string | null;
 }
 
 export interface AssetShare {

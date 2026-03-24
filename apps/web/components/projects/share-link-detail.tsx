@@ -13,6 +13,7 @@ import {
   Paintbrush,
   Layout,
   Eye,
+  EyeOff,
   ChevronDown,
   ChevronRight,
   MessageSquare,
@@ -366,6 +367,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
   React.useEffect(() => {
     if (shareLink) {
       setPasswordEnabled(shareLink.has_password ?? false)
+      setLocalPassword(shareLink.password_value || '')
       setLocalAccentColor(shareLink.appearance?.accent_color || '')
     }
   }, [shareLink])
@@ -468,26 +470,28 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 }}
               />
               {passwordEnabled && (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={localPassword}
-                      onChange={(e) => {
-                        setLocalPassword(e.target.value)
-                        // Auto-save after debounce
-                        debouncedUpdate({ password: e.target.value.trim() || null })
-                      }}
-                      placeholder={shareLink.has_password ? '••••••••' : 'Enter passphrase'}
-                      className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 pr-16 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
-                    />
-                    <button
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                    >
-                      {showPassword ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={localPassword}
+                    onChange={(e) => {
+                      setLocalPassword(e.target.value)
+                      debouncedUpdate({ password: e.target.value.trim() || null })
+                    }}
+                    placeholder="Enter passphrase"
+                    className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-2 pr-12 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-accent/50"
+                  />
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               )}
 

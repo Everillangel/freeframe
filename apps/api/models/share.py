@@ -27,6 +27,7 @@ class ShareLink(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    password_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     permission: Mapped[SharePermission] = mapped_column(Enum(SharePermission), default=SharePermission.view)
     allow_download: Mapped[bool] = mapped_column(Boolean, default=False)
     show_versions: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
