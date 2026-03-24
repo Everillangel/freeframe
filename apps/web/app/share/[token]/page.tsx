@@ -920,7 +920,11 @@ export default function SharePage({
           theme: 'dark',
           accent_color: null,
           open_in_viewer: true,
-          sort_by: 'name',
+          sort_by: 'created_at',
+          card_size: 'm',
+          aspect_ratio: 'landscape',
+          thumbnail_scale: 'fill',
+          show_card_info: true,
         }
         setState({
           stage: 'folder_ready',
@@ -930,7 +934,7 @@ export default function SharePage({
           permission: data.permission,
           allowDownload: data.allow_download ?? false,
           showVersions: data.show_versions ?? true,
-          appearance: data.appearance ?? defaultAppearance,
+          appearance: { ...defaultAppearance, ...(data.appearance ?? {}) },
           branding: data.branding ?? null,
         })
         return

@@ -1,10 +1,56 @@
 'use client'
 
 import React, { useCallback, useState } from 'react'
+import useSWR from 'swr'
 import { Folder, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
 import { NameDialog } from './name-dialog'
-import type { Folder as FolderType } from '@/types'
+import type { Folder as FolderType, AssetResponse } from '@/types'
+
+function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: string; folderId: string; itemCount: number }) {
+  const { data: assets } = useSWR<AssetResponse[]>(
+    itemCount > 0 ? `/projects/${projectId}/assets?folder_id=${folderId}` : null,
+    (key: string) => api.get<AssetResponse[]>(key),
+    { revalidateOnFocus: false },
+  )
+
+  const thumbs = (assets ?? []).filter((a) => a.thumbnail_url).slice(0, 3)
+
+  if (thumbs.length === 0) {
+    return (
+      <div className="aspect-[4/3] flex items-center justify-center bg-white/[0.02] rounded-t-lg">
+        <Folder className="h-12 w-12 text-text-tertiary/50" />
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn(
+      'aspect-[4/3] rounded-t-lg overflow-hidden grid gap-px bg-white/[0.02]',
+      thumbs.length === 1 && 'grid-cols-1',
+      thumbs.length === 2 && 'grid-cols-2',
+      thumbs.length >= 3 && 'grid-cols-2',
+    )}>
+      {thumbs.map((asset, i) => (
+        <div
+          key={asset.id}
+          className={cn(
+            'overflow-hidden bg-zinc-900',
+            thumbs.length === 3 && i === 0 && 'row-span-2',
+          )}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={asset.thumbnail_url!}
+            alt={asset.name}
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface FolderCardProps {
   folder: FolderType
@@ -32,6 +78,19 @@ export function FolderCard({
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+  const menuRef = React.useRef<HTMLDivElement>(null)
+
+  // Close menu on outside click
+  React.useEffect(() => {
+    if (!menuOpen) return
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuOpen])
 
   // Draggable
   const handleDragStart = useCallback(
@@ -73,6 +132,7 @@ export function FolderCard({
           'group relative rounded-lg border bg-bg-tertiary/50 cursor-pointer transition-all hover:border-white/15 hover:scale-[1.01]',
           selected ? 'ring-2 ring-accent border-accent/50' : 'border-border',
           isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
+          menuOpen && 'z-[60]',
           className,
         )}
         draggable
@@ -83,16 +143,14 @@ export function FolderCard({
         onDoubleClick={() => onOpen(folder)}
         onClick={onSelect}
       >
-        {/* Folder icon area */}
-        <div className="aspect-[4/3] flex items-center justify-center bg-white/[0.02] rounded-t-lg">
-          <Folder className="h-12 w-12 text-text-tertiary/50" />
-        </div>
+        {/* Folder thumbnail preview */}
+        <FolderThumbnails projectId={folder.project_id} folderId={folder.id} itemCount={folder.item_count} />
 
         {/* Info */}
         <div className="px-3 py-2">
           <div className="flex items-start justify-between gap-1">
             <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
                 className="opacity-0 group-hover:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-white/10 transition-opacity shrink-0"
                 onClick={(e) => {

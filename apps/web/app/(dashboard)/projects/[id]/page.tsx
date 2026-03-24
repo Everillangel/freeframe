@@ -11,7 +11,7 @@ import {
   Link as LinkIcon, Download, Share2, Plus,
   Trash2, ChevronDown, MessageSquare,
   FolderPlus, Folder as FolderIcon, FileText,
-  MoreHorizontal, MinusCircle, ExternalLink,
+  MoreHorizontal, MinusCircle, ExternalLink, Users,
 } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -33,6 +33,7 @@ import { ShareLinksTable } from '@/components/projects/share-links-table'
 import { ShareLinkContent, ShareLinkSettingsPanel } from '@/components/projects/share-link-detail'
 import { NameDialog } from '@/components/projects/name-dialog'
 import { ShareCreateDialog } from '@/components/projects/share-create-dialog'
+import { ProjectMembersDialog } from '@/components/projects/project-members-dialog'
 import type { Project, AssetResponse, ProjectMember, User, Collection, Folder } from '@/types'
 
 // ─── Collection icon colors (Frame.io style) ──────────────────────────────────
@@ -76,6 +77,7 @@ export default function ProjectDetailPage() {
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false)
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<string | null>(null)
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
+  const [membersDialogOpen, setMembersDialogOpen] = React.useState(false)
 
   const { files: uploadFiles, startUpload } = useUploadStore()
   const { user } = useAuthStore()
@@ -124,7 +126,7 @@ export default function ProjectDetailPage() {
   )
 
   // Subfolders for current view
-  const { data: subfolders } = useSWR<Folder[]>(
+  const { data: subfolders, mutate: mutateSubfolders } = useSWR<Folder[]>(
     showTrash ? null : `/projects/${projectId}/folders?parent_id=${currentFolderId ?? 'root'}`,
     (key: string) => api.get<Folder[]>(key),
   )
@@ -209,8 +211,11 @@ export default function ProjectDetailPage() {
     const anyComplete = uploadFiles.some(
       (f) => f.projectId === projectId && f.status === 'complete',
     )
-    if (anyComplete) mutateAssets()
-  }, [uploadFiles, mutateAssets, projectId])
+    if (anyComplete) {
+      mutateAssets()
+      mutateSubfolders()
+    }
+  }, [uploadFiles, mutateAssets, mutateSubfolders, projectId])
 
   const handleFilesSelected = (files: File[]) => {
     setPendingFiles(files)
@@ -270,10 +275,12 @@ export default function ProjectDetailPage() {
               await deleteFolder(id)
               if (currentFolderId === id) handleSelectFolder(null)
               mutateAssets()
+              mutateSubfolders()
             }}
             onDropItems={async (targetFolderId, assetIds, folderIds) => {
               await bulkMove(assetIds, folderIds, targetFolderId)
               mutateAssets()
+              mutateSubfolders()
             }}
           />
         </div>
@@ -489,6 +496,7 @@ export default function ProjectDetailPage() {
                           await restoreFolder(item.id)
                           mutateTrash()
                           mutateAssets()
+                          mutateSubfolders()
                         }}
                       >
                         Restore
@@ -507,6 +515,7 @@ export default function ProjectDetailPage() {
                           await restoreAsset(item.id)
                           mutateTrash()
                           mutateAssets()
+                          mutateSubfolders()
                         }}
                       >
                         Restore
@@ -537,6 +546,7 @@ export default function ProjectDetailPage() {
               onFolderDelete={async (id) => {
                 await deleteFolder(id)
                 mutateAssets()
+                mutateSubfolders()
               }}
               onFolderShare={async (folderId, folderName) => {
                 await createFolderShare(folderId, { title: folderName })
@@ -544,9 +554,13 @@ export default function ProjectDetailPage() {
               onDropToFolder={async (targetFolderId, assetIds, folderIds) => {
                 await bulkMove(assetIds, folderIds, targetFolderId)
                 mutateAssets()
+                mutateSubfolders()
               }}
               actions={
                 <>
+                  <Button variant="secondary" size="sm" onClick={() => setMembersDialogOpen(true)}>
+                    <Users className="h-4 w-4" />
+                  </Button>
                   <Button variant="secondary" size="sm" onClick={() => setShareDialogOpen(true)}>
                     <Share2 className="h-4 w-4" />
                     Share
@@ -762,6 +776,7 @@ export default function ProjectDetailPage() {
         onSubmit={async (name) => {
           await createFolder(name, folderDialogParentId)
           mutateAssets()
+          mutateSubfolders()
         }}
       />
 
@@ -779,6 +794,14 @@ export default function ProjectDetailPage() {
           setSelectedShareLink(token)
           setShowTrash(false)
         }}
+      />
+
+      {/* Project members dialog */}
+      <ProjectMembersDialog
+        open={membersDialogOpen}
+        onOpenChange={setMembersDialogOpen}
+        projectId={projectId}
+        projectName={project?.name ?? ''}
       />
     </div>
   )

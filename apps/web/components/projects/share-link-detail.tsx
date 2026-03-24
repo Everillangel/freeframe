@@ -11,7 +11,6 @@ import {
   Lock,
   Calendar,
   Paintbrush,
-  Layout,
   LayoutGrid,
   LayoutList,
   Eye,
@@ -498,6 +497,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
 
   const [localTitle, setLocalTitle] = React.useState('')
   const [localDescription, setLocalDescription] = React.useState('')
+  const [previewThumbnails, setPreviewThumbnails] = React.useState<{ id: string; name: string; thumbnail_url: string | null; asset_type: string }[]>([])
 
   React.useEffect(() => {
     if (shareLink) {
@@ -505,6 +505,26 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
       setLocalDescription(shareLink.description || '')
     }
   }, [shareLink])
+
+  // Fetch preview thumbnails for folder shares
+  React.useEffect(() => {
+    if (!shareLink) return
+    if (shareLink.folder_id) {
+      // Folder share: fetch assets from folder
+      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }[]>(
+        `/projects/${projectId}/assets?folder_id=${shareLink.folder_id}`,
+      )
+        .then((assets) => setPreviewThumbnails(assets.slice(0, 4)))
+        .catch(() => setPreviewThumbnails([]))
+    } else if (shareLink.asset_id) {
+      // Asset share: fetch the single asset
+      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }>(
+        `/assets/${shareLink.asset_id}`,
+      )
+        .then((asset) => setPreviewThumbnails([asset]))
+        .catch(() => setPreviewThumbnails([]))
+    }
+  }, [shareLink, projectId])
 
   const shareUrl = `${frontendUrl}/share/${token}`
 
@@ -518,8 +538,6 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
       </div>
     )
   }
-
-  const shareType = shareLink.folder_id ? 'folder' : 'asset'
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
@@ -561,22 +579,41 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           className="w-full bg-transparent text-sm text-zinc-400 placeholder:text-zinc-600 outline-none border-none resize-none focus:ring-0"
         />
 
-        {/* Content preview placeholder */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8">
-          <div className="flex flex-col items-center justify-center text-center space-y-3">
-            <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
-              {shareType === 'folder' ? (
-                <Layout className="h-6 w-6 text-zinc-500" />
-              ) : (
+        {/* Content preview with thumbnails */}
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+          {previewThumbnails.length > 0 ? (
+            <div className={cn(
+              'grid gap-px',
+              previewThumbnails.length === 1 && 'grid-cols-1',
+              previewThumbnails.length === 2 && 'grid-cols-2',
+              previewThumbnails.length >= 3 && 'grid-cols-2',
+            )}>
+              {previewThumbnails.slice(0, 4).map((asset) => (
+                <div key={asset.id} className="aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden max-h-[200px]">
+                  {asset.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={asset.thumbnail_url}
+                      alt={asset.name}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1">
+                      <Eye className="h-6 w-6 text-zinc-600" />
+                      <span className="text-2xs text-zinc-600 truncate max-w-[100px]">{asset.name}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 flex flex-col items-center justify-center text-center space-y-3">
+              <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
                 <Eye className="h-6 w-6 text-zinc-500" />
-              )}
+              </div>
+              <p className="text-sm font-medium text-zinc-300">No assets yet</p>
             </div>
-            <div>
-              <p className="text-sm font-medium text-zinc-300 capitalize">
-                {shareType} Share
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Action buttons */}
