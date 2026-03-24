@@ -7,6 +7,7 @@ import {
   Download,
   Search,
   ChevronRight,
+  ChevronDown,
   Image as ImageIcon,
   Video,
   Music,
@@ -86,6 +87,19 @@ function getAssetTypeBadgeLabel(assetType: string): string {
   }
 }
 
+/** Grid column classes based on card_size */
+function gridColsClass(cardSize: 's' | 'm' | 'l' | undefined): string {
+  switch (cardSize) {
+    case 's':
+      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7'
+    case 'l':
+      return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+    case 'm':
+    default:
+      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+  }
+}
+
 // ─── Download handler ─────────────────────────────────────────────────────────
 
 async function handleDownload(token: string, assetId: string, assetName: string) {
@@ -113,10 +127,11 @@ interface SubfolderCardProps {
   subfolder: FolderShareSubfolder
   isDark: boolean
   accentColor: string
+  aspectRatio: 'landscape' | 'square' | 'portrait'
   onClick: (subfolder: FolderShareSubfolder) => void
 }
 
-function SubfolderCard({ subfolder, isDark, accentColor, onClick }: SubfolderCardProps) {
+function SubfolderCard({ subfolder, isDark, accentColor, aspectRatio, onClick }: SubfolderCardProps) {
   return (
     <button
       className={cn(
@@ -129,7 +144,10 @@ function SubfolderCard({ subfolder, isDark, accentColor, onClick }: SubfolderCar
     >
       <div
         className={cn(
-          'aspect-[16/10] w-full flex items-center justify-center',
+          'w-full flex items-center justify-center',
+          aspectRatio === 'landscape' && 'aspect-[16/10]',
+          aspectRatio === 'square' && 'aspect-square',
+          aspectRatio === 'portrait' && 'aspect-[3/4]',
           isDark ? 'bg-white/[0.02]' : 'bg-zinc-100/50',
         )}
       >
@@ -404,6 +422,54 @@ function AssetListRow({
   )
 }
 
+// ─── Section Header ──────────────────────────────────────────────────────────
+
+interface SectionHeaderProps {
+  label: string
+  count: number
+  totalSize: string | null
+  isDark: boolean
+  expanded: boolean
+  onToggle: () => void
+}
+
+function SectionHeader({ label, count, totalSize, isDark, expanded, onToggle }: SectionHeaderProps) {
+  return (
+    <button
+      className={cn(
+        'flex items-center gap-2 py-2 w-full text-left group',
+      )}
+      onClick={onToggle}
+    >
+      <ChevronDown
+        className={cn(
+          'h-4 w-4 shrink-0 transition-transform',
+          !expanded && '-rotate-90',
+          isDark ? 'text-zinc-500' : 'text-zinc-400',
+        )}
+      />
+      <span
+        className={cn(
+          'text-xs font-semibold uppercase tracking-wider',
+          isDark ? 'text-zinc-400' : 'text-zinc-500',
+        )}
+      >
+        {count} {label}
+      </span>
+      {totalSize && (
+        <span
+          className={cn(
+            'text-xs',
+            isDark ? 'text-zinc-600' : 'text-zinc-400',
+          )}
+        >
+          &middot; {totalSize}
+        </span>
+      )}
+    </button>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function FolderShareViewer({
@@ -421,6 +487,8 @@ export function FolderShareViewer({
   const [currentSubfolderId, setCurrentSubfolderId] = React.useState<string | null>(null)
   const [breadcrumbs, setBreadcrumbs] = React.useState<{ id: string; name: string }[]>([])
   const [searchQuery, setSearchQuery] = React.useState('')
+  const [foldersExpanded, setFoldersExpanded] = React.useState(true)
+  const [assetsExpanded, setAssetsExpanded] = React.useState(true)
 
   const [assets, setAssets] = React.useState<FolderShareAssetItem[]>([])
   const [subfolders, setSubfolders] = React.useState<FolderShareSubfolder[]>([])
@@ -432,7 +500,17 @@ export function FolderShareViewer({
 
   const isDark = appearance.theme === 'dark'
   const accentColor = appearance.accent_color ?? branding?.primary_color ?? '#6366f1'
+  const cardSize = appearance.card_size
+  const aspectRatio = appearance.aspect_ratio || 'landscape'
+  const thumbnailScale = appearance.thumbnail_scale || 'fill'
+  const showCardInfo = appearance.show_card_info !== false
   const perPage = 24
+
+  // Compute total size of assets
+  const totalAssetSize = React.useMemo(() => {
+    const sum = assets.reduce((acc, a) => acc + (a.file_size ?? 0), 0)
+    return sum > 0 ? formatFileSize(sum) : null
+  }, [assets])
 
   // Fetch assets for current folder/page
   React.useEffect(() => {
@@ -518,23 +596,33 @@ export function FolderShareViewer({
   const hasMore = assets.length < total && !searchQuery.trim()
   const totalItems = assets.length + subfolders.length
 
+  // Summary line: "N Folders, N Assets"
+  const summaryParts: string[] = []
+  if (subfolders.length > 0) {
+    summaryParts.push(`${subfolders.length} Folder${subfolders.length === 1 ? '' : 's'}`)
+  }
+  if (assets.length > 0) {
+    summaryParts.push(`${assets.length} Asset${assets.length === 1 ? '' : 's'}`)
+  }
+  const summaryText = summaryParts.join(', ')
+
   return (
     <div
       className={cn(
-        'min-h-screen',
+        'flex-1 min-h-screen flex flex-col',
         isDark ? 'bg-zinc-950 text-white' : 'bg-white text-zinc-900',
       )}
     >
       {/* Header */}
       <header
         className={cn(
-          'sticky top-0 z-10 border-b px-5 py-3',
+          'sticky top-0 z-10 border-b px-5 py-4',
           isDark ? 'bg-zinc-950/95 border-white/10 backdrop-blur-sm' : 'bg-white/95 border-zinc-200 backdrop-blur-sm',
         )}
       >
         <div className="mx-auto max-w-6xl">
           {/* Brand row */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
               {branding?.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -561,21 +649,31 @@ export function FolderShareViewer({
             </div>
           </div>
 
-          {/* Title + description */}
-          <div className="mb-3">
+          {/* Title + subtitle */}
+          <div className="mb-4">
             <h1
               className={cn(
-                'text-lg font-semibold leading-tight',
+                'text-xl font-bold leading-tight',
                 isDark ? 'text-white' : 'text-zinc-900',
               )}
             >
               {title || folderName}
             </h1>
+            {!loading && (
+              <p
+                className={cn(
+                  'mt-1 text-sm',
+                  isDark ? 'text-zinc-400' : 'text-zinc-500',
+                )}
+              >
+                {summaryText || 'Empty folder'}
+              </p>
+            )}
             {description && (
               <p
                 className={cn(
-                  'mt-0.5 text-sm',
-                  isDark ? 'text-zinc-400' : 'text-zinc-500',
+                  'mt-1 text-sm',
+                  isDark ? 'text-zinc-500' : 'text-zinc-400',
                 )}
               >
                 {description}
@@ -655,7 +753,7 @@ export function FolderShareViewer({
       </header>
 
       {/* Main content */}
-      <main className="mx-auto max-w-6xl px-5 py-6">
+      <main className="mx-auto max-w-6xl w-full px-5 py-6 flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2
@@ -679,114 +777,115 @@ export function FolderShareViewer({
           <>
             {/* Subfolders section */}
             {filteredSubfolders.length > 0 && (
-              <section className="mb-8">
-                <h2
-                  className={cn(
-                    'text-xs font-semibold uppercase tracking-wider mb-3',
-                    isDark ? 'text-zinc-500' : 'text-zinc-400',
-                  )}
-                >
-                  Folders
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {filteredSubfolders.map((subfolder) => (
-                    <SubfolderCard
-                      key={subfolder.id}
-                      subfolder={subfolder}
-                      isDark={isDark}
-                      accentColor={accentColor}
-                      onClick={navigateToSubfolder}
-                    />
-                  ))}
-                </div>
+              <section className="mb-6">
+                <SectionHeader
+                  label={filteredSubfolders.length === 1 ? 'Folder' : 'Folders'}
+                  count={filteredSubfolders.length}
+                  totalSize={null}
+                  isDark={isDark}
+                  expanded={foldersExpanded}
+                  onToggle={() => setFoldersExpanded((v) => !v)}
+                />
+                {foldersExpanded && (
+                  <div className={cn('grid gap-3 mt-2', gridColsClass(cardSize))}>
+                    {filteredSubfolders.map((subfolder) => (
+                      <SubfolderCard
+                        key={subfolder.id}
+                        subfolder={subfolder}
+                        isDark={isDark}
+                        accentColor={accentColor}
+                        aspectRatio={aspectRatio}
+                        onClick={navigateToSubfolder}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 
             {/* Assets section */}
             {filteredAssets.length > 0 && (
               <section>
-                {filteredSubfolders.length > 0 && (
-                  <h2
-                    className={cn(
-                      'text-xs font-semibold uppercase tracking-wider mb-3',
-                      isDark ? 'text-zinc-500' : 'text-zinc-400',
+                <SectionHeader
+                  label={filteredAssets.length === 1 ? 'Asset' : 'Assets'}
+                  count={filteredAssets.length}
+                  totalSize={totalAssetSize}
+                  isDark={isDark}
+                  expanded={assetsExpanded}
+                  onToggle={() => setAssetsExpanded((v) => !v)}
+                />
+
+                {assetsExpanded && (
+                  <>
+                    {appearance.layout === 'grid' ? (
+                      <div className={cn('grid gap-3 mt-2', gridColsClass(cardSize))}>
+                        {filteredAssets.map((asset) => (
+                          <AssetGridCard
+                            key={asset.id}
+                            asset={asset}
+                            isDark={isDark}
+                            accentColor={accentColor}
+                            allowDownload={allowDownload}
+                            token={token}
+                            openInViewer={appearance.open_in_viewer}
+                            onAssetClick={onAssetClick}
+                            aspectRatio={aspectRatio}
+                            thumbnailScale={thumbnailScale}
+                            showCardInfo={showCardInfo}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1 mt-2">
+                        {/* List header */}
+                        <div
+                          className={cn(
+                            'hidden lg:grid grid-cols-[1fr_100px_80px_112px_28px] gap-3 px-3 py-1.5 text-xs font-medium',
+                            isDark ? 'text-zinc-500' : 'text-zinc-400',
+                          )}
+                        >
+                          <span>Name</span>
+                          <span className="text-right">Type</span>
+                          <span className="text-right">Size</span>
+                          <span className="text-right">Date</span>
+                          {allowDownload && <span />}
+                        </div>
+                        {filteredAssets.map((asset) => (
+                          <AssetListRow
+                            key={asset.id}
+                            asset={asset}
+                            isDark={isDark}
+                            accentColor={accentColor}
+                            allowDownload={allowDownload}
+                            token={token}
+                            openInViewer={appearance.open_in_viewer}
+                            onAssetClick={onAssetClick}
+                          />
+                        ))}
+                      </div>
                     )}
-                  >
-                    Assets
-                  </h2>
-                )}
 
-                {appearance.layout === 'grid' ? (
-                  <div className={cn('grid gap-3', {
-                    'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7': appearance.card_size === 's',
-                    'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5': !appearance.card_size || appearance.card_size === 'm',
-                    'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4': appearance.card_size === 'l',
-                  })}>
-                    {filteredAssets.map((asset) => (
-                      <AssetGridCard
-                        key={asset.id}
-                        asset={asset}
-                        isDark={isDark}
-                        accentColor={accentColor}
-                        allowDownload={allowDownload}
-                        token={token}
-                        openInViewer={appearance.open_in_viewer}
-                        onAssetClick={onAssetClick}
-                        aspectRatio={appearance.aspect_ratio || 'landscape'}
-                        thumbnailScale={appearance.thumbnail_scale || 'fill'}
-                        showCardInfo={appearance.show_card_info !== false}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {/* List header */}
-                    <div
-                      className={cn(
-                        'hidden lg:grid grid-cols-[1fr_100px_80px_112px_28px] gap-3 px-3 py-1.5 text-xs font-medium',
-                        isDark ? 'text-zinc-500' : 'text-zinc-400',
-                      )}
-                    >
-                      <span>Name</span>
-                      <span className="text-right">Type</span>
-                      <span className="text-right">Size</span>
-                      <span className="text-right">Date</span>
-                      {allowDownload && <span />}
-                    </div>
-                    {filteredAssets.map((asset) => (
-                      <AssetListRow
-                        key={asset.id}
-                        asset={asset}
-                        isDark={isDark}
-                        accentColor={accentColor}
-                        allowDownload={allowDownload}
-                        token={token}
-                        openInViewer={appearance.open_in_viewer}
-                        onAssetClick={onAssetClick}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Load more */}
-                {hasMore && (
-                  <div className="flex justify-center mt-6">
-                    <button
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                      className={cn(
-                        'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border transition-colors',
-                        isDark
-                          ? 'border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20 disabled:opacity-50'
-                          : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50',
-                      )}
-                    >
-                      {loadingMore ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : null}
-                      {loadingMore ? 'Loading…' : 'Load more'}
-                    </button>
-                  </div>
+                    {/* Load more */}
+                    {hasMore && (
+                      <div className="flex justify-center mt-6">
+                        <button
+                          onClick={loadMore}
+                          disabled={loadingMore}
+                          className={cn(
+                            'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border transition-colors',
+                            isDark
+                              ? 'border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20 disabled:opacity-50'
+                              : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50',
+                          )}
+                        >
+                          {loadingMore ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          {loadingMore ? 'Loading…' : 'Load more'}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
             )}
@@ -797,7 +896,7 @@ export function FolderShareViewer({
       {/* Footer */}
       <footer
         className={cn(
-          'border-t px-5 py-4 mt-4',
+          'border-t px-5 py-4',
           isDark ? 'border-white/10' : 'border-zinc-200',
         )}
       >
