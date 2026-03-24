@@ -53,10 +53,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     return () => clearTimeout(timer)
   }, [query])
 
-  // Search assets when query is present
+  // Search assets and folders when query is present
+  const searchQ = debouncedQuery.trim()
   const { data: assets } = useSWR<AssetResponse[]>(
-    open && debouncedQuery.trim().length >= 2 ? `/me/assets?q=${encodeURIComponent(debouncedQuery.trim())}&limit=8` : null,
+    open && searchQ.length >= 2 ? `/me/assets?q=${encodeURIComponent(searchQ)}&limit=8` : null,
     (key: string) => api.get<AssetResponse[]>(key),
+  )
+  const { data: folders } = useSWR<{ id: string; name: string; project_id: string; project_name: string | null }[]>(
+    open && searchQ.length >= 2 ? `/me/folders?q=${encodeURIComponent(searchQ)}&limit=8` : null,
+    (key: string) => api.get(key),
   )
 
   // Reset query when dialog closes
@@ -132,6 +137,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     router.push(`/projects/${asset.project_id}/assets/${asset.id}`)
   }
 
+  function handleFolderSelect(folder: { id: string; project_id: string }) {
+    onOpenChange(false)
+    router.push(`/projects/${folder.project_id}?folder=${folder.id}`)
+  }
+
   function getAssetIcon(type: string) {
     switch (type) {
       case 'video': return Film
@@ -199,6 +209,37 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                       <span className="text-2xs text-text-tertiary shrink-0">
                         {project.asset_count ?? 0} items
                       </span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+
+              {/* Folders — show when searching (2+ chars) */}
+              {hasQuery && folders && folders.length > 0 && (
+                <Command.Group
+                  heading="Folders"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                >
+                  {folders.map((folder) => (
+                    <Command.Item
+                      key={`folder-${folder.id}`}
+                      value={`folder ${folder.name} ${folder.project_name || ''}`}
+                      onSelect={() => handleFolderSelect(folder)}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary',
+                        'data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary',
+                        'transition-colors',
+                      )}
+                    >
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-bg-tertiary">
+                        <FolderOpen className="h-3 w-3 text-text-tertiary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block truncate">{folder.name}</span>
+                        {folder.project_name && (
+                          <span className="block text-2xs text-text-tertiary truncate">in {folder.project_name}</span>
+                        )}
+                      </div>
                     </Command.Item>
                   ))}
                 </Command.Group>
