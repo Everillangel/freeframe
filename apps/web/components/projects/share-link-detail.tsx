@@ -498,6 +498,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
   const [localTitle, setLocalTitle] = React.useState('')
   const [localDescription, setLocalDescription] = React.useState('')
   const [previewThumbnails, setPreviewThumbnails] = React.useState<{ id: string; name: string; thumbnail_url: string | null; asset_type: string }[]>([])
+  const [previewFolders, setPreviewFolders] = React.useState<{ id: string; name: string; item_count: number }[]>([])
 
   React.useEffect(() => {
     if (shareLink) {
@@ -506,30 +507,36 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
     }
   }, [shareLink])
 
-  // Fetch preview thumbnails for shares
+  // Fetch preview data for shares
   React.useEffect(() => {
     if (!shareLink) return
-    if (shareLink.folder_id) {
-      // Folder share: fetch assets from folder
-      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }[]>(
-        `/projects/${projectId}/assets?folder_id=${shareLink.folder_id}`,
-      )
-        .then((assets) => setPreviewThumbnails(assets.slice(0, 4)))
-        .catch(() => setPreviewThumbnails([]))
-    } else if (shareLink.asset_id) {
+    const folderId = shareLink.folder_id
+    const isProjectShare = !folderId && !shareLink.asset_id
+
+    if (shareLink.asset_id) {
       // Asset share: fetch the single asset
       api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }>(
         `/assets/${shareLink.asset_id}`,
       )
         .then((asset) => setPreviewThumbnails([asset]))
         .catch(() => setPreviewThumbnails([]))
+      setPreviewFolders([])
     } else {
-      // Project root share: fetch root-level assets
+      // Folder or project root share: fetch assets + folders
+      const folderParam = folderId ? `folder_id=${folderId}` : 'folder_id=root'
       api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }[]>(
-        `/projects/${projectId}/assets?folder_id=root`,
+        `/projects/${projectId}/assets?${folderParam}`,
       )
         .then((assets) => setPreviewThumbnails(assets.slice(0, 4)))
         .catch(() => setPreviewThumbnails([]))
+
+      // Fetch subfolders
+      const parentParam = folderId || 'root'
+      api.get<{ id: string; name: string; item_count: number }[]>(
+        `/projects/${projectId}/folders?parent_id=${parentParam}`,
+      )
+        .then((folders) => setPreviewFolders(folders))
+        .catch(() => setPreviewFolders([]))
     }
   }, [shareLink, projectId])
 
@@ -586,39 +593,66 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           className="w-full bg-transparent text-sm text-zinc-400 placeholder:text-zinc-600 outline-none border-none resize-none focus:ring-0"
         />
 
+        {/* Content summary */}
+        {(previewFolders.length > 0 || previewThumbnails.length > 0) && (
+          <div className="flex items-center gap-3 text-xs text-zinc-400">
+            {previewFolders.length > 0 && (
+              <span>{previewFolders.length} folder{previewFolders.length !== 1 ? 's' : ''}</span>
+            )}
+            {previewThumbnails.length > 0 && (
+              <span>{previewThumbnails.length} asset{previewThumbnails.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        )}
+
         {/* Content preview with thumbnails */}
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-          {previewThumbnails.length > 0 ? (
-            <div className={cn(
-              'grid gap-px',
-              previewThumbnails.length === 1 && 'grid-cols-1',
-              previewThumbnails.length === 2 && 'grid-cols-2',
-              previewThumbnails.length >= 3 && 'grid-cols-2',
-            )}>
-              {previewThumbnails.slice(0, 4).map((asset) => (
-                <div key={asset.id} className="aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden max-h-[200px]">
-                  {asset.thumbnail_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={asset.thumbnail_url}
-                      alt={asset.name}
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-1">
-                      <Eye className="h-6 w-6 text-zinc-600" />
-                      <span className="text-2xs text-zinc-600 truncate max-w-[100px]">{asset.name}</span>
+          {(previewFolders.length > 0 || previewThumbnails.length > 0) ? (
+            <div className="p-3 space-y-2">
+              {/* Folder previews */}
+              {previewFolders.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {previewFolders.map((folder) => (
+                    <div key={folder.id} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-center">
+                      <div className="flex items-center justify-center h-8 mb-1">
+                        <svg className="h-6 w-6 text-zinc-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                      </div>
+                      <p className="text-2xs text-zinc-300 truncate font-medium">{folder.name}</p>
+                      <p className="text-2xs text-zinc-600">{folder.item_count} item{folder.item_count !== 1 ? 's' : ''}</p>
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              )}
+              {/* Asset thumbnails */}
+              {previewThumbnails.length > 0 && (
+                <div className={cn(
+                  'grid gap-px rounded-lg overflow-hidden',
+                  previewThumbnails.length === 1 && 'grid-cols-1',
+                  previewThumbnails.length === 2 && 'grid-cols-2',
+                  previewThumbnails.length >= 3 && 'grid-cols-2',
+                )}>
+                  {previewThumbnails.slice(0, 4).map((asset) => (
+                    <div key={asset.id} className="aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden max-h-[200px]">
+                      {asset.thumbnail_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-contain" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1">
+                          <Eye className="h-6 w-6 text-zinc-600" />
+                          <span className="text-2xs text-zinc-600 truncate max-w-[100px]">{asset.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-8 flex flex-col items-center justify-center text-center space-y-3">
               <div className="h-12 w-12 rounded-full bg-white/[0.05] flex items-center justify-center">
                 <Eye className="h-6 w-6 text-zinc-500" />
               </div>
-              <p className="text-sm font-medium text-zinc-300">No assets yet</p>
+              <p className="text-sm font-medium text-zinc-300">No content yet</p>
             </div>
           )}
         </div>
