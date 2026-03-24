@@ -20,7 +20,7 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
 
   if (thumbs.length === 0) {
     return (
-      <div className="aspect-[4/3] flex items-center justify-center bg-white/[0.02] rounded-t-lg">
+      <div className="aspect-[4/3] flex items-center justify-center bg-bg-tertiary rounded-t-lg">
         <Folder className="h-12 w-12 text-text-tertiary/50" />
       </div>
     )
@@ -28,7 +28,7 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
 
   return (
     <div className={cn(
-      'aspect-[4/3] rounded-t-lg overflow-hidden grid gap-px bg-white/[0.02]',
+      'aspect-[4/3] rounded-t-lg overflow-hidden grid gap-px bg-bg-tertiary',
       thumbs.length === 1 && 'grid-cols-1',
       thumbs.length === 2 && 'grid-cols-2',
       thumbs.length >= 3 && 'grid-cols-2',
@@ -131,7 +131,7 @@ export function FolderCard({
     <>
       <div
         className={cn(
-          'group relative rounded-lg border bg-bg-tertiary/50 cursor-pointer transition-all hover:border-white/15 hover:scale-[1.01]',
+          'group relative rounded-lg border bg-bg-tertiary/50 cursor-pointer transition-all hover:border-border-focus hover:scale-[1.01]',
           selected ? 'ring-2 ring-accent border-accent/50' : 'border-border',
           isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
           menuOpen && 'z-[60]',
@@ -154,7 +154,7 @@ export function FolderCard({
             <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
             <div className="relative" ref={menuRef}>
               <button
-                className="opacity-0 group-hover:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-white/10 transition-opacity shrink-0"
+                className="opacity-0 group-hover:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-bg-hover transition-opacity shrink-0"
                 onClick={(e) => {
                   e.stopPropagation()
                   setMenuOpen((p) => !p)
@@ -164,9 +164,9 @@ export function FolderCard({
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-white/10 bg-[#232328] shadow-xl py-1">
+                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-border bg-bg-elevated shadow-xl py-1">
                   <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/5"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
                     onClick={(e) => {
                       e.stopPropagation()
                       setMenuOpen(false)
@@ -176,7 +176,7 @@ export function FolderCard({
                     <Pencil className="h-3 w-3" /> Rename
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/5"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
                     onClick={(e) => {
                       e.stopPropagation()
                       setMenuOpen(false)

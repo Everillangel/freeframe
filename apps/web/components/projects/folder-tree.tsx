@@ -101,7 +101,7 @@ function FolderNode({
           'group flex items-center gap-1 px-2 py-1 rounded-md text-[13px] cursor-pointer transition-colors',
           isActive
             ? 'bg-accent/10 text-accent font-medium'
-            : 'text-text-secondary hover:text-text-primary hover:bg-white/5',
+            : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
           isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
@@ -155,7 +155,7 @@ function FolderNode({
 
         {/* Context menu button */}
         <button
-          className="opacity-0 group-hover:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-white/10 transition-opacity"
+          className="opacity-0 group-hover:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-bg-hover transition-opacity"
           onClick={(e) => {
             e.stopPropagation()
             setMenuOpen((p) => !p)
@@ -167,9 +167,9 @@ function FolderNode({
 
       {/* Context menu */}
       {menuOpen && (
-        <div className="ml-8 mt-0.5 mb-1 rounded-lg border border-white/10 bg-[#232328] shadow-xl py-1 z-50 w-44">
+        <div className="ml-8 mt-0.5 mb-1 rounded-lg border border-border bg-bg-elevated shadow-xl py-1 z-50 w-44">
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-white/5 hover:text-text-primary"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary"
             onClick={() => {
               setMenuOpen(false)
               setRenaming(true)
@@ -179,7 +179,7 @@ function FolderNode({
             <Pencil className="h-3 w-3" /> Rename
           </button>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-white/5 hover:text-text-primary"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary"
             onClick={() => {
               setMenuOpen(false)
               onCreateFolder('', node.id)
@@ -187,7 +187,7 @@ function FolderNode({
           >
             <FolderPlus className="h-3 w-3" /> New Subfolder
           </button>
-          <div className="my-1 border-t border-white/5" />
+          <div className="my-1 border-t border-border" />
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10"
             onClick={async () => {
@@ -246,7 +246,7 @@ export function FolderTree({
           'flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors',
           currentFolderId === null && !showTrash
             ? 'bg-accent/10 text-accent font-medium'
-            : 'text-text-secondary hover:text-text-primary hover:bg-white/5',
+            : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
           isDragOverRoot && 'ring-2 ring-accent/50 bg-accent/5',
         )}
         onClick={() => onSelectFolder(null)}
@@ -289,7 +289,7 @@ export function FolderTree({
           'flex items-center gap-2 px-2 py-1 rounded-md text-[13px] cursor-pointer transition-colors mt-2',
           showTrash
             ? 'bg-accent/10 text-accent font-medium'
-            : 'text-text-tertiary hover:text-text-secondary hover:bg-white/5',
+            : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
         )}
         onClick={onShowTrash}
       >
