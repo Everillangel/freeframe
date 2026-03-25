@@ -292,14 +292,16 @@ export function VideoPlayer({
       )}
     >
       {/* Video area — fills available space, object-contain preserves aspect ratio with letterbox */}
-      <div className="flex-1 relative min-h-0 bg-black overflow-hidden">
+      <div
+        className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer"
+        onClick={handleContainerClick}
+      >
         <video
           ref={videoRef}
           className={cn(
             "absolute inset-0 w-full h-full object-contain",
-            isDrawingMode ? "pointer-events-none" : "cursor-pointer",
+            isDrawingMode ? "pointer-events-none" : "",
           )}
-          onClick={handleContainerClick}
           playsInline
           preload="metadata"
         />
