@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Maximize,
   Minimize,
@@ -11,27 +11,28 @@ import {
   ChevronUp,
   Check,
   Repeat,
-} from 'lucide-react'
-import { cn, formatTime, formatTimecode, formatFrames } from '@/lib/utils'
-import { api } from '@/lib/api'
-import { useReviewStore, type TimeFormat } from '@/stores/review-store'
-import { useVideoPlayer } from '@/hooks/use-video-player'
-import { ProgressBar } from './progress-bar'
-import type { Comment } from '@/types'
+} from "lucide-react";
+import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { useReviewStore, type TimeFormat } from "@/stores/review-store";
+import { useVideoPlayer } from "@/hooks/use-video-player";
+import { useReview } from "./review-provider";
+import { ProgressBar } from "./progress-bar";
+import type { Comment } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StreamUrlResponse {
-  url: string
+  url: string;
 }
 
 interface VideoPlayerProps {
-  assetId: string
-  comments?: Comment[]
-  overlay?: React.ReactNode
-  className?: string
+  assetId: string;
+  comments?: Comment[];
+  overlay?: React.ReactNode;
+  className?: string;
   /** Pre-fetched stream URL (for share mode — skips authenticated API call) */
-  initialStreamUrl?: string | null
+  initialStreamUrl?: string | null;
 }
 
 // ─── Video frame constraint ──────────────────────────────────────────────────
@@ -44,127 +45,143 @@ function VideoFrameConstraint({
   videoRef,
   children,
 }: {
-  videoRef: React.RefObject<HTMLVideoElement>
-  children: React.ReactNode
+  videoRef: React.RefObject<HTMLVideoElement>;
+  children: React.ReactNode;
 }) {
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const [style, setStyle] = useState<React.CSSProperties>({})
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+    const video = videoRef.current;
+    if (!video) return;
 
     const calc = () => {
-      const container = video.parentElement
-      if (!container) return
+      const container = video.parentElement;
+      if (!container) return;
 
-      const cw = container.clientWidth
-      const ch = container.clientHeight
-      const vw = video.videoWidth
-      const vh = video.videoHeight
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
 
       if (!vw || !vh) {
         // Video metadata not loaded yet — fill container
-        setStyle({ position: 'absolute', inset: 0 })
-        return
+        setStyle({ position: "absolute", inset: 0 });
+        return;
       }
 
-      const containerAspect = cw / ch
-      const videoAspect = vw / vh
+      const containerAspect = cw / ch;
+      const videoAspect = vw / vh;
 
-      let renderW: number, renderH: number, offsetX: number, offsetY: number
+      let renderW: number, renderH: number, offsetX: number, offsetY: number;
 
       if (videoAspect > containerAspect) {
         // Video wider than container — letterbox top/bottom
-        renderW = cw
-        renderH = cw / videoAspect
-        offsetX = 0
-        offsetY = (ch - renderH) / 2
+        renderW = cw;
+        renderH = cw / videoAspect;
+        offsetX = 0;
+        offsetY = (ch - renderH) / 2;
       } else {
         // Video taller than container — letterbox left/right
-        renderH = ch
-        renderW = ch * videoAspect
-        offsetX = (cw - renderW) / 2
-        offsetY = 0
+        renderH = ch;
+        renderW = ch * videoAspect;
+        offsetX = (cw - renderW) / 2;
+        offsetY = 0;
       }
 
       setStyle({
-        position: 'absolute',
+        position: "absolute",
         left: offsetX,
         top: offsetY,
         width: renderW,
         height: renderH,
-      })
-    }
+      });
+    };
 
-    calc()
-    video.addEventListener('loadedmetadata', calc)
-    video.addEventListener('resize', calc)
+    calc();
+    video.addEventListener("loadedmetadata", calc);
+    video.addEventListener("resize", calc);
 
-    const ro = new ResizeObserver(calc)
-    if (video.parentElement) ro.observe(video.parentElement)
+    const ro = new ResizeObserver(calc);
+    if (video.parentElement) ro.observe(video.parentElement);
 
     return () => {
-      video.removeEventListener('loadedmetadata', calc)
-      video.removeEventListener('resize', calc)
-      ro.disconnect()
-    }
-  }, [videoRef])
+      video.removeEventListener("loadedmetadata", calc);
+      video.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [videoRef]);
 
   return (
     <div ref={wrapperRef} style={style} className="overflow-hidden">
       {children}
     </div>
-  )
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
-export function VideoPlayer({ assetId, comments = [], overlay, className, initialStreamUrl }: VideoPlayerProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [streamUrl, setStreamUrl] = useState<string | null>(null)
-  const [loop, setLoop] = useState(false)
+export function VideoPlayer({
+  assetId,
+  comments = [],
+  overlay,
+  className,
+  initialStreamUrl,
+}: VideoPlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [loop, setLoop] = useState(false);
 
-  const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } = useReviewStore()
-  const [timeFormatOpen, setTimeFormatOpen] = useState(false)
-  const timeFormatRef = useRef<HTMLDivElement>(null)
+  const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
+    useReviewStore();
+  const { registerPauseHandler } = useReview();
+  const [timeFormatOpen, setTimeFormatOpen] = useState(false);
+  const timeFormatRef = useRef<HTMLDivElement>(null);
 
   // Close time format dropdown on outside click
   useEffect(() => {
-    if (!timeFormatOpen) return
+    if (!timeFormatOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (timeFormatRef.current && !timeFormatRef.current.contains(e.target as Node)) setTimeFormatOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [timeFormatOpen])
+      if (
+        timeFormatRef.current &&
+        !timeFormatRef.current.contains(e.target as Node)
+      )
+        setTimeFormatOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [timeFormatOpen]);
 
   function displayTime(seconds: number): string {
     switch (timeFormat) {
-      case 'frames': return formatFrames(seconds)
-      case 'standard': return formatTime(seconds)
-      case 'timecode': return formatTimecode(seconds)
-      default: return formatTimecode(seconds)
+      case "frames":
+        return formatFrames(seconds);
+      case "standard":
+        return formatTime(seconds);
+      case "timecode":
+        return formatTimecode(seconds);
+      default:
+        return formatTimecode(seconds);
     }
   }
 
   // Load the stream URL
   useEffect(() => {
     if (initialStreamUrl) {
-      setStreamUrl(initialStreamUrl)
-      return
+      setStreamUrl(initialStreamUrl);
+      return;
     }
     api
       .get<StreamUrlResponse>(`/assets/${assetId}/stream`)
       .then((data) => setStreamUrl(data.url))
       .catch(() => {
         /* stream URL errors handled by player error state */
-      })
-  }, [assetId, initialStreamUrl])
+      });
+  }, [assetId, initialStreamUrl]);
 
-  const player = useVideoPlayer(streamUrl)
+  const player = useVideoPlayer(streamUrl);
 
   const {
     videoRef,
@@ -180,6 +197,7 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
     isLoading,
     isFullscreen,
     error,
+    pause,
     togglePlay,
     seek,
     setPlaybackRate,
@@ -187,17 +205,22 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
     setVolume,
     toggleMute,
     toggleFullscreen,
-  } = player
+  } = player;
+
+  // Register pause handler with review provider
+  useEffect(() => {
+    registerPauseHandler(pause);
+  }, [registerPauseHandler, pause]);
 
   // Sync video currentTime to review store so comment input shows same timecode
-  const lastSyncRef = useRef(0)
+  const lastSyncRef = useRef(0);
   useEffect(() => {
-    const now = Date.now()
+    const now = Date.now();
     if (now - lastSyncRef.current > 100) {
-      setPlayheadTime(currentTime)
-      lastSyncRef.current = now
+      setPlayheadTime(currentTime);
+      lastSyncRef.current = now;
     }
-  }, [currentTime, setPlayheadTime])
+  }, [currentTime, setPlayheadTime]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -207,62 +230,64 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
         e.target instanceof HTMLTextAreaElement ||
         isDrawingMode
       ) {
-        return
+        return;
       }
 
       switch (e.code) {
-        case 'Space':
-          e.preventDefault()
-          togglePlay()
-          break
-        case 'ArrowLeft':
-          e.preventDefault()
-          seek(currentTime - 5)
-          break
-        case 'ArrowRight':
-          e.preventDefault()
-          seek(currentTime + 5)
-          break
-        case 'KeyJ':
-          seek(currentTime - 10)
-          break
-        case 'KeyK':
-          togglePlay()
-          break
-        case 'KeyL':
-          seek(currentTime + 10)
-          break
+        case "Space":
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          seek(currentTime - 5);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          seek(currentTime + 5);
+          break;
+        case "KeyJ":
+          seek(currentTime - 10);
+          break;
+        case "KeyK":
+          togglePlay();
+          break;
+        case "KeyL":
+          seek(currentTime + 10);
+          break;
       }
-    }
+    };
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [togglePlay, seek, currentTime, isDrawingMode])
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [togglePlay, seek, currentTime, isDrawingMode]);
 
   const handleContainerClick = useCallback(() => {
     if (!isDrawingMode) {
-      togglePlay()
+      togglePlay();
     }
-  }, [togglePlay, isDrawingMode])
+  }, [togglePlay, isDrawingMode]);
 
   const handleFullscreen = useCallback(() => {
     if (containerRef.current) {
-      toggleFullscreen(containerRef.current)
+      toggleFullscreen(containerRef.current);
     }
-  }, [toggleFullscreen])
+  }, [toggleFullscreen]);
 
   const handleSpeedCycle = useCallback(() => {
-    const idx = SPEED_OPTIONS.indexOf(playbackRate as typeof SPEED_OPTIONS[number])
-    const next = SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length]
-    setPlaybackRate(next)
-  }, [playbackRate, setPlaybackRate])
+    const idx = SPEED_OPTIONS.indexOf(
+      playbackRate as (typeof SPEED_OPTIONS)[number],
+    );
+    const next = SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length];
+    setPlaybackRate(next);
+  }, [playbackRate, setPlaybackRate]);
 
   return (
     <div
       ref={containerRef}
       className={cn(
-        'flex flex-col h-full w-full',
-        isFullscreen && 'fixed inset-0 z-50',
+        "flex flex-col h-full w-full",
+        isFullscreen && "fixed inset-0 z-50",
         className,
       )}
     >
@@ -271,8 +296,8 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
         <video
           ref={videoRef}
           className={cn(
-            'absolute inset-0 w-full h-full object-contain',
-            isDrawingMode ? 'pointer-events-none' : 'cursor-pointer',
+            "absolute inset-0 w-full h-full object-contain",
+            isDrawingMode ? "pointer-events-none" : "cursor-pointer",
           )}
           onClick={handleContainerClick}
           playsInline
@@ -294,7 +319,11 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
         )}
 
         {/* Overlay slot (annotation canvas / overlay) — constrained to video frame */}
-        {overlay && <VideoFrameConstraint videoRef={videoRef}>{overlay}</VideoFrameConstraint>}
+        {overlay && (
+          <VideoFrameConstraint videoRef={videoRef}>
+            {overlay}
+          </VideoFrameConstraint>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -316,16 +345,22 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
           <button
             onClick={togglePlay}
             className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-colors"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            aria-label={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {isPlaying ? (
+              <Pause className="h-4 w-4" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
           </button>
 
           <button
             onClick={() => setLoop((p) => !p)}
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-colors',
-              loop ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
+              "flex h-7 w-7 items-center justify-center rounded transition-colors",
+              loop
+                ? "text-accent bg-accent/10"
+                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover",
             )}
             aria-label="Loop"
           >
@@ -343,9 +378,13 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
           <button
             onClick={toggleMute}
             className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-bg-hover transition-colors"
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
+            aria-label={isMuted ? "Unmute" : "Mute"}
           >
-            {isMuted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            {isMuted || volume === 0 ? (
+              <VolumeX className="h-4 w-4" />
+            ) : (
+              <Volume2 className="h-4 w-4" />
+            )}
           </button>
         </div>
 
@@ -356,33 +395,52 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
             className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1 hover:bg-bg-hover transition-colors"
           >
             <span className="font-mono text-sm text-text-primary tabular-nums tracking-wide">
-              {timeFormat === 'timecode'
-                ? displayTime(currentTime)
-                : <>{displayTime(currentTime)} <span className="text-text-tertiary">/</span> {displayTime(duration)}</>
-              }
+              {timeFormat === "timecode" ? (
+                displayTime(currentTime)
+              ) : (
+                <>
+                  {displayTime(currentTime)}{" "}
+                  <span className="text-text-tertiary">/</span>{" "}
+                  {displayTime(duration)}
+                </>
+              )}
             </span>
-            <ChevronUp className={cn('h-3 w-3 text-text-tertiary transition-transform', timeFormatOpen && 'rotate-180')} />
+            <ChevronUp
+              className={cn(
+                "h-3 w-3 text-text-tertiary transition-transform",
+                timeFormatOpen && "rotate-180",
+              )}
+            />
           </button>
           {timeFormatOpen && (
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
                 Time Format
               </div>
-              {([
-                { id: 'frames' as TimeFormat, label: 'Frames' },
-                { id: 'standard' as TimeFormat, label: 'Standard' },
-                { id: 'timecode' as TimeFormat, label: 'Timecode' },
-              ] as const).map((item) => (
+              {(
+                [
+                  { id: "frames" as TimeFormat, label: "Frames" },
+                  { id: "standard" as TimeFormat, label: "Standard" },
+                  { id: "timecode" as TimeFormat, label: "Timecode" },
+                ] as const
+              ).map((item) => (
                 <button
                   key={item.id}
                   className={cn(
-                    'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                    timeFormat === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-white/5',
+                    "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                    timeFormat === item.id
+                      ? "text-text-primary"
+                      : "text-text-secondary hover:bg-white/5",
                   )}
-                  onClick={() => { setTimeFormat(item.id); setTimeFormatOpen(false) }}
+                  onClick={() => {
+                    setTimeFormat(item.id);
+                    setTimeFormatOpen(false);
+                  }}
                 >
                   {item.label}
-                  {timeFormat === item.id && <Check className="h-4 w-4 text-accent" />}
+                  {timeFormat === item.id && (
+                    <Check className="h-4 w-4 text-accent" />
+                  )}
                 </button>
               ))}
             </div>
@@ -403,7 +461,11 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
                 Auto
               </option>
               {qualityLevels.map((level) => (
-                <option key={level.index} value={level.index} className="bg-bg-secondary">
+                <option
+                  key={level.index}
+                  value={level.index}
+                  className="bg-bg-secondary"
+                >
                   {level.label}
                 </option>
               ))}
@@ -414,12 +476,16 @@ export function VideoPlayer({ assetId, comments = [], overlay, className, initia
           <button
             onClick={handleFullscreen}
             className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           >
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+            {isFullscreen ? (
+              <Minimize className="h-4 w-4" />
+            ) : (
+              <Maximize className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

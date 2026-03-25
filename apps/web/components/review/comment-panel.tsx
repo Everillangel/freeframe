@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import * as React from 'react'
+import * as React from "react";
 import {
   CheckCircle2,
   Clock,
@@ -26,68 +26,91 @@ import {
   Check,
   Send,
   Lock,
-} from 'lucide-react'
-import { cn, formatTime, formatRelativeTime } from '@/lib/utils'
-import { useReviewStore } from '@/stores/review-store'
-import type { CommentWithReplies } from '@/hooks/use-comments'
+} from "lucide-react";
+import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
+import { useReviewStore } from "@/stores/review-store";
+import type { CommentWithReplies } from "@/hooks/use-comments";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CommentPanelProps {
-  comments: CommentWithReplies[]
-  isLoading?: boolean
-  currentUserId?: string
-  onResolve: (commentId: string) => Promise<void>
-  onDelete: (commentId: string) => Promise<void>
-  onAddReaction: (commentId: string, emoji: string) => Promise<void>
-  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>
-  onReply: (parentId: string) => void
-  onSubmitReply?: (parentId: string, body: string) => Promise<void>
-  className?: string
+  comments: CommentWithReplies[];
+  isLoading?: boolean;
+  currentUserId?: string;
+  onResolve: (commentId: string) => Promise<void>;
+  onDelete: (commentId: string) => Promise<void>;
+  onAddReaction: (commentId: string, emoji: string) => Promise<void>;
+  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
+  onReply: (parentId: string) => void;
+  onSubmitReply?: (parentId: string, body: string) => Promise<void>;
+  className?: string;
 }
 
 // ─── Emoji picker ────────────────────────────────────────────────────────────
 
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+const REPLY_EMOJIS = [
+  "👍",
+  "👎",
+  "❤️",
+  "🔥",
+  "👀",
+  "🎉",
+  "😂",
+  "😮",
+  "😢",
+  "💯",
+  "✅",
+  "❌",
+  "⭐",
+  "💡",
+  "🤔",
+  "👏",
+];
 
 // ─── Avatar colors ───────────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  'bg-orange-500',
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-purple-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-cyan-500',
-  'bg-pink-500',
-]
+  "bg-orange-500",
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-purple-500",
+  "bg-rose-500",
+  "bg-amber-500",
+  "bg-cyan-500",
+  "bg-pink-500",
+];
 
 function getAvatarColor(name: string): string {
-  let hash = 0
+  let hash = 0;
   for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
 // ─── useClickOutside ─────────────────────────────────────────────────────────
 
-function useClickOutside(ref: React.RefObject<HTMLElement | null>, handler: () => void, active: boolean) {
+function useClickOutside(
+  ref: React.RefObject<HTMLElement | null>,
+  handler: () => void,
+  active: boolean,
+) {
   React.useEffect(() => {
-    if (!active) return
+    if (!active) return;
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) handler()
+      if (ref.current && !ref.current.contains(e.target as Node)) handler();
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [active, ref, handler])
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [active, ref, handler]);
 }
 
 // ─── Dropdown wrapper ────────────────────────────────────────────────────────
@@ -97,31 +120,31 @@ function Dropdown({
   onClose,
   children,
   className,
-  align = 'left',
+  align = "left",
 }: {
-  open: boolean
-  onClose: () => void
-  children: React.ReactNode
-  className?: string
-  align?: 'left' | 'right'
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  className?: string;
+  align?: "left" | "right";
 }) {
-  const ref = React.useRef<HTMLDivElement>(null)
-  useClickOutside(ref, onClose, open)
+  const ref = React.useRef<HTMLDivElement>(null);
+  useClickOutside(ref, onClose, open);
 
-  if (!open) return null
+  if (!open) return null;
 
   return (
     <div
       ref={ref}
       className={cn(
-        'absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100',
-        align === 'right' ? 'right-0' : 'left-0',
+        "absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100",
+        align === "right" ? "right-0" : "left-0",
         className,
       )}
     >
       {children}
     </div>
-  )
+  );
 }
 
 // ─── Context menu ────────────────────────────────────────────────────────────
@@ -131,14 +154,14 @@ function CommentMenu({
   commentId,
   onDelete,
 }: {
-  isOwn: boolean
-  commentId: string
-  onDelete: (commentId: string) => Promise<void>
+  isOwn: boolean;
+  commentId: string;
+  onDelete: (commentId: string) => Promise<void>;
 }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(false);
 
   // Only show menu for own comments — others only get emoji reactions
-  if (!isOwn) return null
+  if (!isOwn) return null;
 
   return (
     <div className="relative">
@@ -148,7 +171,12 @@ function CommentMenu({
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
-      <Dropdown open={open} onClose={() => setOpen(false)} align="right" className="w-44">
+      <Dropdown
+        open={open}
+        onClose={() => setOpen(false)}
+        align="right"
+        className="w-44"
+      >
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
           onClick={() => setOpen(false)}
@@ -165,14 +193,17 @@ function CommentMenu({
         </button>
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-bg-tertiary transition-colors"
-          onClick={() => { onDelete(commentId); setOpen(false) }}
+          onClick={() => {
+            onDelete(commentId);
+            setOpen(false);
+          }}
         >
           <Trash2 className="h-3.5 w-3.5" />
           Delete
         </button>
       </Dropdown>
     </div>
-  )
+  );
 }
 
 // ─── Inline reply input (Frame.io style) ─────────────────────────────────────
@@ -182,30 +213,44 @@ function InlineReplyInput({
   onSubmit,
   onCancel,
 }: {
-  parentId: string
-  onSubmit: (parentId: string, body: string) => Promise<void>
-  onCancel: () => void
+  parentId: string;
+  onSubmit: (parentId: string, body: string) => Promise<void>;
+  onCancel: () => void;
 }) {
-  const [body, setBody] = React.useState('')
-  const [submitting, setSubmitting] = React.useState(false)
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [body, setBody] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const emojiRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+    inputRef.current?.focus();
+  }, []);
+
+  // Close emoji picker on outside click
+  React.useEffect(() => {
+    if (!emojiOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setEmojiOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [emojiOpen]);
 
   async function handleSubmit() {
-    const trimmed = body.trim()
-    if (!trimmed || submitting) return
-    setSubmitting(true)
+    const trimmed = body.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
     try {
-      await onSubmit(parentId, trimmed)
-      setBody('')
-      onCancel()
+      await onSubmit(parentId, trimmed);
+      setBody("");
+      onCancel();
     } catch {
       // error handled upstream
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -219,8 +264,11 @@ function InlineReplyInput({
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
-          if (e.key === 'Escape') onCancel()
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+          if (e.key === "Escape") onCancel();
         }}
       />
       <div className="flex items-center justify-between mt-2">
@@ -228,9 +276,34 @@ function InlineReplyInput({
           <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors">
             <Paperclip className="h-4 w-4" />
           </button>
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors">
-            <Smile className="h-4 w-4" />
-          </button>
+          <div className="relative" ref={emojiRef}>
+            <button
+              onClick={() => setEmojiOpen((p) => !p)}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+              title="Add emoji"
+            >
+              <Smile className="h-4 w-4" />
+            </button>
+            {emojiOpen && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
+                <div className="grid grid-cols-8 gap-px">
+                  {REPLY_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      className="h-6 w-6 rounded flex items-center justify-center text-sm hover:bg-bg-hover transition-colors"
+                      onClick={() => {
+                        setBody((prev) => prev + e);
+                        setEmojiOpen(false);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -249,25 +322,25 @@ function InlineReplyInput({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ─── Single comment item ──────────────────────────────────────────────────────
 
 interface CommentItemProps {
-  comment: CommentWithReplies
-  commentNumber?: number
-  depth?: number
-  currentUserId?: string
-  replyingTo?: string | null
-  isFocused?: boolean
-  onResolve: (commentId: string) => Promise<void>
-  onDelete: (commentId: string) => Promise<void>
-  onAddReaction: (commentId: string, emoji: string) => Promise<void>
-  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>
-  onReply: (parentId: string) => void
-  onCancelReply: () => void
-  onSubmitReply?: (parentId: string, body: string) => Promise<void>
+  comment: CommentWithReplies;
+  commentNumber?: number;
+  depth?: number;
+  currentUserId?: string;
+  replyingTo?: string | null;
+  isFocused?: boolean;
+  onResolve: (commentId: string) => Promise<void>;
+  onDelete: (commentId: string) => Promise<void>;
+  onAddReaction: (commentId: string, emoji: string) => Promise<void>;
+  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
+  onReply: (parentId: string) => void;
+  onCancelReply: () => void;
+  onSubmitReply?: (parentId: string, body: string) => Promise<void>;
 }
 
 function CommentItem({
@@ -285,84 +358,96 @@ function CommentItem({
   onCancelReply,
   onSubmitReply,
 }: CommentItemProps) {
-  const seekTo = useReviewStore((s) => s.seekTo)
-  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
-  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
-  const itemRef = React.useRef<HTMLDivElement>(null)
-  const [showReplies, setShowReplies] = React.useState(true)
-  const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
-  const [resolving, setResolving] = React.useState(false)
+  const seekTo = useReviewStore((s) => s.seekTo);
+  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
+  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId);
+  const itemRef = React.useRef<HTMLDivElement>(null);
+  const [showReplies, setShowReplies] = React.useState(true);
+  const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
+  const [resolving, setResolving] = React.useState(false);
 
   // Scroll into view when focused from progress bar marker click
   React.useEffect(() => {
     if (isFocused && itemRef.current) {
-      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      itemRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [isFocused])
+  }, [isFocused]);
 
   const authorName =
-    comment.author?.name ?? comment.guest_author?.name ?? 'Unknown'
-  const isOwn = !!(currentUserId && comment.author_id === currentUserId)
-  const avatarColor = getAvatarColor(authorName)
-  const isReplyingHere = replyingTo === comment.id && depth === 0
+    comment.author?.name ?? comment.guest_author?.name ?? "Unknown";
+  const isOwn = !!(currentUserId && comment.author_id === currentUserId);
+  const avatarColor = getAvatarColor(authorName);
+  const isReplyingHere = replyingTo === comment.id && depth === 0;
 
   // Group reactions by emoji
   const reactionGroups = React.useMemo(() => {
-    const groups: Record<string, { emoji: string; count: number; userReacted: boolean }> = {}
+    const groups: Record<
+      string,
+      { emoji: string; count: number; userReacted: boolean }
+    > = {};
     for (const r of comment.reactions ?? []) {
       if (!groups[r.emoji]) {
-        groups[r.emoji] = { emoji: r.emoji, count: 0, userReacted: false }
+        groups[r.emoji] = { emoji: r.emoji, count: 0, userReacted: false };
       }
-      groups[r.emoji].count++
-      if (r.user_id === currentUserId) groups[r.emoji].userReacted = true
+      groups[r.emoji].count++;
+      if (r.user_id === currentUserId) groups[r.emoji].userReacted = true;
     }
-    return Object.values(groups)
-  }, [comment.reactions, currentUserId])
+    return Object.values(groups);
+  }, [comment.reactions, currentUserId]);
 
   async function handleResolve() {
-    setResolving(true)
-    try { await onResolve(comment.id) } finally { setResolving(false) }
+    setResolving(true);
+    try {
+      await onResolve(comment.id);
+    } finally {
+      setResolving(false);
+    }
   }
 
   async function handleReactionClick(emoji: string, userReacted: boolean) {
-    if (userReacted) await onRemoveReaction(comment.id, emoji)
-    else await onAddReaction(comment.id, emoji)
+    if (userReacted) await onRemoveReaction(comment.id, emoji);
+    else await onAddReaction(comment.id, emoji);
   }
 
   async function handleQuickEmoji(emoji: string) {
-    setShowEmojiPicker(false)
-    const existing = reactionGroups.find((r) => r.emoji === emoji)
-    if (existing?.userReacted) await onRemoveReaction(comment.id, emoji)
-    else await onAddReaction(comment.id, emoji)
+    setShowEmojiPicker(false);
+    const existing = reactionGroups.find((r) => r.emoji === emoji);
+    if (existing?.userReacted) await onRemoveReaction(comment.id, emoji);
+    else await onAddReaction(comment.id, emoji);
   }
 
   return (
     <div
       ref={itemRef}
       className={cn(
-        'group/comment relative transition-colors cursor-pointer',
+        "group/comment relative transition-colors cursor-pointer",
         depth > 0
-          ? 'ml-8 pl-3 border-l-2 border-border'
+          ? "ml-8 pl-3 border-l-2 border-border"
           : cn(
-              'rounded-lg border px-3',
+              "rounded-lg border px-3",
               isFocused
-                ? 'border-accent/50 bg-white/[0.04]'
-                : 'border-white/[0.06] hover:border-white/15 hover:bg-white/[0.02]',
+                ? "border-accent/50 bg-white/[0.04]"
+                : "border-white/[0.06] hover:border-white/15 hover:bg-white/[0.02]",
             ),
       )}
       onClick={() => {
-        setFocusedCommentId(comment.id)
-        if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
-          seekTo(comment.timecode_start, true)
+        setFocusedCommentId(comment.id);
+        if (
+          comment.timecode_start !== null &&
+          comment.timecode_start !== undefined
+        ) {
+          seekTo(comment.timecode_start, true);
         }
-        setActiveAnnotation(comment.annotation ? comment.annotation.drawing_data : null)
+        setActiveAnnotation(
+          comment.annotation ? comment.annotation.drawing_data : null,
+        );
       }}
     >
       <div className="flex gap-2.5 py-3">
         {/* Colored avatar */}
         <div
           className={cn(
-            'h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-text-inverse shrink-0 mt-0.5',
+            "h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-text-inverse shrink-0 mt-0.5",
             avatarColor,
           )}
         >
@@ -384,7 +469,7 @@ function CommentItem({
                   #{commentNumber}
                 </span>
               )}
-              {comment.visibility === 'internal' ? (
+              {comment.visibility === "internal" ? (
                 <Lock className="h-3.5 w-3.5 text-amber-400" />
               ) : (
                 <Globe className="h-3.5 w-3.5 text-text-tertiary" />
@@ -394,40 +479,45 @@ function CommentItem({
 
           {/* Timecode badge + annotation indicator */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          {comment.timecode_start !== null && comment.timecode_start !== undefined && (
-            <button
-              className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
-              onClick={() => {
-                seekTo(comment.timecode_start!, true)
-                setFocusedCommentId(comment.id)
-                if (comment.annotation) {
-                  setActiveAnnotation(comment.annotation.drawing_data)
-                }
-              }}
-              title="Jump to timecode"
-            >
-              <Clock className="h-2.5 w-2.5" />
-              {formatTime(comment.timecode_start)}
-              {comment.timecode_end !== null && comment.timecode_end !== undefined && (
-                <> — {formatTime(comment.timecode_end)}</>
+            {comment.timecode_start !== null &&
+              comment.timecode_start !== undefined && (
+                <button
+                  className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
+                  onClick={() => {
+                    seekTo(comment.timecode_start!, true);
+                    setFocusedCommentId(comment.id);
+                    if (comment.annotation) {
+                      setActiveAnnotation(comment.annotation.drawing_data);
+                    }
+                  }}
+                  title="Jump to timecode"
+                >
+                  <Clock className="h-2.5 w-2.5" />
+                  {formatTime(comment.timecode_start)}
+                  {comment.timecode_end !== null &&
+                    comment.timecode_end !== undefined && (
+                      <> — {formatTime(comment.timecode_end)}</>
+                    )}
+                </button>
               )}
-            </button>
-          )}
-          {comment.annotation && (
-            <button
-              className="inline-flex items-center justify-center h-5 w-5 rounded text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/15 transition-colors"
-              onClick={() => {
-                setActiveAnnotation(comment.annotation!.drawing_data)
-                setFocusedCommentId(comment.id)
-                if (comment.timecode_start !== null && comment.timecode_start !== undefined) {
-                  seekTo(comment.timecode_start, true)
-                }
-              }}
-              title="Show annotation"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-          )}
+            {comment.annotation && (
+              <button
+                className="inline-flex items-center justify-center h-5 w-5 rounded text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                onClick={() => {
+                  setActiveAnnotation(comment.annotation!.drawing_data);
+                  setFocusedCommentId(comment.id);
+                  if (
+                    comment.timecode_start !== null &&
+                    comment.timecode_start !== undefined
+                  ) {
+                    seekTo(comment.timecode_start, true);
+                  }
+                }}
+                title="Show annotation"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
           </div>
 
           {/* Body */}
@@ -442,10 +532,10 @@ function CommentItem({
                 <button
                   key={r.emoji}
                   className={cn(
-                    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
                     r.userReacted
-                      ? 'border-accent/40 bg-accent/10 text-accent'
-                      : 'border-border bg-bg-tertiary text-text-secondary hover:border-white/20',
+                      ? "border-accent/40 bg-accent/10 text-accent"
+                      : "border-border bg-bg-tertiary text-text-secondary hover:border-white/20",
                   )}
                   onClick={() => handleReactionClick(r.emoji, r.userReacted)}
                 >
@@ -494,7 +584,11 @@ function CommentItem({
 
               {/* Context menu — hover only */}
               <div className="opacity-0 group-hover/comment:opacity-100 transition-opacity">
-                <CommentMenu isOwn={isOwn} commentId={comment.id} onDelete={onDelete} />
+                <CommentMenu
+                  isOwn={isOwn}
+                  commentId={comment.id}
+                  onDelete={onDelete}
+                />
               </div>
 
               {/* Resolve — green filled when resolved (clickable to unresolve), outline on hover when unresolved */}
@@ -538,8 +632,13 @@ function CommentItem({
             className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors ml-10 mb-1"
             onClick={() => setShowReplies((p) => !p)}
           >
-            {showReplies ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
+            {showReplies ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+            {comment.replies.length}{" "}
+            {comment.replies.length === 1 ? "reply" : "replies"}
           </button>
           {showReplies && (
             <div>
@@ -564,21 +663,21 @@ function CommentItem({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type CommentVisibility = 'all' | 'public' | 'internal'
-type SortMode = 'oldest' | 'newest' | 'commenter' | 'completed'
+type CommentVisibility = "all" | "public" | "internal";
+type SortMode = "oldest" | "newest" | "commenter" | "completed";
 
 interface FilterState {
-  annotations: boolean
-  attachments: boolean
-  completed: boolean
-  incomplete: boolean
-  unread: boolean
-  mentionsReactions: boolean
+  annotations: boolean;
+  attachments: boolean;
+  completed: boolean;
+  incomplete: boolean;
+  unread: boolean;
+  mentionsReactions: boolean;
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -588,7 +687,7 @@ const EMPTY_FILTERS: FilterState = {
   incomplete: false,
   unread: false,
   mentionsReactions: false,
-}
+};
 
 // ─── Comment panel ────────────────────────────────────────────────────────────
 
@@ -604,126 +703,180 @@ export function CommentPanel({
   onSubmitReply,
   className,
 }: CommentPanelProps) {
-  const focusedCommentId = useReviewStore((s) => s.focusedCommentId)
-  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
-  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
-
-
+  const focusedCommentId = useReviewStore((s) => s.focusedCommentId);
+  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId);
+  const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
 
   // Toolbar state
-  const [visibility, setVisibility] = React.useState<CommentVisibility>('all')
-  const [visOpen, setVisOpen] = React.useState(false)
-  const [filterOpen, setFilterOpen] = React.useState(false)
-  const [sortOpen, setSortOpen] = React.useState(false)
-  const [searchOpen, setSearchOpen] = React.useState(false)
-  const [searchQuery, setSearchQuery] = React.useState('')
-  const [sortMode, setSortMode] = React.useState<SortMode>('oldest')
-  const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS)
-  const [replyingTo, setReplyingTo] = React.useState<string | null>(null)
+  const [visibility, setVisibility] = React.useState<CommentVisibility>("all");
+  const [visOpen, setVisOpen] = React.useState(false);
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [sortOpen, setSortOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortMode, setSortMode] = React.useState<SortMode>("oldest");
+  const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS);
+  const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
 
-  const searchRef = React.useRef<HTMLInputElement>(null)
+  const searchRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (searchOpen) searchRef.current?.focus()
-  }, [searchOpen])
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
 
-  const hasActiveFilters = Object.values(filters).some(Boolean)
+  const hasActiveFilters = Object.values(filters).some(Boolean);
 
   // ─── Computed list ──────────────────────────────────────────────────
 
-  const topLevel = React.useMemo(() => comments.filter((c) => c.parent_id === null), [comments])
+  const topLevel = React.useMemo(
+    () => comments.filter((c) => c.parent_id === null),
+    [comments],
+  );
 
-  const publicCount = React.useMemo(() => topLevel.filter((c) => c.visibility !== 'internal').length, [topLevel])
-  const internalCount = React.useMemo(() => topLevel.filter((c) => c.visibility === 'internal').length, [topLevel])
+  const publicCount = React.useMemo(
+    () => topLevel.filter((c) => c.visibility !== "internal").length,
+    [topLevel],
+  );
+  const internalCount = React.useMemo(
+    () => topLevel.filter((c) => c.visibility === "internal").length,
+    [topLevel],
+  );
 
   const filtered = React.useMemo(() => {
-    let list = [...topLevel]
+    let list = [...topLevel];
 
     // Filter by visibility
-    if (visibility === 'public') list = list.filter((c) => c.visibility !== 'internal')
-    else if (visibility === 'internal') list = list.filter((c) => c.visibility === 'internal')
+    if (visibility === "public")
+      list = list.filter((c) => c.visibility !== "internal");
+    else if (visibility === "internal")
+      list = list.filter((c) => c.visibility === "internal");
 
     // Filter by completion
-    if (filters.completed && !filters.incomplete) list = list.filter((c) => c.resolved)
-    else if (filters.incomplete && !filters.completed) list = list.filter((c) => !c.resolved)
+    if (filters.completed && !filters.incomplete)
+      list = list.filter((c) => c.resolved);
+    else if (filters.incomplete && !filters.completed)
+      list = list.filter((c) => !c.resolved);
 
     // Filter by annotations
-    if (filters.annotations) list = list.filter((c) => c.annotation !== null)
+    if (filters.annotations) list = list.filter((c) => c.annotation !== null);
 
     // Search
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
+      const q = searchQuery.toLowerCase();
       list = list.filter(
         (c) =>
           c.body.toLowerCase().includes(q) ||
-          (c.author?.name ?? '').toLowerCase().includes(q),
-      )
+          (c.author?.name ?? "").toLowerCase().includes(q),
+      );
     }
 
-    return list
-  }, [topLevel, visibility, filters, searchQuery])
+    return list;
+  }, [topLevel, visibility, filters, searchQuery]);
 
   const sorted = React.useMemo(() => {
     return [...filtered].sort((a, b) => {
-      if (sortMode === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      if (sortMode === 'commenter') return (a.author?.name ?? '').localeCompare(b.author?.name ?? '')
-      if (sortMode === 'completed') {
-        if (a.resolved && !b.resolved) return -1
-        if (!a.resolved && b.resolved) return 1
+      if (sortMode === "newest")
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      if (sortMode === "commenter")
+        return (a.author?.name ?? "").localeCompare(b.author?.name ?? "");
+      if (sortMode === "completed") {
+        if (a.resolved && !b.resolved) return -1;
+        if (!a.resolved && b.resolved) return 1;
       }
       // Default: oldest / timecoded first
-      const aHasTime = a.timecode_start !== null && a.timecode_start !== undefined
-      const bHasTime = b.timecode_start !== null && b.timecode_start !== undefined
-      if (aHasTime && bHasTime) return (a.timecode_start as number) - (b.timecode_start as number)
-      if (aHasTime && !bHasTime) return -1
-      if (!aHasTime && bHasTime) return 1
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    })
-  }, [filtered, sortMode])
+      const aHasTime =
+        a.timecode_start !== null && a.timecode_start !== undefined;
+      const bHasTime =
+        b.timecode_start !== null && b.timecode_start !== undefined;
+      if (aHasTime && bHasTime)
+        return (a.timecode_start as number) - (b.timecode_start as number);
+      if (aHasTime && !bHasTime) return -1;
+      if (!aHasTime && bHasTime) return 1;
+      return (
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    });
+  }, [filtered, sortMode]);
 
-  const visLabel = visibility === 'all' ? 'All comments' : visibility === 'public' ? 'Public comments' : 'Internal comments'
+  const visLabel =
+    visibility === "all"
+      ? "All comments"
+      : visibility === "public"
+        ? "Public comments"
+        : "Internal comments";
 
   function toggleFilter(key: keyof FilterState) {
-    setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
+    setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   function handleReply(parentId: string) {
-    setReplyingTo(parentId)
-    onReply(parentId)
+    setReplyingTo(parentId);
+    onReply(parentId);
   }
 
   return (
-    <div className={cn('flex flex-col flex-1 min-h-0', className)}>
+    <div className={cn("flex flex-col flex-1 min-h-0", className)}>
       {/* ─── Toolbar ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-2.5 shrink-0">
         {/* Visibility dropdown */}
         <div className="relative">
           <button
             className={cn(
-              'flex items-center gap-1.5 text-[13px] font-medium transition-colors rounded-md px-2 py-1',
-              visOpen ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary hover:text-text-primary',
+              "flex items-center gap-1.5 text-[13px] font-medium transition-colors rounded-md px-2 py-1",
+              visOpen
+                ? "bg-bg-tertiary text-text-primary"
+                : "text-text-secondary hover:text-text-primary",
             )}
-            onClick={() => { setVisOpen((p) => !p); setFilterOpen(false); setSortOpen(false) }}
+            onClick={() => {
+              setVisOpen((p) => !p);
+              setFilterOpen(false);
+              setSortOpen(false);
+            }}
           >
             {visLabel}
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
-          <Dropdown open={visOpen} onClose={() => setVisOpen(false)} className="w-52">
-            {([
-              { id: 'all' as const, label: 'All comments', count: topLevel.length },
-              { id: 'public' as const, label: 'Public comments', count: publicCount },
-              { id: 'internal' as const, label: 'Internal comments', count: internalCount },
-            ]).map((item) => (
+          <Dropdown
+            open={visOpen}
+            onClose={() => setVisOpen(false)}
+            className="w-52"
+          >
+            {[
+              {
+                id: "all" as const,
+                label: "All comments",
+                count: topLevel.length,
+              },
+              {
+                id: "public" as const,
+                label: "Public comments",
+                count: publicCount,
+              },
+              {
+                id: "internal" as const,
+                label: "Internal comments",
+                count: internalCount,
+              },
+            ].map((item) => (
               <button
                 key={item.id}
                 className={cn(
-                  'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                  visibility === item.id ? 'text-text-primary bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
+                  "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                  visibility === item.id
+                    ? "text-text-primary bg-bg-tertiary"
+                    : "text-text-secondary hover:bg-bg-tertiary",
                 )}
-                onClick={() => { setVisibility(item.id); setVisOpen(false) }}
+                onClick={() => {
+                  setVisibility(item.id);
+                  setVisOpen(false);
+                }}
               >
                 {item.label}
-                <span className="text-[12px] text-text-tertiary tabular-nums">{item.count}</span>
+                <span className="text-[12px] text-text-tertiary tabular-nums">
+                  {item.count}
+                </span>
               </button>
             ))}
           </Dropdown>
@@ -735,28 +888,57 @@ export function CommentPanel({
           <div className="relative">
             <button
               className={cn(
-                'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+                "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                 filterOpen || hasActiveFilters
-                  ? 'text-accent bg-accent/10'
-                  : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
+                  ? "text-accent bg-accent/10"
+                  : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
               )}
               title="Filter"
-              onClick={() => { setFilterOpen((p) => !p); setVisOpen(false); setSortOpen(false) }}
+              onClick={() => {
+                setFilterOpen((p) => !p);
+                setVisOpen(false);
+                setSortOpen(false);
+              }}
             >
               <ListFilter className="h-4 w-4" />
             </button>
-            <Dropdown open={filterOpen} onClose={() => setFilterOpen(false)} align="right" className="w-56">
+            <Dropdown
+              open={filterOpen}
+              onClose={() => setFilterOpen(false)}
+              align="right"
+              className="w-56"
+            >
               <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
                 Filter by...
               </div>
-              {([
-                { key: 'annotations' as const, icon: Pencil, label: 'Annotations' },
-                { key: 'attachments' as const, icon: Paperclip, label: 'Attachments' },
-                { key: 'completed' as const, icon: CheckCircle2, label: 'Completed' },
-                { key: 'incomplete' as const, icon: Circle, label: 'Incomplete' },
-                { key: 'unread' as const, icon: Mail, label: 'Unread' },
-                { key: 'mentionsReactions' as const, icon: AtSign, label: 'Mentions and reactions' },
-              ]).map(({ key, icon: Icon, label }) => (
+              {[
+                {
+                  key: "annotations" as const,
+                  icon: Pencil,
+                  label: "Annotations",
+                },
+                {
+                  key: "attachments" as const,
+                  icon: Paperclip,
+                  label: "Attachments",
+                },
+                {
+                  key: "completed" as const,
+                  icon: CheckCircle2,
+                  label: "Completed",
+                },
+                {
+                  key: "incomplete" as const,
+                  icon: Circle,
+                  label: "Incomplete",
+                },
+                { key: "unread" as const, icon: Mail, label: "Unread" },
+                {
+                  key: "mentionsReactions" as const,
+                  icon: AtSign,
+                  label: "Mentions and reactions",
+                },
+              ].map(({ key, icon: Icon, label }) => (
                 <button
                   key={key}
                   className="flex w-full items-center justify-between px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
@@ -766,11 +948,17 @@ export function CommentPanel({
                     <Icon className="h-4 w-4" />
                     {label}
                   </div>
-                  <div className={cn(
-                    'h-4 w-4 rounded border flex items-center justify-center transition-colors',
-                    filters[key] ? 'bg-accent border-accent' : 'border-white/20',
-                  )}>
-                    {filters[key] && <Check className="h-3 w-3 text-text-inverse" />}
+                  <div
+                    className={cn(
+                      "h-4 w-4 rounded border flex items-center justify-center transition-colors",
+                      filters[key]
+                        ? "bg-accent border-accent"
+                        : "border-white/20",
+                    )}
+                  >
+                    {filters[key] && (
+                      <Check className="h-3 w-3 text-text-inverse" />
+                    )}
                   </div>
                 </button>
               ))}
@@ -803,34 +991,52 @@ export function CommentPanel({
           <div className="relative">
             <button
               className={cn(
-                'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-                sortOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
+                "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                sortOpen
+                  ? "text-accent bg-accent/10"
+                  : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
               )}
               title="Sort"
-              onClick={() => { setSortOpen((p) => !p); setVisOpen(false); setFilterOpen(false) }}
+              onClick={() => {
+                setSortOpen((p) => !p);
+                setVisOpen(false);
+                setFilterOpen(false);
+              }}
             >
               <ArrowUpDown className="h-4 w-4" />
             </button>
-            <Dropdown open={sortOpen} onClose={() => setSortOpen(false)} align="right" className="w-52">
+            <Dropdown
+              open={sortOpen}
+              onClose={() => setSortOpen(false)}
+              align="right"
+              className="w-52"
+            >
               <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
                 Sort thread by...
               </div>
-              {([
-                { id: 'oldest' as const, label: 'Oldest (Default)' },
-                { id: 'newest' as const, label: 'Newest' },
-                { id: 'commenter' as const, label: 'Commenter' },
-                { id: 'completed' as const, label: 'Completed' },
-              ]).map((item) => (
+              {[
+                { id: "oldest" as const, label: "Oldest (Default)" },
+                { id: "newest" as const, label: "Newest" },
+                { id: "commenter" as const, label: "Commenter" },
+                { id: "completed" as const, label: "Completed" },
+              ].map((item) => (
                 <button
                   key={item.id}
                   className={cn(
-                    'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                    sortMode === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-bg-tertiary',
+                    "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                    sortMode === item.id
+                      ? "text-text-primary"
+                      : "text-text-secondary hover:bg-bg-tertiary",
                   )}
-                  onClick={() => { setSortMode(item.id); setSortOpen(false) }}
+                  onClick={() => {
+                    setSortMode(item.id);
+                    setSortOpen(false);
+                  }}
                 >
                   {item.label}
-                  {sortMode === item.id && <Check className="h-4 w-4 text-accent" />}
+                  {sortMode === item.id && (
+                    <Check className="h-4 w-4 text-accent" />
+                  )}
                 </button>
               ))}
             </Dropdown>
@@ -839,17 +1045,25 @@ export function CommentPanel({
           {/* Search */}
           <button
             className={cn(
-              'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-              searchOpen ? 'text-accent bg-accent/10' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary',
+              "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+              searchOpen
+                ? "text-accent bg-accent/10"
+                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
             )}
             title="Search"
-            onClick={() => { setSearchOpen((p) => !p); if (searchOpen) setSearchQuery('') }}
+            onClick={() => {
+              setSearchOpen((p) => !p);
+              if (searchOpen) setSearchQuery("");
+            }}
           >
             <Search className="h-4 w-4" />
           </button>
 
           {/* More */}
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors" title="More">
+          <button
+            className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
+            title="More"
+          >
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
@@ -869,12 +1083,18 @@ export function CommentPanel({
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="text-text-tertiary hover:text-text-secondary">
+              <button
+                onClick={() => setSearchQuery("")}
+                className="text-text-tertiary hover:text-text-secondary"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
             <button
-              onClick={() => { setSearchOpen(false); setSearchQuery('') }}
+              onClick={() => {
+                setSearchOpen(false);
+                setSearchQuery("");
+              }}
               className="text-[12px] text-text-tertiary hover:text-text-secondary font-medium"
             >
               Cancel
@@ -896,7 +1116,9 @@ export function CommentPanel({
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-bg-tertiary text-text-tertiary mb-3">
               <MessageSquare className="h-6 w-6" />
             </div>
-            <p className="text-sm text-text-secondary font-medium">No comments yet</p>
+            <p className="text-sm text-text-secondary font-medium">
+              No comments yet
+            </p>
             <p className="text-xs text-text-tertiary mt-1">
               Leave a comment below to start the review
             </p>
@@ -905,10 +1127,7 @@ export function CommentPanel({
 
         {!isLoading &&
           sorted.map((comment, index) => (
-            <div
-              key={comment.id}
-              className="px-3 pt-2 first:pt-3"
-            >
+            <div key={comment.id} className="px-3 pt-2 first:pt-3">
               <CommentItem
                 comment={comment}
                 commentNumber={index + 1}
@@ -927,5 +1146,5 @@ export function CommentPanel({
           ))}
       </div>
     </div>
-  )
+  );
 }

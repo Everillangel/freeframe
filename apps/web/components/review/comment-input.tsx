@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import * as React from 'react'
+import * as React from "react";
 import {
   Pencil,
   Paperclip,
@@ -18,21 +18,22 @@ import {
   Trash2,
   Globe,
   Lock,
-} from 'lucide-react'
-import { cn, formatTime, formatTimecode, formatFrames } from '@/lib/utils'
-import { useReviewStore } from '@/stores/review-store'
-import { useDrawing } from '@/hooks/use-drawing'
-import { api } from '@/lib/api'
-import type { User } from '@/types'
+} from "lucide-react";
+import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { useReviewStore } from "@/stores/review-store";
+import { useReview } from "./review-provider";
+import { useDrawing } from "@/hooks/use-drawing";
+import { api } from "@/lib/api";
+import type { User } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CommentInputProps {
-  assetId: string
-  projectId: string
-  assetType?: string
-  replyToId?: string | null
-  annotationData?: Record<string, unknown> | null
+  assetId: string;
+  projectId: string;
+  assetType?: string;
+  replyToId?: string | null;
+  annotationData?: Record<string, unknown> | null;
   onSubmit: (
     body: string,
     timecodeStart?: number,
@@ -41,33 +42,52 @@ interface CommentInputProps {
     parentId?: string,
     visibility?: string,
     mentionUserIds?: string[],
-  ) => Promise<void>
-  onCancelReply?: () => void
-  className?: string
+  ) => Promise<void>;
+  onCancelReply?: () => void;
+  onPauseVideo?: () => void;
+  className?: string;
 }
 
 // ─── Drawing tools config ─────────────────────────────────────────────────────
 
 const EMOJIS = [
-  '👍', '👎', '❤️', '🔥', '👀', '🎉', '😂', '😮',
-  '😢', '💯', '✅', '❌', '⭐', '💡', '🤔', '👏',
-]
+  "👍",
+  "👎",
+  "❤️",
+  "🔥",
+  "👀",
+  "🎉",
+  "😂",
+  "😮",
+  "😢",
+  "💯",
+  "✅",
+  "❌",
+  "⭐",
+  "💡",
+  "🤔",
+  "👏",
+];
 
-type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'line'
+type DrawingTool = "pen" | "rectangle" | "arrow" | "line";
 
-const DRAW_TOOLS: { id: DrawingTool; icon: React.ElementType; label: string }[] = [
-  { id: 'pen', icon: Pencil, label: 'Pencil' },
-  { id: 'arrow', icon: MousePointer, label: 'Arrow' },
-  { id: 'line', icon: Minus, label: 'Line' },
-  { id: 'rectangle', icon: Square, label: 'Rectangle' },
-]
+const DRAW_TOOLS: {
+  id: DrawingTool;
+  icon: React.ElementType;
+  label: string;
+}[] = [
+  { id: "pen", icon: Pencil, label: "Pencil" },
+  { id: "arrow", icon: MousePointer, label: "Arrow" },
+  { id: "line", icon: Minus, label: "Line" },
+  { id: "rectangle", icon: Square, label: "Rectangle" },
+];
 
 const DRAW_COLORS = [
-  '#AF52DE', // purple
-  '#FF9500', // orange
-  '#34C759', // green
-  '#FF3B30', // red
-]
+  "#AF52DE", // purple
+  "#FF9500", // orange
+  "#34C759", // green
+  "#FF3B30", // red
+];
 
 // ─── @mention dropdown ────────────────────────────────────────────────────────
 
@@ -76,45 +96,54 @@ function MentionDropdown({
   projectId,
   onSelect,
 }: {
-  query: string
-  projectId: string
-  onSelect: (user: User) => void
-  onClose: () => void
+  query: string;
+  projectId: string;
+  onSelect: (user: User) => void;
+  onClose: () => void;
 }) {
-  const [members, setMembers] = React.useState<User[]>([])
-  const [loading, setLoading] = React.useState(false)
+  const [members, setMembers] = React.useState<User[]>([]);
+  const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
-    if (!projectId) return
-    setLoading(true)
+    if (!projectId) return;
+    setLoading(true);
     api
-      .get<Array<{ user_id: string; role: string }>>(`/projects/${projectId}/members`)
+      .get<Array<{ user_id: string; role: string }>>(
+        `/projects/${projectId}/members`,
+      )
       .then(async (memberList) => {
-        if (!memberList || memberList.length === 0) { setMembers([]); return }
-        const userIds = memberList.map((m) => m.user_id).join(',')
-        const users = await api.get<User[]>(`/users?ids=${userIds}`)
-        setMembers(users)
+        if (!memberList || memberList.length === 0) {
+          setMembers([]);
+          return;
+        }
+        const userIds = memberList.map((m) => m.user_id).join(",");
+        const users = await api.get<User[]>(`/users?ids=${userIds}`);
+        setMembers(users);
       })
       .catch(() => setMembers([]))
-      .finally(() => setLoading(false))
-  }, [projectId])
+      .finally(() => setLoading(false));
+  }, [projectId]);
 
   const filtered = members.filter(
     (u) =>
       u.name.toLowerCase().includes(query.toLowerCase()) ||
       u.email.toLowerCase().includes(query.toLowerCase()),
-  )
+  );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-3 px-4">
         <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
       </div>
-    )
+    );
   }
 
   if (filtered.length === 0) {
-    return <div className="py-2 px-4 text-xs text-text-tertiary">No members found</div>
+    return (
+      <div className="py-2 px-4 text-xs text-text-tertiary">
+        No members found
+      </div>
+    );
   }
 
   return (
@@ -124,8 +153,8 @@ function MentionDropdown({
           key={user.id}
           className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
           onMouseDown={(e) => {
-            e.preventDefault()
-            onSelect(user)
+            e.preventDefault();
+            onSelect(user);
           }}
         >
           <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
@@ -133,12 +162,14 @@ function MentionDropdown({
           </div>
           <div className="flex-1 text-left min-w-0">
             <div className="font-medium truncate text-[13px]">{user.name}</div>
-            <div className="text-[11px] text-text-tertiary truncate">{user.email}</div>
+            <div className="text-[11px] text-text-tertiary truncate">
+              {user.email}
+            </div>
           </div>
         </button>
       ))}
     </>
-  )
+  );
 }
 
 // ─── Comment input component (Frame.io style) ───────────────────────────────
@@ -151,6 +182,7 @@ export function CommentInput({
   annotationData,
   onSubmit,
   onCancelReply,
+  onPauseVideo,
   className,
 }: CommentInputProps) {
   const {
@@ -164,170 +196,209 @@ export function CommentInput({
     setDrawingTool,
     setDrawingColor,
     setPendingAnnotation,
-  } = useReviewStore()
+  } = useReviewStore();
 
-  const { clear, undo, getJSON } = useDrawing()
+  const { pauseVideo } = useReview();
 
-  const [body, setBody] = React.useState('')
-  const [mentionUserIds, setMentionUserIds] = React.useState<string[]>([])
-  const [submitting, setSubmitting] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [commentVisibility, setCommentVisibility] = React.useState<'public' | 'internal'>('public')
-  const [visDropdownOpen, setVisDropdownOpen] = React.useState(false)
-  const [timecodeAttached, setTimecodeAttached] = React.useState(true)
-  const visRef = React.useRef<HTMLDivElement>(null)
+  const { clear, undo, getJSON } = useDrawing();
+
+  const [body, setBody] = React.useState("");
+  const [mentionUserIds, setMentionUserIds] = React.useState<string[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [commentVisibility, setCommentVisibility] = React.useState<
+    "public" | "internal"
+  >("public");
+  const [visDropdownOpen, setVisDropdownOpen] = React.useState(false);
+  const [timecodeAttached, setTimecodeAttached] = React.useState(true);
+  const visRef = React.useRef<HTMLDivElement>(null);
 
   // Emoji picker state
-  const [emojiOpen, setEmojiOpen] = React.useState(false)
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const emojiRef = React.useRef<HTMLDivElement>(null);
 
   // Mention state
-  const [mentionQuery, setMentionQuery] = React.useState<string | null>(null)
-  const [mentionStart, setMentionStart] = React.useState<number>(0)
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
+  const [mentionStart, setMentionStart] = React.useState<number>(0);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   // Close dropdowns on outside click
   React.useEffect(() => {
-    if (!visDropdownOpen && !emojiOpen) return
+    if (!visDropdownOpen && !emojiOpen) return;
     function handleClick(e: MouseEvent) {
-      if (visDropdownOpen && visRef.current && !visRef.current.contains(e.target as Node)) setVisDropdownOpen(false)
-      if (emojiOpen) setEmojiOpen(false)
+      if (
+        visDropdownOpen &&
+        visRef.current &&
+        !visRef.current.contains(e.target as Node)
+      )
+        setVisDropdownOpen(false);
+      if (
+        emojiOpen &&
+        emojiRef.current &&
+        !emojiRef.current.contains(e.target as Node)
+      )
+        setEmojiOpen(false);
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [visDropdownOpen, emojiOpen])
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [visDropdownOpen, emojiOpen]);
 
-  const canAnnotate = assetType !== 'audio'
-  const hasTimecode = assetType === 'video' || assetType === 'audio'
+  const canAnnotate = assetType !== "audio";
+  const hasTimecode = assetType === "video" || assetType === "audio";
 
   function displayTime(seconds: number): string {
     switch (timeFormat) {
-      case 'frames': return formatFrames(seconds)
-      case 'standard': return formatTime(seconds)
-      case 'timecode': return formatTimecode(seconds)
-      default: return formatTimecode(seconds)
+      case "frames":
+        return formatFrames(seconds);
+      case "standard":
+        return formatTime(seconds);
+      case "timecode":
+        return formatTimecode(seconds);
+      default:
+        return formatTimecode(seconds);
     }
   }
-  const hasAnnotation = !!(annotationData && Object.keys(annotationData).length > 0) || !!(pendingAnnotation && (pendingAnnotation as any)?.objects?.length > 0)
+  const hasAnnotation =
+    !!(annotationData && Object.keys(annotationData).length > 0) ||
+    !!(pendingAnnotation && (pendingAnnotation as any)?.objects?.length > 0);
 
   // Capture canvas state synchronously before exiting drawing mode
   function exitDrawingMode() {
     if (isDrawingMode) {
       try {
-        const json = getJSON()
-        const objs = (json as any)?.objects
+        const json = getJSON();
+        const objs = (json as any)?.objects;
         if (objs && Array.isArray(objs) && objs.length > 0) {
-          setPendingAnnotation(json)
+          setPendingAnnotation(json);
         }
-      } catch { /* canvas may not be ready */ }
+      } catch {
+        /* canvas may not be ready */
+      }
     }
-    toggleDrawingMode()
+    toggleDrawingMode();
   }
 
   function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const value = e.target.value
-    setBody(value)
+    const value = e.target.value;
+    setBody(value);
 
-    const cursor = e.target.selectionStart ?? value.length
-    const textBeforeCursor = value.slice(0, cursor)
-    const atIdx = textBeforeCursor.lastIndexOf('@')
+    const cursor = e.target.selectionStart ?? value.length;
+    const textBeforeCursor = value.slice(0, cursor);
+    const atIdx = textBeforeCursor.lastIndexOf("@");
 
     if (atIdx !== -1) {
-      const afterAt = textBeforeCursor.slice(atIdx + 1)
-      if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
-        setMentionQuery(afterAt)
-        setMentionStart(atIdx)
-        return
+      const afterAt = textBeforeCursor.slice(atIdx + 1);
+      if (!afterAt.includes(" ") && !afterAt.includes("\n")) {
+        setMentionQuery(afterAt);
+        setMentionStart(atIdx);
+        return;
       }
     }
-    setMentionQuery(null)
+    setMentionQuery(null);
   }
 
   function handleMentionSelect(user: User) {
-    const before = body.slice(0, mentionStart)
-    const after = body.slice(mentionStart + 1 + (mentionQuery?.length ?? 0))
-    setBody(`${before}@${user.name} ${after}`)
-    setMentionUserIds((prev) => prev.includes(user.id) ? prev : [...prev, user.id])
-    setMentionQuery(null)
-    textareaRef.current?.focus()
+    const before = body.slice(0, mentionStart);
+    const after = body.slice(mentionStart + 1 + (mentionQuery?.length ?? 0));
+    setBody(`${before}@${user.name} ${after}`);
+    setMentionUserIds((prev) =>
+      prev.includes(user.id) ? prev : [...prev, user.id],
+    );
+    setMentionQuery(null);
+    textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Escape') setMentionQuery(null)
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
+    if (e.key === "Escape") setMentionQuery(null);
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   }
 
   async function handleSubmit() {
-    const trimmed = body.trim()
-    if (!trimmed) return
+    const trimmed = body.trim();
+    if (!trimmed) return;
 
-    setSubmitting(true)
-    setError(null)
+    setSubmitting(true);
+    setError(null);
 
     try {
       // Grab canvas state: try live canvas first, then store, then prop
-      let finalAnnotation: Record<string, unknown> | undefined = undefined
+      let finalAnnotation: Record<string, unknown> | undefined = undefined;
 
       if (isDrawingMode) {
         try {
-          const json = getJSON()
-          const objects = (json as any)?.objects
+          const json = getJSON();
+          const objects = (json as any)?.objects;
           if (objects && Array.isArray(objects) && objects.length > 0) {
-            finalAnnotation = json
+            finalAnnotation = json;
           }
-        } catch { /* canvas may not exist */ }
-        exitDrawingMode()
+        } catch {
+          /* canvas may not exist */
+        }
+        exitDrawingMode();
       } else {
         try {
-          const json = getJSON()
-          const objects = (json as any)?.objects
+          const json = getJSON();
+          const objects = (json as any)?.objects;
           if (objects && Array.isArray(objects) && objects.length > 0) {
-            finalAnnotation = json
+            finalAnnotation = json;
           }
-        } catch { /* canvas may not exist */ }
+        } catch {
+          /* canvas may not exist */
+        }
       }
 
       if (!finalAnnotation && pendingAnnotation) {
-        const objs = (pendingAnnotation as any)?.objects
+        const objs = (pendingAnnotation as any)?.objects;
         if (objs && Array.isArray(objs) && objs.length > 0) {
-          finalAnnotation = pendingAnnotation
+          finalAnnotation = pendingAnnotation;
         }
       }
 
       if (!finalAnnotation && annotationData) {
-        finalAnnotation = annotationData
+        finalAnnotation = annotationData;
       }
 
       await onSubmit(
         trimmed,
-        hasTimecode && timecodeAttached && playheadTime > 0 ? playheadTime : undefined,
+        hasTimecode && timecodeAttached && playheadTime > 0
+          ? playheadTime
+          : undefined,
         undefined,
         finalAnnotation,
         replyToId ?? undefined,
         commentVisibility,
         mentionUserIds.length > 0 ? mentionUserIds : undefined,
-      )
+      );
 
-      setBody('')
-      setMentionUserIds([])
-      setPendingAnnotation(null)
-      if (replyToId && onCancelReply) onCancelReply()
+      setBody("");
+      setMentionUserIds([]);
+      setPendingAnnotation(null);
+      if (replyToId && onCancelReply) onCancelReply();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to post comment')
+      setError(err instanceof Error ? err.message : "Failed to post comment");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className={cn('border-t border-border bg-bg-secondary shrink-0', className)}>
+    <div
+      className={cn(
+        "border-t border-border bg-bg-secondary shrink-0",
+        className,
+      )}
+    >
       {/* Reply indicator */}
       {replyToId && (
         <div className="flex items-center justify-between px-4 py-2 bg-accent/5 border-b border-accent/10 text-xs text-accent">
           <span>Replying to comment</span>
-          <button className="text-text-tertiary hover:text-text-primary" onClick={onCancelReply}>
+          <button
+            className="text-text-tertiary hover:text-text-primary"
+            onClick={onCancelReply}
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -346,10 +417,16 @@ export function CommentInput({
             <textarea
               ref={textareaRef}
               className="flex-1 resize-none bg-transparent px-2.5 py-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none min-h-[38px] max-h-[120px]"
-              placeholder={replyToId ? 'Write a reply...' : 'Leave your comment...'}
+              placeholder={
+                replyToId ? "Write a reply..." : "Leave your comment..."
+              }
               value={body}
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
+              onClick={() => {
+                pauseVideo();
+                onPauseVideo?.();
+              }}
               rows={1}
             />
           </div>
@@ -386,22 +463,22 @@ export function CommentInput({
             <div className="w-px h-4 bg-white/10 mx-0.5" />
 
             {DRAW_TOOLS.map((tool) => {
-              const Icon = tool.icon
+              const Icon = tool.icon;
               return (
                 <button
                   key={tool.id}
                   onClick={() => setDrawingTool(tool.id as DrawingTool)}
                   title={tool.label}
                   className={cn(
-                    'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     drawingTool === tool.id
-                      ? 'bg-accent/15 text-accent'
-                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
+                      ? "bg-accent/15 text-accent"
+                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </button>
-              )
+              );
             })}
 
             <div className="w-px h-4 bg-white/10 mx-0.5" />
@@ -411,10 +488,10 @@ export function CommentInput({
                 key={color}
                 onClick={() => setDrawingColor(color)}
                 className={cn(
-                  'w-5 h-5 rounded-full transition-all shrink-0',
+                  "w-5 h-5 rounded-full transition-all shrink-0",
                   drawingColor === color
-                    ? 'ring-2 ring-accent ring-offset-1 ring-offset-bg-secondary'
-                    : 'hover:scale-110',
+                    ? "ring-2 ring-accent ring-offset-1 ring-offset-bg-secondary"
+                    : "hover:scale-110",
                 )}
                 style={{ backgroundColor: color }}
               />
@@ -445,13 +522,15 @@ export function CommentInput({
               {hasTimecode && (
                 <button
                   className={cn(
-                    'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     timecodeAttached
-                      ? 'text-amber-400 bg-amber-400/10'
-                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
+                      ? "text-amber-400 bg-amber-400/10"
+                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => setTimecodeAttached((p) => !p)}
-                  title={timecodeAttached ? 'Detach timecode' : 'Attach timecode'}
+                  title={
+                    timecodeAttached ? "Detach timecode" : "Attach timecode"
+                  }
                 >
                   <Clock className="h-4 w-4" />
                 </button>
@@ -461,10 +540,10 @@ export function CommentInput({
               {canAnnotate && (
                 <button
                   className={cn(
-                    'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     hasAnnotation
-                      ? 'text-accent bg-accent/10'
-                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary',
+                      ? "text-accent bg-accent/10"
+                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => toggleDrawingMode()}
                   title="Draw annotation"
@@ -474,7 +553,7 @@ export function CommentInput({
               )}
 
               {/* Emoji */}
-              <div className="relative">
+              <div className="relative" ref={emojiRef}>
                 <button
                   className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                   title="Add emoji"
@@ -490,9 +569,9 @@ export function CommentInput({
                           key={e}
                           className="h-6 w-6 rounded flex items-center justify-center text-sm hover:bg-bg-hover transition-colors"
                           onClick={() => {
-                            setBody((prev) => prev + e)
-                            setEmojiOpen(false)
-                            textareaRef.current?.focus()
+                            setBody((prev) => prev + e);
+                            setEmojiOpen(false);
+                            textareaRef.current?.focus();
                           }}
                         >
                           {e}
@@ -502,7 +581,6 @@ export function CommentInput({
                   </div>
                 )}
               </div>
-
             </div>
 
             <div className="flex items-center gap-2">
@@ -511,34 +589,48 @@ export function CommentInput({
                 <button
                   onClick={() => setVisDropdownOpen((p) => !p)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border',
-                    commentVisibility === 'internal'
-                      ? 'text-amber-400 border-amber-400/30 bg-amber-400/10'
-                      : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border',
+                    "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border",
+                    commentVisibility === "internal"
+                      ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
+                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border",
                   )}
                 >
-                  {commentVisibility === 'internal' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
-                  {commentVisibility === 'internal' ? 'Internal' : 'Public'}
+                  {commentVisibility === "internal" ? (
+                    <Lock className="h-3 w-3" />
+                  ) : (
+                    <Globe className="h-3 w-3" />
+                  )}
+                  {commentVisibility === "internal" ? "Internal" : "Public"}
                   <ChevronDown className="h-3 w-3" />
                 </button>
                 {visDropdownOpen && (
                   <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
                     <button
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors',
-                        commentVisibility === 'public' ? 'text-text-primary bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
+                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
+                        commentVisibility === "public"
+                          ? "text-text-primary bg-bg-tertiary"
+                          : "text-text-secondary hover:bg-bg-tertiary",
                       )}
-                      onClick={() => { setCommentVisibility('public'); setVisDropdownOpen(false) }}
+                      onClick={() => {
+                        setCommentVisibility("public");
+                        setVisDropdownOpen(false);
+                      }}
                     >
                       <Globe className="h-3.5 w-3.5" />
                       Public
                     </button>
                     <button
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors',
-                        commentVisibility === 'internal' ? 'text-amber-400 bg-bg-tertiary' : 'text-text-secondary hover:bg-bg-tertiary',
+                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
+                        commentVisibility === "internal"
+                          ? "text-amber-400 bg-bg-tertiary"
+                          : "text-text-secondary hover:bg-bg-tertiary",
                       )}
-                      onClick={() => { setCommentVisibility('internal'); setVisDropdownOpen(false) }}
+                      onClick={() => {
+                        setCommentVisibility("internal");
+                        setVisDropdownOpen(false);
+                      }}
                     >
                       <Lock className="h-3.5 w-3.5" />
                       Internal
@@ -565,5 +657,5 @@ export function CommentInput({
         )}
       </div>
     </div>
-  )
+  );
 }
