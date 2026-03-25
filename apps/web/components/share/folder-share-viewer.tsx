@@ -195,9 +195,12 @@ interface AssetGridCardProps {
   isSelected: boolean
   onSelect: (asset: FolderShareAssetItem) => void
   onOpen: (asset: FolderShareAssetItem) => void
+  aspectClass?: string
+  thumbnailScale?: 'fit' | 'fill'
+  showCardInfo?: boolean
 }
 
-function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOpen }: AssetGridCardProps) {
+function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOpen, aspectClass = 'aspect-[16/10]', thumbnailScale = 'fill', showCardInfo = true }: AssetGridCardProps) {
   const TypeIcon = getAssetTypeIcon(asset.asset_type)
 
   return (
@@ -205,21 +208,21 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOp
       className={cn(
         'group flex flex-col rounded-lg border overflow-hidden transition-all cursor-pointer',
         isSelected
-          ? 'border-indigo-500/60 ring-1 ring-indigo-500/40'
-          : 'border-white/[0.08] hover:border-white/[0.15]',
-        'bg-white/[0.02] hover:bg-white/[0.04]',
+          ? 'border-accent/60 ring-1 ring-accent/40'
+          : 'border-border hover:border-border-focus',
+        'bg-bg-tertiary hover:bg-bg-hover',
       )}
       onClick={() => onSelect(asset)}
       onDoubleClick={() => onOpen(asset)}
     >
       {/* Thumbnail */}
-      <div className="w-full aspect-[16/10] relative overflow-hidden bg-zinc-900/50">
+      <div className={cn('w-full relative overflow-hidden bg-bg-tertiary', aspectClass)}>
         {asset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={asset.thumbnail_url}
             alt={asset.name}
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            className={cn('h-full w-full transition-transform duration-200 group-hover:scale-[1.02]', thumbnailScale === 'fill' ? 'object-cover' : 'object-contain')}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
@@ -261,14 +264,16 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOp
       </div>
 
       {/* Info — name, author, date */}
-      <div className="px-3 py-2.5">
-        <p className="text-sm font-medium text-white line-clamp-1">{asset.name}</p>
-        <p className="text-xs text-zinc-500 mt-0.5 truncate">
-          {asset.created_by_name && <>{asset.created_by_name} &middot; </>}
-          {formatShortDate(asset.created_at)}
-          {asset.file_size != null && <> &middot; {formatFileSize(asset.file_size)}</>}
-        </p>
-      </div>
+      {showCardInfo && (
+        <div className="px-3 py-2.5">
+          <p className="text-sm font-medium text-text-primary line-clamp-1">{asset.name}</p>
+          <p className="text-xs text-text-tertiary mt-0.5 truncate">
+            {asset.created_by_name && <>{asset.created_by_name} &middot; </>}
+            {formatShortDate(asset.created_at)}
+            {asset.file_size != null && <> &middot; {formatFileSize(asset.file_size)}</>}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -876,7 +881,50 @@ export function FolderShareViewer({
   const [error, setError] = React.useState<string | null>(null)
 
   const accentColor = appearance.accent_color ?? branding?.primary_color ?? '#6366f1'
+  const isDark = appearance.theme !== 'light'
+  const cardSize = appearance.card_size ?? 'm'
+  const aspectRatio = appearance.aspect_ratio ?? 'landscape'
+  const thumbnailScale = appearance.thumbnail_scale ?? 'fill'
+  const showCardInfo = appearance.show_card_info !== false
+  const isGridLayout = appearance.layout !== 'list'
+  const openInViewer = appearance.open_in_viewer !== false
   const perPage = 24
+
+  // Grid column classes based on card_size
+  const gridCols = cardSize === 's'
+    ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7'
+    : cardSize === 'l'
+    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+
+  // Aspect ratio class
+  const aspectClass = aspectRatio === 'square'
+    ? 'aspect-square'
+    : aspectRatio === 'portrait'
+    ? 'aspect-[3/4]'
+    : 'aspect-[16/10]'
+
+  // Apply share link theme (overrides user's global theme on the share page)
+  React.useEffect(() => {
+    const theme = isDark ? 'dark' : 'light'
+    document.documentElement.setAttribute('data-theme', theme)
+    return () => {
+      // Restore user's theme when leaving share page
+      try {
+        const stored = JSON.parse(localStorage.getItem('ff-theme') || '{}')
+        const userTheme = stored?.state?.theme || 'dark'
+        const resolved = userTheme === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : userTheme
+        document.documentElement.setAttribute('data-theme', resolved)
+      } catch {
+        document.documentElement.setAttribute('data-theme', 'dark')
+      }
+    }
+  }, [isDark])
+
+  // Whether clicking opens viewer
+  const openInViewer = appearance.open_in_viewer !== false
 
   // Compute total size of assets
   const totalAssetSize = React.useMemo(() => {
@@ -1180,7 +1228,7 @@ export function FolderShareViewer({
                       onToggle={() => setFoldersExpanded((v) => !v)}
                     />
                     {foldersExpanded && (
-                      <div className="grid gap-3 mt-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                      <div className={cn('grid gap-3 mt-2', gridCols)}>
                         {filteredSubfolders.map((subfolder) => (
                           <SubfolderCard
                             key={subfolder.id}
@@ -1206,7 +1254,7 @@ export function FolderShareViewer({
 
                     {assetsExpanded && (
                       <>
-                        <div className="grid gap-3 mt-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                        <div className={cn('grid gap-3 mt-2', gridCols)}>
                           {filteredAssets.map((asset) => (
                             <AssetGridCard
                               key={asset.id}
@@ -1215,7 +1263,10 @@ export function FolderShareViewer({
                               token={token}
                               isSelected={selectedAsset?.id === asset.id}
                               onSelect={setSelectedAsset}
-                              onOpen={setViewingAsset}
+                              onOpen={openInViewer ? setViewingAsset : () => {}}
+                              aspectClass={aspectClass}
+                              thumbnailScale={thumbnailScale}
+                              showCardInfo={showCardInfo}
                             />
                           ))}
                         </div>
