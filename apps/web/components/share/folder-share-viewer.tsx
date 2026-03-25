@@ -700,9 +700,16 @@ function ShareReviewInner({
   const { useComments } = require('@/hooks/use-comments')
 
   const { asset, versions, isLoading, comments, refetchComments } = useReview()
-  const { currentVersion, isDrawingMode } = useReviewStore()
+  const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
+  const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
+
+  React.useEffect(() => {
+    import('@/components/review/annotation-overlay').then((mod) => {
+      setAnnotationOverlay(() => mod.AnnotationOverlay)
+    })
+  }, [])
 
   const canComment = permission === 'comment' || permission === 'approve'
   const versionReady = currentVersion?.processing_status === 'ready'
@@ -738,12 +745,18 @@ function ShareReviewInner({
         {/* Media viewer — reuses project components */}
         <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
-            <VideoPlayer assetId={asset.id} comments={comments} className="flex-1" initialStreamUrl={(asset as any).stream_url} />
+            <VideoPlayer
+              assetId={asset.id}
+              comments={comments}
+              className="flex-1"
+              initialStreamUrl={(asset as any).stream_url}
+              overlay={AnnotationOverlay ? <AnnotationOverlay key={focusedCommentId ?? 'none'} /> : undefined}
+            />
           ) : asset.asset_type === 'audio' && versionReady && AudioPlayer ? (
             <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
           ) : (asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && versionReady && ImageViewer ? (
             <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden">
-              <ImageViewer asset={asset} version={currentVersion} />
+              <ImageViewer asset={asset} version={currentVersion} annotationCanvas={AnnotationOverlay ? <AnnotationOverlay key={focusedCommentId ?? 'none'} /> : undefined} />
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
