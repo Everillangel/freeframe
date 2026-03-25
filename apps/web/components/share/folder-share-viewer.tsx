@@ -408,10 +408,7 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
         <ShareCommentList comments={comments} loading={loadingComments} canComment={canComment} />
       </div>
 
-      {/* Comment input */}
-      {canComment && selectedAsset && (
-        <ShareCommentInput token={token} assetId={selectedAsset.id} onCommentPosted={() => setCommentRefresh(k => k + 1)} />
-      )}
+      {/* Comment input — only in asset viewer, not in folder preview */}
     </div>
   )
 }
