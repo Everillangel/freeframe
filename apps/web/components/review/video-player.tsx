@@ -30,6 +30,8 @@ interface VideoPlayerProps {
   comments?: Comment[]
   overlay?: React.ReactNode
   className?: string
+  /** Pre-fetched stream URL (for share mode — skips authenticated API call) */
+  initialStreamUrl?: string | null
 }
 
 // ─── Video frame constraint ──────────────────────────────────────────────────
@@ -120,7 +122,7 @@ function VideoFrameConstraint({
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 
-export function VideoPlayer({ assetId, comments = [], overlay, className }: VideoPlayerProps) {
+export function VideoPlayer({ assetId, comments = [], overlay, className, initialStreamUrl }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [loop, setLoop] = useState(false)
@@ -150,13 +152,17 @@ export function VideoPlayer({ assetId, comments = [], overlay, className }: Vide
 
   // Load the stream URL
   useEffect(() => {
+    if (initialStreamUrl) {
+      setStreamUrl(initialStreamUrl)
+      return
+    }
     api
       .get<StreamUrlResponse>(`/assets/${assetId}/stream`)
       .then((data) => setStreamUrl(data.url))
       .catch(() => {
         /* stream URL errors handled by player error state */
       })
-  }, [assetId])
+  }, [assetId, initialStreamUrl])
 
   const player = useVideoPlayer(streamUrl)
 

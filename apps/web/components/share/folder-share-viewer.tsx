@@ -738,7 +738,7 @@ function ShareReviewInner({
         {/* Media viewer — reuses project components */}
         <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
-            <VideoPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
+            <VideoPlayer assetId={asset.id} comments={comments} className="flex-1" initialStreamUrl={(asset as any).stream_url} />
           ) : asset.asset_type === 'audio' && versionReady && AudioPlayer ? (
             <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
           ) : (asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && versionReady && ImageViewer ? (
