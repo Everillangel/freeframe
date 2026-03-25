@@ -1,8 +1,8 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import * as Switch from '@radix-ui/react-switch'
-import useSWR from 'swr'
+import * as React from "react";
+import * as Switch from "@radix-ui/react-switch";
+import useSWR from "swr";
 import {
   ArrowLeft,
   Copy,
@@ -23,11 +23,11 @@ import {
   Droplets,
   Globe,
   X,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { api } from '@/lib/api'
-import { ShareLinkActivityPanel } from '@/components/projects/share-link-activity'
-import type { ShareLink, ShareLinkAppearance } from '@/types'
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { ShareLinkActivityPanel } from "@/components/projects/share-link-activity";
+import type { ShareLink, ShareLinkAppearance } from "@/types";
 
 // ─── Shared hook for share link data + mutations ────────────────────────────
 
@@ -35,54 +35,67 @@ function useShareLinkData(token: string) {
   const { data: shareLink, mutate } = useSWR<ShareLink>(
     `/share/${token}/details`,
     (key: string) => api.get<ShareLink>(key),
-  )
+  );
 
-  const updateTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updateTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const debouncedUpdate = React.useCallback(
     (updates: Record<string, unknown>) => {
-      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
       updateTimerRef.current = setTimeout(async () => {
         try {
-          await api.patch(`/share/${token}`, updates)
-          mutate()
+          await api.patch(`/share/${token}`, updates);
+          mutate();
         } catch {
           // Silent fail — could add toast
         }
-      }, 300)
+      }, 300);
     },
     [token, mutate],
-  )
+  );
 
   const immediateUpdate = React.useCallback(
     async (updates: Record<string, unknown>) => {
       try {
-        await api.patch(`/share/${token}`, updates)
-        mutate()
+        await api.patch(`/share/${token}`, updates);
+        mutate();
       } catch {
         // Silent fail
       }
     },
     [token, mutate],
-  )
+  );
 
   const appearance: ShareLinkAppearance = shareLink?.appearance || {
-    layout: 'grid',
-    theme: 'dark',
+    layout: "grid",
+    theme: "dark",
     accent_color: null,
     open_in_viewer: false,
-    sort_by: 'name',
-  }
+    sort_by: "name",
+    card_size: "m",
+    aspect_ratio: "landscape",
+    thumbnail_scale: "fit",
+    show_card_info: true,
+  };
 
   const updateAppearance = React.useCallback(
     (patch: Partial<ShareLinkAppearance>) => {
-      const updated = { ...appearance, ...patch }
-      immediateUpdate({ appearance: updated })
+      const updated = { ...appearance, ...patch };
+      immediateUpdate({ appearance: updated });
     },
     [appearance, immediateUpdate],
-  )
+  );
 
-  return { shareLink, mutate, debouncedUpdate, immediateUpdate, appearance, updateAppearance }
+  return {
+    shareLink,
+    mutate,
+    debouncedUpdate,
+    immediateUpdate,
+    appearance,
+    updateAppearance,
+  };
 }
 
 // ─── Collapsible Section ─────────────────────────────────────────────────────
@@ -93,12 +106,12 @@ function Section({
   defaultOpen = true,
   children,
 }: {
-  title: string
-  icon: React.ReactNode
-  defaultOpen?: boolean
-  children: React.ReactNode
+  title: string;
+  icon: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen)
+  const [open, setOpen] = React.useState(defaultOpen);
 
   return (
     <div className="border-b border-border">
@@ -116,7 +129,7 @@ function Section({
       </button>
       {open && <div className="px-4 pb-4 space-y-3">{children}</div>}
     </div>
-  )
+  );
 }
 
 // ─── Toggle Row ──────────────────────────────────────────────────────────────
@@ -127,10 +140,10 @@ function ToggleRow({
   checked,
   onCheckedChange,
 }: {
-  label: string
-  description?: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
+  label: string;
+  description?: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -144,149 +157,191 @@ function ToggleRow({
         checked={checked}
         onCheckedChange={onCheckedChange}
         className={cn(
-          'relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors',
-          checked ? 'bg-accent' : 'bg-bg-hover',
+          "relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors",
+          checked ? "bg-accent" : "bg-bg-hover",
         )}
       >
         <Switch.Thumb
           className={cn(
-            'block h-4 w-4 rounded-full bg-white transition-transform',
-            checked ? 'translate-x-[18px]' : 'translate-x-[2px]',
+            "block h-4 w-4 rounded-full bg-white transition-transform",
+            checked ? "translate-x-[18px]" : "translate-x-[2px]",
           )}
         />
       </Switch.Root>
     </div>
-  )
+  );
 }
 
 // ─── Share User Search (autocomplete) ───────────────────────────────────────
 
 interface UserSuggestion {
-  id: string
-  name: string
-  email: string
-  avatar_url?: string | null
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
 }
 
 interface InvitedUser {
-  id: string
-  name: string
-  email: string
-  permission: string
+  id: string;
+  name: string;
+  email: string;
+  permission: string;
 }
 
 function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
-  const [query, setQuery] = React.useState('')
-  const [suggestions, setSuggestions] = React.useState<UserSuggestion[]>([])
-  const [showSuggestions, setShowSuggestions] = React.useState(false)
-  const [sending, setSending] = React.useState(false)
-  const [sent, setSent] = React.useState<string | null>(null)
-  const [invitedUsers, setInvitedUsers] = React.useState<InvitedUser[]>([])
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const containerRef = React.useRef<HTMLDivElement>(null)
+  const [query, setQuery] = React.useState("");
+  const [suggestions, setSuggestions] = React.useState<UserSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState<string | null>(null);
+  const [invitedUsers, setInvitedUsers] = React.useState<InvitedUser[]>([]);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch already-invited users from direct shares
   React.useEffect(() => {
     async function fetchInvited() {
       try {
-        const targetId = shareLink.folder_id || shareLink.asset_id
-        if (!targetId) return
-        const type = shareLink.folder_id ? 'folders' : 'assets'
-        const shares = await api.get<Array<{ id: string; shared_with_user_id: string | null; permission: string }>>(`/${type}/${targetId}/direct-shares`)
+        const targetId = shareLink.folder_id || shareLink.asset_id;
+        if (!targetId) return;
+        const type = shareLink.folder_id ? "folders" : "assets";
+        const shares = await api.get<
+          Array<{
+            id: string;
+            shared_with_user_id: string | null;
+            permission: string;
+          }>
+        >(`/${type}/${targetId}/direct-shares`);
         if (shares && shares.length > 0) {
-          const userIds = shares.filter(s => s.shared_with_user_id).map(s => s.shared_with_user_id).join(',')
+          const userIds = shares
+            .filter((s) => s.shared_with_user_id)
+            .map((s) => s.shared_with_user_id)
+            .join(",");
           if (userIds) {
-            const users = await api.get<Array<{ id: string; name: string; email: string }>>(`/users?ids=${userIds}`)
-            setInvitedUsers(users.map(u => ({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              permission: shares.find(s => s.shared_with_user_id === u.id)?.permission || 'view',
-            })))
+            const users = await api.get<
+              Array<{ id: string; name: string; email: string }>
+            >(`/users?ids=${userIds}`);
+            setInvitedUsers(
+              users.map((u) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                permission:
+                  shares.find((s) => s.shared_with_user_id === u.id)
+                    ?.permission || "view",
+              })),
+            );
           }
         }
       } catch {
         // Endpoint may not exist yet — silently fail
       }
     }
-    fetchInvited()
-  }, [shareLink.asset_id, shareLink.folder_id])
+    fetchInvited();
+  }, [shareLink.asset_id, shareLink.folder_id]);
 
   function searchUsers(q: string) {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!q.trim()) {
-      setSuggestions([])
-      setShowSuggestions(false)
-      return
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const results = await api.get<UserSuggestion[]>(`/users/search?q=${encodeURIComponent(q.trim())}`)
-        setSuggestions(results)
-        setShowSuggestions(results.length > 0)
+        const results = await api.get<UserSuggestion[]>(
+          `/users/search?q=${encodeURIComponent(q.trim())}`,
+        );
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
       } catch {
-        setSuggestions([])
+        setSuggestions([]);
       }
-    }, 250)
+    }, 250);
   }
 
   async function inviteUser(user: UserSuggestion) {
-    setSending(true)
+    setSending(true);
     try {
-      const body = { permission: shareLink.permission || 'view', user_id: user.id, share_token: shareLink.token }
+      const body = {
+        permission: shareLink.permission || "view",
+        user_id: user.id,
+        share_token: shareLink.token,
+      };
       if (shareLink.folder_id) {
-        await api.post(`/folders/${shareLink.folder_id}/share/user`, body)
+        await api.post(`/folders/${shareLink.folder_id}/share/user`, body);
       } else if (shareLink.asset_id) {
-        await api.post(`/assets/${shareLink.asset_id}/share/user`, body)
+        await api.post(`/assets/${shareLink.asset_id}/share/user`, body);
       } else if ((shareLink as any).project_id) {
-        await api.post(`/projects/${(shareLink as any).project_id}/share/user`, body)
+        await api.post(
+          `/projects/${(shareLink as any).project_id}/share/user`,
+          body,
+        );
       }
-      setSent(user.name || user.email)
-      setQuery('')
-      setSuggestions([])
-      setShowSuggestions(false)
-      setInvitedUsers(prev => [...prev.filter(u => u.id !== user.id), { id: user.id, name: user.name, email: user.email, permission: shareLink.permission || 'view' }])
-      setTimeout(() => setSent(null), 3000)
+      setSent(user.name || user.email);
+      setQuery("");
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setInvitedUsers((prev) => [
+        ...prev.filter((u) => u.id !== user.id),
+        {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          permission: shareLink.permission || "view",
+        },
+      ]);
+      setTimeout(() => setSent(null), 3000);
     } catch {
       // Could show error
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
   async function inviteByEmail(email: string) {
-    setSending(true)
+    setSending(true);
     try {
-      const body = { permission: shareLink.permission || 'view', email, share_token: shareLink.token }
+      const body = {
+        permission: shareLink.permission || "view",
+        email,
+        share_token: shareLink.token,
+      };
       if (shareLink.folder_id) {
-        await api.post(`/folders/${shareLink.folder_id}/share/user`, body)
+        await api.post(`/folders/${shareLink.folder_id}/share/user`, body);
       } else if (shareLink.asset_id) {
-        await api.post(`/assets/${shareLink.asset_id}/share/user`, body)
+        await api.post(`/assets/${shareLink.asset_id}/share/user`, body);
       } else if ((shareLink as any).project_id) {
-        await api.post(`/projects/${(shareLink as any).project_id}/share/user`, body)
+        await api.post(
+          `/projects/${(shareLink as any).project_id}/share/user`,
+          body,
+        );
       }
-      setSent(email)
-      setQuery('')
-      setSuggestions([])
-      setShowSuggestions(false)
-      setTimeout(() => setSent(null), 3000)
+      setSent(email);
+      setQuery("");
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setTimeout(() => setSent(null), 3000);
     } catch {
       // Could show error
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
   // Close suggestions on outside click
   React.useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false)
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
     <div className="mt-2 relative" ref={containerRef}>
@@ -294,15 +349,15 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         type="text"
         value={query}
         onChange={(e) => {
-          setQuery(e.target.value)
-          searchUsers(e.target.value)
+          setQuery(e.target.value);
+          searchUsers(e.target.value);
         }}
         onFocus={() => {
-          if (suggestions.length > 0) setShowSuggestions(true)
+          if (suggestions.length > 0) setShowSuggestions(true);
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && query.includes('@') && !showSuggestions) {
-            inviteByEmail(query.trim())
+          if (e.key === "Enter" && query.includes("@") && !showSuggestions) {
+            inviteByEmail(query.trim());
           }
         }}
         placeholder="Send to name or email"
@@ -325,8 +380,12 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-text-primary truncate">{user.name}</p>
-                <p className="text-2xs text-text-tertiary truncate">{user.email}</p>
+                <p className="text-sm text-text-primary truncate">
+                  {user.name}
+                </p>
+                <p className="text-2xs text-text-tertiary truncate">
+                  {user.email}
+                </p>
               </div>
             </button>
           ))}
@@ -334,11 +393,11 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
       )}
 
       {/* Success message */}
-      {sent && (
-        <p className="text-2xs text-green-400 mt-1">Invited {sent}</p>
-      )}
+      {sent && <p className="text-2xs text-green-400 mt-1">Invited {sent}</p>}
       {!sent && !invitedUsers.length && (
-        <p className="text-2xs text-text-tertiary mt-1">Type to search users or enter email</p>
+        <p className="text-2xs text-text-tertiary mt-1">
+          Type to search users or enter email
+        </p>
       )}
 
       {/* Invited users list */}
@@ -355,24 +414,38 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-text-primary truncate">{user.name}</p>
+                <p className="text-xs text-text-primary truncate">
+                  {user.name}
+                </p>
               </div>
-              <span className="text-2xs text-text-tertiary capitalize shrink-0">{user.permission}</span>
+              <span className="text-2xs text-text-tertiary capitalize shrink-0">
+                {user.permission}
+              </span>
               <button
                 onClick={async () => {
                   try {
-                    const targetId = shareLink.folder_id || shareLink.asset_id
-                    const type = shareLink.folder_id ? 'folders' : 'assets'
+                    const targetId = shareLink.folder_id || shareLink.asset_id;
+                    const type = shareLink.folder_id ? "folders" : "assets";
                     // Find the share ID for this user
-                    const shares = await api.get<Array<{ id: string; shared_with_user_id: string }>>(`/${type}/${targetId}/direct-shares`)
-                    const share = shares.find(s => s.shared_with_user_id === user.id)
+                    const shares = await api.get<
+                      Array<{ id: string; shared_with_user_id: string }>
+                    >(`/${type}/${targetId}/direct-shares`);
+                    const share = shares.find(
+                      (s) => s.shared_with_user_id === user.id,
+                    );
                     if (share && shareLink.folder_id) {
-                      await api.delete(`/folders/${shareLink.folder_id}/shares/${share.id}`)
+                      await api.delete(
+                        `/folders/${shareLink.folder_id}/shares/${share.id}`,
+                      );
                     }
                     // For assets, we'd need a similar delete endpoint — for now just remove from UI
-                    setInvitedUsers(prev => prev.filter(u => u.id !== user.id))
+                    setInvitedUsers((prev) =>
+                      prev.filter((u) => u.id !== user.id),
+                    );
                   } catch {
-                    setInvitedUsers(prev => prev.filter(u => u.id !== user.id))
+                    setInvitedUsers((prev) =>
+                      prev.filter((u) => u.id !== user.id),
+                    );
                   }
                 }}
                 className="text-text-tertiary hover:text-red-400 transition-colors shrink-0"
@@ -385,19 +458,19 @@ function ShareUserSearch({ shareLink }: { shareLink: ShareLink }) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ─── Copy Button (small, inline) ────────────────────────────────────────────
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
-  const [copied, setCopied] = React.useState(false)
+  const [copied, setCopied] = React.useState(false);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback
     }
@@ -407,7 +480,7 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
     <button
       onClick={handleCopy}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors',
+        "inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors",
         className,
       )}
       title="Copy to clipboard"
@@ -424,19 +497,19 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
         </>
       )}
     </button>
-  )
+  );
 }
 
 // ─── Copy Link Button (larger, for main content area) ────────────────────────
 
 function CopyLinkButton({ text }: { text: string }) {
-  const [copied, setCopied] = React.useState(false)
+  const [copied, setCopied] = React.useState(false);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback
     }
@@ -446,10 +519,10 @@ function CopyLinkButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className={cn(
-        'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+        "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors",
         copied
-          ? 'border-green-500/30 text-green-400'
-          : 'border-border text-text-primary hover:bg-bg-tertiary hover:text-text-primary',
+          ? "border-green-500/30 text-green-400"
+          : "border-border text-text-primary hover:bg-bg-tertiary hover:text-text-primary",
       )}
     >
       {copied ? (
@@ -464,73 +537,98 @@ function CopyLinkButton({ text }: { text: string }) {
         </>
       )}
     </button>
-  )
+  );
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface ShareLinkContentProps {
-  token: string
-  projectId: string
-  onBack: () => void
-  frontendUrl: string
+  token: string;
+  projectId: string;
+  onBack: () => void;
+  frontendUrl: string;
 }
 
 interface ShareLinkSettingsPanelProps {
-  token: string
+  token: string;
 }
 
 // ─── ShareLinkContent (LEFT/MAIN panel) ─────────────────────────────────────
 
-export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: ShareLinkContentProps) {
-  const { shareLink, immediateUpdate } = useShareLinkData(token)
+export function ShareLinkContent({
+  token,
+  projectId,
+  onBack,
+  frontendUrl,
+}: ShareLinkContentProps) {
+  const { shareLink, immediateUpdate } = useShareLinkData(token);
 
-  const [localTitle, setLocalTitle] = React.useState('')
-  const [localDescription, setLocalDescription] = React.useState('')
-  const [previewThumbnails, setPreviewThumbnails] = React.useState<{ id: string; name: string; thumbnail_url: string | null; asset_type: string }[]>([])
-  const [previewFolders, setPreviewFolders] = React.useState<{ id: string; name: string; item_count: number }[]>([])
+  const [localTitle, setLocalTitle] = React.useState("");
+  const [localDescription, setLocalDescription] = React.useState("");
+  const [previewThumbnails, setPreviewThumbnails] = React.useState<
+    {
+      id: string;
+      name: string;
+      thumbnail_url: string | null;
+      asset_type: string;
+    }[]
+  >([]);
+  const [previewFolders, setPreviewFolders] = React.useState<
+    { id: string; name: string; item_count: number }[]
+  >([]);
 
   React.useEffect(() => {
     if (shareLink) {
-      setLocalTitle(shareLink.title || '')
-      setLocalDescription(shareLink.description || '')
+      setLocalTitle(shareLink.title || "");
+      setLocalDescription(shareLink.description || "");
     }
-  }, [shareLink])
+  }, [shareLink]);
 
   // Fetch preview data for shares
   React.useEffect(() => {
-    if (!shareLink) return
-    const folderId = shareLink.folder_id
-    const isProjectShare = !folderId && !shareLink.asset_id
+    if (!shareLink) return;
+    const folderId = shareLink.folder_id;
+    const isProjectShare = !folderId && !shareLink.asset_id;
 
     if (shareLink.asset_id) {
       // Asset share: fetch the single asset
-      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }>(
-        `/assets/${shareLink.asset_id}`,
-      )
+      api
+        .get<{
+          id: string;
+          name: string;
+          asset_type: string;
+          thumbnail_url: string | null;
+        }>(`/assets/${shareLink.asset_id}`)
         .then((asset) => setPreviewThumbnails([asset]))
-        .catch(() => setPreviewThumbnails([]))
-      setPreviewFolders([])
+        .catch(() => setPreviewThumbnails([]));
+      setPreviewFolders([]);
     } else {
       // Folder or project root share: fetch assets + folders
-      const folderParam = folderId ? `folder_id=${folderId}` : 'folder_id=root'
-      api.get<{ id: string; name: string; asset_type: string; thumbnail_url: string | null }[]>(
-        `/projects/${projectId}/assets?${folderParam}`,
-      )
+      const folderParam = folderId ? `folder_id=${folderId}` : "folder_id=root";
+      api
+        .get<
+          {
+            id: string;
+            name: string;
+            asset_type: string;
+            thumbnail_url: string | null;
+          }[]
+        >(`/projects/${projectId}/assets?${folderParam}`)
         .then((assets) => setPreviewThumbnails(assets.slice(0, 4)))
-        .catch(() => setPreviewThumbnails([]))
+        .catch(() => setPreviewThumbnails([]));
 
       // Fetch subfolders
-      const parentParam = folderId || 'root'
-      api.get<{ id: string; name: string; item_count: number }[]>(
-        `/projects/${projectId}/folders?parent_id=${parentParam}`,
-      )
+      const parentParam = folderId || "root";
+      api
+        .get<{ id: string; name: string; item_count: number }[]>(
+          `/projects/${projectId}/folders?parent_id=${parentParam}`,
+        )
         .then((folders) => setPreviewFolders(folders))
-        .catch(() => setPreviewFolders([]))
+        .catch(() => setPreviewFolders([]));
     }
-  }, [shareLink, projectId])
+  }, [shareLink, projectId]);
 
-  const shareUrl = `${frontendUrl}/share/${token}`
+  const shareUrl = `${frontendUrl}/share/${token}`;
 
   if (!shareLink) {
     return (
@@ -540,7 +638,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           <span className="text-sm">Loading...</span>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -562,7 +660,7 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           onChange={(e) => setLocalTitle(e.target.value)}
           onBlur={() => {
             if (localTitle !== shareLink.title) {
-              immediateUpdate({ title: localTitle })
+              immediateUpdate({ title: localTitle });
             }
           }}
           placeholder="Untitled Share Link"
@@ -574,8 +672,8 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
           value={localDescription}
           onChange={(e) => setLocalDescription(e.target.value)}
           onBlur={() => {
-            if (localDescription !== (shareLink.description || '')) {
-              immediateUpdate({ description: localDescription || null })
+            if (localDescription !== (shareLink.description || "")) {
+              immediateUpdate({ description: localDescription || null });
             }
           }}
           placeholder="Add a description..."
@@ -584,23 +682,45 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
         />
 
         {/* Content preview — matches project view style */}
-        {(previewFolders.length > 0 || previewThumbnails.length > 0) ? (
+        {previewFolders.length > 0 || previewThumbnails.length > 0 ? (
           <div className="space-y-4">
             {/* Folders */}
             {previewFolders.length > 0 && (
               <>
                 <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
-                  {previewFolders.length} {previewFolders.length === 1 ? 'Folder' : 'Folders'}
+                  {previewFolders.length}{" "}
+                  {previewFolders.length === 1 ? "Folder" : "Folders"}
                 </span>
                 <div className="grid grid-cols-3 gap-3">
                   {previewFolders.map((folder) => (
-                    <div key={folder.id} className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden">
+                    <div
+                      key={folder.id}
+                      className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden"
+                    >
                       <div className="aspect-[4/3] flex items-center justify-center bg-bg-tertiary">
-                        <svg className="h-10 w-10 text-text-tertiary/50" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                        <svg
+                          className="h-10 w-10 text-text-tertiary/50"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+                        </svg>
                       </div>
                       <div className="px-3 py-2">
-                        <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
-                        <p className="text-xs text-text-tertiary mt-0.5">{folder.item_count} {folder.item_count === 1 ? 'Item' : 'Items'}</p>
+                        <p className="text-sm font-medium text-text-primary truncate">
+                          {folder.name}
+                        </p>
+                        <p className="text-xs text-text-tertiary mt-0.5">
+                          {folder.item_count}{" "}
+                          {folder.item_count === 1 ? "Item" : "Items"}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -611,21 +731,31 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
             {previewThumbnails.length > 0 && (
               <>
                 <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
-                  {previewThumbnails.length} {previewThumbnails.length === 1 ? 'Asset' : 'Assets'}
+                  {previewThumbnails.length}{" "}
+                  {previewThumbnails.length === 1 ? "Asset" : "Assets"}
                 </span>
                 <div className="grid grid-cols-3 gap-3">
                   {previewThumbnails.slice(0, 6).map((asset) => (
-                    <div key={asset.id} className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden">
+                    <div
+                      key={asset.id}
+                      className="rounded-lg border border-border bg-bg-tertiary/50 overflow-hidden"
+                    >
                       <div className="aspect-[16/10] bg-bg-tertiary flex items-center justify-center overflow-hidden">
                         {asset.thumbnail_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-cover" />
+                          <img
+                            src={asset.thumbnail_url}
+                            alt={asset.name}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <Eye className="h-8 w-8 text-text-tertiary/40" />
                         )}
                       </div>
                       <div className="px-3 py-2">
-                        <p className="text-sm font-medium text-text-primary truncate">{asset.name}</p>
+                        <p className="text-sm font-medium text-text-primary truncate">
+                          {asset.name}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -638,14 +768,16 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
             <div className="h-12 w-12 rounded-full bg-bg-tertiary flex items-center justify-center">
               <Eye className="h-6 w-6 text-text-tertiary" />
             </div>
-            <p className="text-sm font-medium text-text-primary">No content yet</p>
+            <p className="text-sm font-medium text-text-primary">
+              No content yet
+            </p>
           </div>
         )}
 
         {/* Action buttons */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.open(shareUrl, '_blank')}
+            onClick={() => window.open(shareUrl, "_blank")}
             className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent/90 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
@@ -655,29 +787,40 @@ export function ShareLinkContent({ token, projectId, onBack, frontendUrl }: Shar
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ─── ShareLinkSettingsPanel (RIGHT panel) ───────────────────────────────────
 
 export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
-  const { shareLink, debouncedUpdate, immediateUpdate, appearance, updateAppearance } = useShareLinkData(token)
+  const {
+    shareLink,
+    debouncedUpdate,
+    immediateUpdate,
+    appearance,
+    updateAppearance,
+  } = useShareLinkData(token);
 
-  const [rightTab, setRightTab] = React.useState<'settings' | 'activity'>('settings')
-  const [localPassword, setLocalPassword] = React.useState('')
-  const [passwordEnabled, setPasswordEnabled] = React.useState(false)
-  const [showPassword, setShowPassword] = React.useState(false)
-  const [localAccentColor, setLocalAccentColor] = React.useState('')
+  const [rightTab, setRightTab] = React.useState<"settings" | "activity">(
+    "settings",
+  );
+  const [localPassword, setLocalPassword] = React.useState("");
+  const [passwordEnabled, setPasswordEnabled] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [localAccentColor, setLocalAccentColor] = React.useState("");
 
   React.useEffect(() => {
     if (shareLink) {
-      setPasswordEnabled(shareLink.has_password ?? false)
-      setLocalPassword(shareLink.password_value || '')
-      setLocalAccentColor(shareLink.appearance?.accent_color || '')
+      setPasswordEnabled(shareLink.has_password ?? false);
+      setLocalPassword(shareLink.password_value || "");
+      setLocalAccentColor(shareLink.appearance?.accent_color || "");
     }
-  }, [shareLink])
+  }, [shareLink]);
 
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/share/${token}` : `/share/${token}`
+  const shareUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/share/${token}`
+      : `/share/${token}`;
 
   if (!shareLink) {
     return (
@@ -687,22 +830,22 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
           <span className="text-sm">Loading...</span>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <>
       {/* Tabs */}
       <div className="flex items-center border-b border-border">
-        {(['settings', 'activity'] as const).map((tab) => (
+        {(["settings", "activity"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setRightTab(tab)}
             className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium capitalize transition-colors border-b-2',
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium capitalize transition-colors border-b-2",
               rightTab === tab
-                ? 'border-accent text-text-primary'
-                : 'border-transparent text-text-tertiary hover:text-text-secondary',
+                ? "border-accent text-text-primary"
+                : "border-transparent text-text-tertiary hover:text-text-secondary",
             )}
           >
             {tab}
@@ -712,15 +855,24 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
-        {rightTab === 'settings' ? (
+        {rightTab === "settings" ? (
           <div>
             {/* Link Visibility */}
-            <Section title="Link Visibility" icon={<Globe className="h-3.5 w-3.5" />}>
+            <Section
+              title="Link Visibility"
+              icon={<Globe className="h-3.5 w-3.5" />}
+            >
               <ToggleRow
                 label="Enabled"
-                description={shareLink.visibility === 'secure' ? 'Only invited users can access' : 'Anyone with the link can access'}
+                description={
+                  shareLink.visibility === "secure"
+                    ? "Only invited users can access"
+                    : "Anyone with the link can access"
+                }
                 checked={shareLink.is_enabled}
-                onCheckedChange={(checked) => immediateUpdate({ is_enabled: checked })}
+                onCheckedChange={(checked) =>
+                  immediateUpdate({ is_enabled: checked })
+                }
               />
               {/* URL + Visibility dropdown */}
               <div className="flex items-center gap-2 rounded-md bg-bg-tertiary px-3 py-2 mt-2">
@@ -729,46 +881,56 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 </span>
                 <CopyButton text={shareUrl} />
                 <select
-                  value={shareLink.visibility || 'public'}
-                  onChange={(e) => immediateUpdate({ visibility: e.target.value })}
+                  value={shareLink.visibility || "public"}
+                  onChange={(e) =>
+                    immediateUpdate({ visibility: e.target.value })
+                  }
                   className="rounded-full border border-border bg-bg-tertiary px-2.5 py-1 text-2xs font-medium text-text-primary outline-none cursor-pointer [color-scheme:auto]"
                 >
                   <option value="public">🌐 Public</option>
                   <option value="secure">🔒 Secure</option>
                 </select>
               </div>
-              {shareLink.visibility === 'secure' && (
+              {shareLink.visibility === "secure" && (
                 <p className="text-2xs text-text-tertiary mt-1">
                   Only project members and people you invite can view this link.
                 </p>
               )}
               {/* Send to name or email */}
-              <ShareUserSearch
-                shareLink={shareLink}
-              />
+              <ShareUserSearch shareLink={shareLink} />
             </Section>
 
             {/* Permissions */}
-            <Section title="Permissions" icon={<MessageSquare className="h-3.5 w-3.5" />}>
+            <Section
+              title="Permissions"
+              icon={<MessageSquare className="h-3.5 w-3.5" />}
+            >
               <ToggleRow
                 label="Comments"
                 description="Allow viewers to leave comments"
-                checked={shareLink.permission === 'comment' || shareLink.permission === 'approve'}
+                checked={
+                  shareLink.permission === "comment" ||
+                  shareLink.permission === "approve"
+                }
                 onCheckedChange={(checked) =>
-                  immediateUpdate({ permission: checked ? 'comment' : 'view' })
+                  immediateUpdate({ permission: checked ? "comment" : "view" })
                 }
               />
               <ToggleRow
                 label="Downloads"
                 description="Allow viewers to download files"
                 checked={shareLink.allow_download}
-                onCheckedChange={(checked) => immediateUpdate({ allow_download: checked })}
+                onCheckedChange={(checked) =>
+                  immediateUpdate({ allow_download: checked })
+                }
               />
               <ToggleRow
                 label="Show all versions"
                 description="Display version history"
                 checked={shareLink.show_versions}
-                onCheckedChange={(checked) => immediateUpdate({ show_versions: checked })}
+                onCheckedChange={(checked) =>
+                  immediateUpdate({ show_versions: checked })
+                }
               />
             </Section>
 
@@ -776,25 +938,31 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
             <Section title="Security" icon={<Lock className="h-3.5 w-3.5" />}>
               <ToggleRow
                 label="Passphrase"
-                description={passwordEnabled ? 'Password required to access' : 'Require a password to access'}
+                description={
+                  passwordEnabled
+                    ? "Password required to access"
+                    : "Require a password to access"
+                }
                 checked={passwordEnabled}
                 onCheckedChange={(checked) => {
-                  setPasswordEnabled(checked)
+                  setPasswordEnabled(checked);
                   if (!checked) {
-                    setLocalPassword('')
-                    setShowPassword(false)
-                    immediateUpdate({ password: null })
+                    setLocalPassword("");
+                    setShowPassword(false);
+                    immediateUpdate({ password: null });
                   }
                 }}
               />
               {passwordEnabled && (
                 <div className="relative">
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     value={localPassword}
                     onChange={(e) => {
-                      setLocalPassword(e.target.value)
-                      debouncedUpdate({ password: e.target.value.trim() || null })
+                      setLocalPassword(e.target.value);
+                      debouncedUpdate({
+                        password: e.target.value.trim() || null,
+                      });
                     }}
                     placeholder="Enter passphrase"
                     className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 pr-12 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
@@ -802,7 +970,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                   <button
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary transition-colors"
-                    title={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -819,7 +987,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                   <p className="text-xs text-text-tertiary mt-0.5">
                     {shareLink.expires_at
                       ? `Expires ${new Date(shareLink.expires_at).toLocaleDateString()}`
-                      : 'Not set'}
+                      : "Not set"}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -828,14 +996,16 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                     type="date"
                     value={
                       shareLink.expires_at
-                        ? new Date(shareLink.expires_at).toISOString().split('T')[0]
-                        : ''
+                        ? new Date(shareLink.expires_at)
+                            .toISOString()
+                            .split("T")[0]
+                        : ""
                     }
                     onChange={(e) => {
-                      const val = e.target.value
+                      const val = e.target.value;
                       immediateUpdate({
                         expires_at: val ? new Date(val).toISOString() : null,
-                      })
+                      });
                     }}
                     className="w-[130px] rounded border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary outline-none focus:border-accent/50 [color-scheme:auto]"
                   />
@@ -846,28 +1016,38 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 label="Watermark"
                 description="Overlay watermark on content"
                 checked={shareLink.show_watermark}
-                onCheckedChange={(checked) => immediateUpdate({ show_watermark: checked })}
+                onCheckedChange={(checked) =>
+                  immediateUpdate({ show_watermark: checked })
+                }
               />
             </Section>
 
             {/* Appearance */}
-            <Section title="Appearance" icon={<Paintbrush className="h-3.5 w-3.5" />} defaultOpen={false}>
+            <Section
+              title="Appearance"
+              icon={<Paintbrush className="h-3.5 w-3.5" />}
+              defaultOpen={false}
+            >
               {/* Layout — Grid / List */}
               <div className="space-y-1.5">
                 <p className="text-xs text-text-secondary">Layout</p>
                 <div className="flex gap-2">
-                  {(['grid', 'list'] as const).map((layout) => (
+                  {(["grid", "list"] as const).map((layout) => (
                     <button
                       key={layout}
                       onClick={() => updateAppearance({ layout })}
                       className={cn(
-                        'flex-1 flex flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium capitalize transition-colors',
+                        "flex-1 flex flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium capitalize transition-colors",
                         appearance.layout === layout
-                          ? 'bg-accent/10 border-accent text-accent'
-                          : 'border-border text-text-secondary hover:text-text-primary hover:border-border-focus',
+                          ? "bg-accent/10 border-accent text-accent"
+                          : "border-border text-text-secondary hover:text-text-primary hover:border-border-focus",
                       )}
                     >
-                      {layout === 'grid' ? <LayoutGrid className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
+                      {layout === "grid" ? (
+                        <LayoutGrid className="h-4 w-4" />
+                      ) : (
+                        <LayoutList className="h-4 w-4" />
+                      )}
                       {layout}
                     </button>
                   ))}
@@ -879,25 +1059,27 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 label="Open in viewer"
                 description="Click assets to open full viewer"
                 checked={appearance.open_in_viewer}
-                onCheckedChange={(checked) => updateAppearance({ open_in_viewer: checked })}
+                onCheckedChange={(checked) =>
+                  updateAppearance({ open_in_viewer: checked })
+                }
               />
 
               {/* Theme — Dark / Light */}
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-text-primary">Theme</p>
                 <div className="flex rounded-lg border border-border overflow-hidden">
-                  {(['dark', 'light'] as const).map((theme) => (
+                  {(["dark", "light"] as const).map((theme) => (
                     <button
                       key={theme}
                       onClick={() => updateAppearance({ theme })}
                       className={cn(
-                        'px-4 py-1.5 text-xs font-medium capitalize transition-colors',
+                        "px-4 py-1.5 text-xs font-medium capitalize transition-colors",
                         appearance.theme === theme
-                          ? 'bg-accent text-text-inverse'
-                          : 'text-text-secondary hover:text-text-primary',
+                          ? "bg-accent text-text-inverse"
+                          : "text-text-secondary hover:text-text-primary",
                       )}
                     >
-                      {theme === 'dark' ? '🌙' : '☀️'}
+                      {theme === "dark" ? "🌙" : "☀️"}
                     </button>
                   ))}
                 </div>
@@ -913,9 +1095,13 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                     value={localAccentColor}
                     onChange={(e) => setLocalAccentColor(e.target.value)}
                     onBlur={() => {
-                      const color = localAccentColor.trim() || null
-                      if (color !== (appearance.accent_color || '')) {
-                        updateAppearance({ accent_color: color ? `#${color.replace('#', '')}` : null })
+                      const color = localAccentColor.trim() || null;
+                      if (color !== (appearance.accent_color || "")) {
+                        updateAppearance({
+                          accent_color: color
+                            ? `#${color.replace("#", "")}`
+                            : null,
+                        });
                       }
                     }}
                     placeholder="None"
@@ -925,15 +1111,23 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                   <label className="relative h-6 w-6 rounded-full border border-border cursor-pointer overflow-hidden shrink-0">
                     <div
                       className="absolute inset-0 rounded-full"
-                      style={{ backgroundColor: localAccentColor ? `#${localAccentColor.replace('#', '')}` : '#6366f1' }}
+                      style={{
+                        backgroundColor: localAccentColor
+                          ? `#${localAccentColor.replace("#", "")}`
+                          : "#6366f1",
+                      }}
                     />
                     <input
                       type="color"
-                      value={localAccentColor ? `#${localAccentColor.replace('#', '')}` : '#6366f1'}
+                      value={
+                        localAccentColor
+                          ? `#${localAccentColor.replace("#", "")}`
+                          : "#6366f1"
+                      }
                       onChange={(e) => {
-                        const hex = e.target.value.replace('#', '')
-                        setLocalAccentColor(hex)
-                        updateAppearance({ accent_color: `#${hex}` })
+                        const hex = e.target.value.replace("#", "");
+                        setLocalAccentColor(hex);
+                        updateAppearance({ accent_color: `#${hex}` });
                       }}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
@@ -945,15 +1139,15 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-text-primary">Card Size</p>
                 <div className="flex rounded-lg border border-border overflow-hidden">
-                  {(['s', 'm', 'l'] as const).map((size) => (
+                  {(["s", "m", "l"] as const).map((size) => (
                     <button
                       key={size}
                       onClick={() => updateAppearance({ card_size: size })}
                       className={cn(
-                        'px-4 py-1.5 text-xs font-medium uppercase transition-colors',
-                        (appearance.card_size || 'm') === size
-                          ? 'bg-accent text-text-inverse'
-                          : 'text-text-secondary hover:text-text-primary',
+                        "px-4 py-1.5 text-xs font-medium uppercase transition-colors",
+                        (appearance.card_size || "m") === size
+                          ? "bg-accent text-text-inverse"
+                          : "text-text-secondary hover:text-text-primary",
                       )}
                     >
                       {size}
@@ -966,19 +1160,19 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-text-primary">Aspect Ratio</p>
                 <div className="flex rounded-lg border border-border overflow-hidden">
-                  {([
-                    { value: 'landscape' as const, icon: '▭' },
-                    { value: 'square' as const, icon: '□' },
-                    { value: 'portrait' as const, icon: '▯' },
-                  ]).map(({ value, icon }) => (
+                  {[
+                    { value: "landscape" as const, icon: "▭" },
+                    { value: "square" as const, icon: "□" },
+                    { value: "portrait" as const, icon: "▯" },
+                  ].map(({ value, icon }) => (
                     <button
                       key={value}
                       onClick={() => updateAppearance({ aspect_ratio: value })}
                       className={cn(
-                        'px-4 py-1.5 text-sm transition-colors',
-                        (appearance.aspect_ratio || 'landscape') === value
-                          ? 'bg-accent text-text-inverse'
-                          : 'text-text-secondary hover:text-text-primary',
+                        "px-4 py-1.5 text-sm transition-colors",
+                        (appearance.aspect_ratio || "landscape") === value
+                          ? "bg-accent text-text-inverse"
+                          : "text-text-secondary hover:text-text-primary",
                       )}
                     >
                       {icon}
@@ -991,15 +1185,17 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-text-primary">Thumbnail Scale</p>
                 <div className="flex rounded-lg border border-border overflow-hidden">
-                  {(['fit', 'fill'] as const).map((scale) => (
+                  {(["fit", "fill"] as const).map((scale) => (
                     <button
                       key={scale}
-                      onClick={() => updateAppearance({ thumbnail_scale: scale })}
+                      onClick={() =>
+                        updateAppearance({ thumbnail_scale: scale })
+                      }
                       className={cn(
-                        'px-4 py-1.5 text-xs font-medium capitalize transition-colors',
-                        (appearance.thumbnail_scale || 'fill') === scale
-                          ? 'bg-accent text-text-inverse'
-                          : 'text-text-secondary hover:text-text-primary',
+                        "px-4 py-1.5 text-xs font-medium capitalize transition-colors",
+                        (appearance.thumbnail_scale || "fill") === scale
+                          ? "bg-accent text-text-inverse"
+                          : "text-text-secondary hover:text-text-primary",
                       )}
                     >
                       {scale}
@@ -1013,17 +1209,23 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
                 label="Show Card Info"
                 description="Display name, type, and size below thumbnail"
                 checked={appearance.show_card_info !== false}
-                onCheckedChange={(checked) => updateAppearance({ show_card_info: checked })}
+                onCheckedChange={(checked) =>
+                  updateAppearance({ show_card_info: checked })
+                }
               />
             </Section>
 
             {/* Sort By */}
-            <Section title="Sort By" icon={<Layers className="h-3.5 w-3.5" />} defaultOpen={false}>
+            <Section
+              title="Sort By"
+              icon={<Layers className="h-3.5 w-3.5" />}
+              defaultOpen={false}
+            >
               <select
                 value={appearance.sort_by}
                 onChange={(e) =>
                   updateAppearance({
-                    sort_by: e.target.value as ShareLinkAppearance['sort_by'],
+                    sort_by: e.target.value as ShareLinkAppearance["sort_by"],
                   })
                 }
                 className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 [color-scheme:auto]"
@@ -1042,7 +1244,7 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
       {/* Bottom action buttons */}
       <div className="border-t border-border p-3 shrink-0 flex items-center gap-2">
         <button
-          onClick={() => window.open(shareUrl, '_blank')}
+          onClick={() => window.open(shareUrl, "_blank")}
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-text-inverse hover:bg-accent/90 transition-colors"
         >
           <ExternalLink className="h-4 w-4" />
@@ -1051,12 +1253,17 @@ export function ShareLinkSettingsPanel({ token }: ShareLinkSettingsPanelProps) {
         <CopyLinkButton text={shareUrl} />
       </div>
     </>
-  )
+  );
 }
 
 // ─── Legacy default export (kept for backward compat, now delegates) ────────
 
-export function ShareLinkDetail({ token, projectId, onBack, frontendUrl }: ShareLinkContentProps) {
+export function ShareLinkDetail({
+  token,
+  projectId,
+  onBack,
+  frontendUrl,
+}: ShareLinkContentProps) {
   return (
     <ShareLinkContent
       token={token}
@@ -1064,5 +1271,5 @@ export function ShareLinkDetail({ token, projectId, onBack, frontendUrl }: Share
       onBack={onBack}
       frontendUrl={frontendUrl}
     />
-  )
+  );
 }

@@ -97,12 +97,19 @@ export function ReviewProvider({
         data = {
           id: assetId,
           name: streamData?.name || "Asset",
+          description: null,
           asset_type: streamData?.asset_type || "image",
           status: "in_review",
+          rating: null,
+          assignee_id: null,
+          folder_id: null,
+          due_date: null,
+          keywords: [],
           project_id: "",
           created_by: "",
           created_at: "",
           updated_at: "",
+          deleted_at: null,
           stream_url: streamData?.url,
           thumbnail_url: streamData?.thumbnail_url,
           latest_version: streamData?.version_id
@@ -113,6 +120,7 @@ export function ReviewProvider({
                 processing_status: "ready",
                 created_by: "",
                 created_at: "",
+                deleted_at: null,
                 files: [],
               }
             : null,

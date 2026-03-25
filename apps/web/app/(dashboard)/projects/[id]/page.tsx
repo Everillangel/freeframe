@@ -322,7 +322,7 @@ export default function ProjectDetailPage() {
               setShowShareLinks(false);
               setSelectedShareLink(null);
             }}
-            onCreateFolder={(_name, parentId) => {
+            onCreateFolder={async (_name, parentId) => {
               setFolderDialogParentId(parentId);
               setFolderDialogOpen(true);
             }}
