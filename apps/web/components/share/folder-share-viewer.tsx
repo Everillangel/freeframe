@@ -1128,13 +1128,6 @@ export function FolderShareViewer({
               Download All
             </button>
           )}
-          <button
-            onClick={() => setPanelOpen((v) => !v)}
-            className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            title={panelOpen ? 'Hide panel' : 'Show panel'}
-          >
-            {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-          </button>
         </div>
       </header>
 
@@ -1308,18 +1301,7 @@ export function FolderShareViewer({
           </footer>
         </div>
 
-        {/* ─── Right Panel ───────────────────────────────────────────── */}
-        {panelOpen && (
-          <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
-            <RightPanel
-              selectedAsset={selectedAsset}
-              token={token}
-              permission={permission}
-              allowDownload={allowDownload}
-              onOpenAsset={setViewingAsset}
-            />
-          </div>
-        )}
+        {/* Right panel removed — comments available in asset viewer (double-click) */}
       </div>
     </div>
   )
