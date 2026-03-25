@@ -138,8 +138,13 @@ export function ReviewProvider({ assetId, shareToken, children }: ReviewProvider
       if (shareToken) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
         const res = await fetch(`${API_URL}/share/${shareToken}/comments?asset_id=${assetId}`)
-        const json = res.ok ? await res.json() : { comments: [] }
-        data = json.comments ?? []
+        if (res.ok) {
+          const json = await res.json()
+          // Handle both formats: array directly or {comments: [...]}
+          data = Array.isArray(json) ? json : (json.comments ?? [])
+        } else {
+          data = []
+        }
       } else {
         data = await api.get<Comment[]>(`/assets/${assetId}/comments`)
       }

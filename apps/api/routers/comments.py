@@ -554,66 +554,14 @@ def list_share_comments(
         return {"comments": []}
     asset_id = target_asset_id
 
-    # Get top-level comments for this asset
+    # Get top-level comments — reuse same format as authenticated endpoint
     top_level = db.query(Comment).filter(
         Comment.asset_id == asset_id,
         Comment.parent_id.is_(None),
         Comment.deleted_at.is_(None),
     ).order_by(Comment.created_at).all()
 
-    comments = []
-    for c in top_level:
-        # Get guest author info
-        guest_name = None
-        guest_email = None
-        author_name = None
-        if c.guest_author_id:
-            guest = db.query(GuestUser).filter(GuestUser.id == c.guest_author_id).first()
-            if guest:
-                guest_name = guest.name
-                guest_email = guest.email
-        elif c.author_id:
-            from ..models.user import User as UserModel
-            author = db.query(UserModel).filter(UserModel.id == c.author_id).first()
-            if author:
-                author_name = author.name
-
-        # Get replies
-        replies_data = []
-        replies = db.query(Comment).filter(
-            Comment.parent_id == c.id,
-            Comment.deleted_at.is_(None),
-        ).order_by(Comment.created_at).all()
-        for r in replies:
-            r_guest_name = None
-            r_author_name = None
-            if r.guest_author_id:
-                rg = db.query(GuestUser).filter(GuestUser.id == r.guest_author_id).first()
-                if rg: r_guest_name = rg.name
-            elif r.author_id:
-                ra = db.query(UserModel).filter(UserModel.id == r.author_id).first()
-                if ra: r_author_name = ra.name
-            replies_data.append({
-                "id": str(r.id),
-                "body": r.body,
-                "guest_name": r_guest_name or r_author_name or "Anonymous",
-                "author_name": r_author_name,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "timecode_start": r.timecode_start,
-            })
-
-        comments.append({
-            "id": str(c.id),
-            "body": c.body,
-            "guest_name": guest_name or author_name or "Anonymous",
-            "author_name": author_name,
-            "guest_email": guest_email or "",
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-            "timecode_start": c.timecode_start,
-            "replies": replies_data,
-        })
-
-    return {"comments": comments}
+    return [_build_comment_response(c, db) for c in top_level]
 
 
 @router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
