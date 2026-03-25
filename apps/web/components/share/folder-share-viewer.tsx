@@ -887,7 +887,6 @@ export function FolderShareViewer({
   const thumbnailScale = appearance.thumbnail_scale ?? 'fill'
   const showCardInfo = appearance.show_card_info !== false
   const isGridLayout = appearance.layout !== 'list'
-  const openInViewer = appearance.open_in_viewer !== false
   const perPage = 24
 
   // Grid column classes based on card_size
