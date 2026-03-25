@@ -338,8 +338,8 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
     }
     setLoadingComments(true)
     fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`)
-      .then((r) => (r.ok ? r.json() : Promise.resolve({ comments: [] })))
-      .then((data) => setComments(data.comments ?? []))
+      .then((r) => (r.ok ? r.json() : Promise.resolve([])))
+      .then((data) => setComments(Array.isArray(data) ? data : (data.comments ?? [])))
       .catch(() => setComments([]))
       .finally(() => setLoadingComments(false))
   }, [selectedAsset?.id, token, commentRefresh])
