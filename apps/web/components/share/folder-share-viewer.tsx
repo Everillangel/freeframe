@@ -691,31 +691,31 @@ function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetV
   const canComment = permission === 'comment' || permission === 'approve'
 
   return (
-    <div className="flex-1 min-h-screen flex flex-col bg-black text-white">
+    <div className="fixed inset-0 flex flex-col bg-bg-primary text-text-primary z-50">
       {/* Top bar */}
-      <header className="flex items-center gap-3 border-b border-white/[0.06] px-4 h-12 bg-zinc-950 shrink-0">
-        <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+      <header className="flex items-center gap-3 border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
+        <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-medium text-white truncate">{asset.name}</span>
+        <span className="text-[13px] font-medium text-text-primary truncate">{asset.name}</span>
         <div className="flex-1" />
         {allowDownload && (
-          <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors" onClick={() => handleDownload(token, asset.id, asset.name)}>
+          <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, asset.name)}>
             <Download className="h-3 w-3" /> Download
           </button>
         )}
-        <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+        <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
           {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
         </button>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Media viewer */}
-        <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center bg-black overflow-hidden min-w-0">
           {loading ? (
             <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
           ) : asset.asset_type === 'video' ? (
-            streamUrl ? <HlsVideo src={streamUrl} className="max-h-full max-w-full rounded-lg" /> : (
+            streamUrl ? <HlsVideo src={streamUrl} className="max-h-[calc(100vh-48px)] max-w-full" /> : (
               <div className="text-center text-zinc-500"><Video className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Video unavailable</p></div>
             )
           ) : asset.asset_type === 'audio' ? (
@@ -731,7 +731,7 @@ function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetV
           ) : (
             (streamUrl || asset.thumbnail_url) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={streamUrl || asset.thumbnail_url!} alt={asset.name} className="max-h-full max-w-full object-contain rounded-lg" />
+              <img src={streamUrl || asset.thumbnail_url!} alt={asset.name} className="max-h-[calc(100vh-48px)] max-w-full object-contain" />
             ) : <div className="text-center text-zinc-500"><ImageIcon className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Image unavailable</p></div>
           )}
         </div>
