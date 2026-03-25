@@ -1,24 +1,24 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import useSWR from 'swr'
-import Link from 'next/link'
-import { FolderOpen, Clock, UserCheck, type LucideIcon } from 'lucide-react'
-import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth-store'
-import { formatRelativeTime } from '@/lib/utils'
-import { EmptyState } from '@/components/shared/empty-state'
-import type { Asset } from '@/types'
+import * as React from "react";
+import useSWR from "swr";
+import Link from "next/link";
+import { FolderOpen, Clock, UserCheck, type LucideIcon } from "lucide-react";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { formatRelativeTime } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/empty-state";
+import type { Asset } from "@/types";
 
 function getGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 interface AssetCardProps {
-  asset: Asset
+  asset: Asset;
 }
 
 function AssetCard({ asset }: AssetCardProps) {
@@ -48,16 +48,16 @@ function AssetCard({ asset }: AssetCardProps) {
         )}
       </div>
     </Link>
-  )
+  );
 }
 
 interface SectionProps {
-  title: string
-  icon: LucideIcon
-  assets: Asset[] | undefined
-  isLoading: boolean
-  emptyTitle: string
-  emptyDescription: string
+  title: string;
+  icon: LucideIcon;
+  assets: Asset[] | undefined;
+  isLoading: boolean;
+  emptyTitle: string;
+  emptyDescription: string;
 }
 
 function Section({
@@ -103,34 +103,36 @@ function Section({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export default function HomePage() {
-  const { user } = useAuthStore()
+  const { user } = useAuthStore();
 
   const { data: recentAssets, isLoading: loadingRecent } = useSWR(
-    '/me/assets?filter=owned',
-    () => api.get<Asset[]>('/me/assets?filter=owned'),
-  )
+    "/me/assets?filter=owned",
+    () => api.get<Asset[]>("/me/assets?filter=owned"),
+  );
 
   const { data: assignedAssets, isLoading: loadingAssigned } = useSWR(
-    '/me/assets?filter=assigned',
-    () => api.get<Asset[]>('/me/assets?filter=assigned'),
-  )
+    "/me/assets?filter=assigned",
+    () => api.get<Asset[]>("/me/assets?filter=assigned"),
+  );
 
   const { data: dueSoonAssets, isLoading: loadingDueSoon } = useSWR(
-    '/me/assets?filter=due_soon',
-    () => api.get<Asset[]>('/me/assets?filter=due_soon'),
-  )
+    "/me/assets?filter=due_soon",
+    () => api.get<Asset[]>("/me/assets?filter=due_soon"),
+  );
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl">
+    <div className="p-6 space-y-8">
       {/* Greeting */}
       <div>
         <h1 className="text-xl font-semibold text-text-primary">
-          {getGreeting()},{' '}
-          <span className="text-accent">{user?.name?.split(' ')[0] ?? 'there'}</span>
+          {getGreeting()},{" "}
+          <span className="text-accent">
+            {user?.name?.split(" ")[0] ?? "there"}
+          </span>
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
           Here&apos;s what&apos;s happening with your assets today.
@@ -165,5 +167,5 @@ export default function HomePage() {
         emptyDescription="Assets due within the next 7 days will appear here."
       />
     </div>
-  )
+  );
 }

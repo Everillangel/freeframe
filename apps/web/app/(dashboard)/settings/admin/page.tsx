@@ -1,74 +1,75 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import useSWR, { mutate } from 'swr'
-import * as Dialog from '@radix-ui/react-dialog'
-import { Users, Plus, X, Shield, Link2, Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { api } from '@/lib/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Avatar } from '@/components/shared/avatar'
-import { EmptyState } from '@/components/shared/empty-state'
-import { useAuthStore } from '@/stores/auth-store'
-import { useRouter } from 'next/navigation'
-import type { User, UserStatus } from '@/types'
+import * as React from "react";
+import useSWR, { mutate } from "swr";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Users, Plus, X, Shield, Link2, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Avatar } from "@/components/shared/avatar";
+import { EmptyState } from "@/components/shared/empty-state";
+import { useAuthStore } from "@/stores/auth-store";
+import { useRouter } from "next/navigation";
+import type { User, UserStatus } from "@/types";
 
 function BulkInviteDialog() {
-  const [open, setOpen] = React.useState(false)
-  const [emails, setEmails] = React.useState('')
-  const [loading, setLoading] = React.useState(false)
-  const [error, setError] = React.useState('')
-  const [success, setSuccess] = React.useState('')
+  const [open, setOpen] = React.useState(false);
+  const [emails, setEmails] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [success, setSuccess] = React.useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     const emailList = emails
       .split(/[\n,]/)
       .map((e) => e.trim())
-      .filter(Boolean)
-    if (emailList.length === 0) return
-    setLoading(true)
-    setError('')
-    setSuccess('')
-    let sent = 0
-    const skipped: string[] = []
-    const failed: string[] = []
+      .filter(Boolean);
+    if (emailList.length === 0) return;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    let sent = 0;
+    const skipped: string[] = [];
+    const failed: string[] = [];
     try {
       for (const email of emailList) {
         try {
-          const name = email.split('@')[0]
-          await api.post('/users/invite', { email, name })
-          sent++
+          const name = email.split("@")[0];
+          await api.post("/users/invite", { email, name });
+          sent++;
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : ''
-          if (msg.toLowerCase().includes('already registered')) {
-            skipped.push(email)
+          const msg = err instanceof Error ? err.message : "";
+          if (msg.toLowerCase().includes("already registered")) {
+            skipped.push(email);
           } else {
-            failed.push(email)
+            failed.push(email);
           }
         }
       }
-      const parts: string[] = []
-      if (sent > 0) parts.push(`${sent} invite(s) sent`)
-      if (skipped.length > 0) parts.push(`${skipped.length} already registered`)
-      if (failed.length > 0) parts.push(`${failed.length} failed`)
+      const parts: string[] = [];
+      if (sent > 0) parts.push(`${sent} invite(s) sent`);
+      if (skipped.length > 0)
+        parts.push(`${skipped.length} already registered`);
+      if (failed.length > 0) parts.push(`${failed.length} failed`);
       if (sent > 0 || skipped.length > 0) {
-        setSuccess(parts.join(', '))
+        setSuccess(parts.join(", "));
         if (failed.length === 0) {
-          setEmails('')
-          setTimeout(() => setOpen(false), 1500)
+          setEmails("");
+          setTimeout(() => setOpen(false), 1500);
         }
       }
       if (failed.length > 0) {
-        setError(`Failed to invite: ${failed.join(', ')}`)
+        setError(`Failed to invite: ${failed.join(", ")}`);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to send invites')
+      setError(err instanceof Error ? err.message : "Failed to send invites");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -95,7 +96,9 @@ function BulkInviteDialog() {
 
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text-secondary">Email addresses</label>
+              <label className="text-sm font-medium text-text-secondary">
+                Email addresses
+              </label>
               <textarea
                 value={emails}
                 onChange={(e) => setEmails(e.target.value)}
@@ -105,9 +108,16 @@ function BulkInviteDialog() {
               />
             </div>
             {error && <p className="text-xs text-status-error">{error}</p>}
-            {success && <p className="text-xs text-status-success">{success}</p>}
+            {success && (
+              <p className="text-xs text-status-success">{success}</p>
+            )}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setOpen(false)}
+              >
                 Close
               </Button>
               <Button type="submit" size="sm" loading={loading}>
@@ -118,92 +128,119 @@ function BulkInviteDialog() {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }
 
 function userStatusBadge(status: UserStatus) {
   const map: Record<UserStatus, { label: string; className: string }> = {
-    active: { label: 'Active', className: 'bg-status-success/15 text-status-success' },
-    deactivated: { label: 'Deactivated', className: 'bg-status-error/15 text-status-error' },
-    pending_invite: { label: 'Pending', className: 'bg-status-warning/15 text-status-warning' },
-    pending_verification: { label: 'Unverified', className: 'bg-bg-tertiary text-text-secondary' },
-  }
-  const cfg = map[status] ?? map.active
+    active: {
+      label: "Active",
+      className: "bg-status-success/15 text-status-success",
+    },
+    deactivated: {
+      label: "Deactivated",
+      className: "bg-status-error/15 text-status-error",
+    },
+    pending_invite: {
+      label: "Pending",
+      className: "bg-status-warning/15 text-status-warning",
+    },
+    pending_verification: {
+      label: "Unverified",
+      className: "bg-bg-tertiary text-text-secondary",
+    },
+  };
+  const cfg = map[status] ?? map.active;
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cfg.className)}>
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        cfg.className,
+      )}
+    >
       {cfg.label}
     </span>
-  )
+  );
 }
 
 export default function AdminPage() {
-  const { user, isSuperAdmin } = useAuthStore()
-  const router = useRouter()
+  const { user, isSuperAdmin } = useAuthStore();
+  const router = useRouter();
 
   const { data: usersResp, isLoading: loadingUsers } = useSWR<User[]>(
-    isSuperAdmin ? '/admin/users' : null,
-    () => api.get<User[]>('/admin/users'),
-  )
+    isSuperAdmin ? "/admin/users" : null,
+    () => api.get<User[]>("/admin/users"),
+  );
 
   React.useEffect(() => {
     if (user && !isSuperAdmin) {
-      router.replace('/')
+      router.replace("/");
     }
-  }, [user, isSuperAdmin, router])
+  }, [user, isSuperAdmin, router]);
 
   const handleDeactivate = async (userId: string) => {
     try {
-      await api.patch(`/admin/users/${userId}/deactivate`)
-      mutate('/admin/users')
+      await api.patch(`/admin/users/${userId}/deactivate`);
+      mutate("/admin/users");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to deactivate user'
-      alert(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to deactivate user";
+      alert(message);
     }
-  }
+  };
 
   const handleReactivate = async (userId: string) => {
     try {
-      await api.patch(`/admin/users/${userId}/reactivate`)
-      mutate('/admin/users')
+      await api.patch(`/admin/users/${userId}/reactivate`);
+      mutate("/admin/users");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to reactivate user'
-      alert(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to reactivate user";
+      alert(message);
     }
-  }
+  };
 
-  const [copiedId, setCopiedId] = React.useState<string | null>(null)
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   const handleCopyInviteLink = (u: User) => {
-    if (!u.invite_token) return
-    const link = `${window.location.origin}/invite/${u.invite_token}`
-    navigator.clipboard.writeText(link)
-    setCopiedId(u.id)
-    setTimeout(() => setCopiedId(null), 2000)
-  }
+    if (!u.invite_token) return;
+    const link = `${window.location.origin}/invite/${u.invite_token}`;
+    navigator.clipboard.writeText(link);
+    setCopiedId(u.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-  const handleToggleAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
+  const handleToggleAdmin = async (
+    userId: string,
+    isCurrentlyAdmin: boolean,
+  ) => {
     try {
-      await api.patch(`/admin/users/${userId}/role`, { is_admin: !isCurrentlyAdmin })
-      mutate('/admin/users')
+      await api.patch(`/admin/users/${userId}/role`, {
+        is_admin: !isCurrentlyAdmin,
+      });
+      mutate("/admin/users");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update user role'
-      alert(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to update user role";
+      alert(message);
     }
-  }
+  };
 
   if (!isSuperAdmin) {
-    return null
+    return null;
   }
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl">
+    <div className="p-6 space-y-8">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-muted">
           <Shield className="h-5 w-5 text-accent" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Admin Dashboard</h1>
+          <h1 className="text-xl font-semibold text-text-primary">
+            Admin Dashboard
+          </h1>
           <p className="text-sm text-text-secondary">Manage platform users</p>
         </div>
       </div>
@@ -211,14 +248,19 @@ export default function AdminPage() {
       {/* User management */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text-primary">Platform Users</h2>
+          <h2 className="text-sm font-semibold text-text-primary">
+            Platform Users
+          </h2>
           <BulkInviteDialog />
         </div>
 
         {loadingUsers ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-12 animate-pulse rounded-lg bg-bg-tertiary" />
+              <div
+                key={i}
+                className="h-12 animate-pulse rounded-lg bg-bg-tertiary"
+              />
             ))}
           </div>
         ) : !usersResp || usersResp.length === 0 ? (
@@ -234,22 +276,39 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-tertiary">
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">User</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">Role</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">Status</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">Joined</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-medium text-text-tertiary">Actions</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">
+                    User
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">
+                    Role
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">
+                    Status
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-text-tertiary">
+                    Joined
+                  </th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-text-tertiary">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {usersResp.map((u: User) => (
-                  <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg-tertiary transition-colors">
+                  <tr
+                    key={u.id}
+                    className="border-b border-border last:border-0 hover:bg-bg-tertiary transition-colors"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar src={u.avatar_url} name={u.name} size="sm" />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">{u.name}</p>
-                          <p className="text-xs text-text-tertiary truncate">{u.email}</p>
+                          <p className="text-sm font-medium text-text-primary truncate">
+                            {u.name}
+                          </p>
+                          <p className="text-xs text-text-tertiary truncate">
+                            {u.email}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -265,11 +324,13 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3">{userStatusBadge(u.status)}</td>
                     <td className="px-4 py-3 text-xs text-text-tertiary">
-                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                      {u.created_at
+                        ? new Date(u.created_at).toLocaleDateString()
+                        : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {u.status === 'pending_invite' && u.invite_token && (
+                        {u.status === "pending_invite" && u.invite_token && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -277,9 +338,15 @@ export default function AdminPage() {
                             className="gap-1"
                           >
                             {copiedId === u.id ? (
-                              <><Check className="h-3.5 w-3.5 text-status-success" /> Copied</>
+                              <>
+                                <Check className="h-3.5 w-3.5 text-status-success" />{" "}
+                                Copied
+                              </>
                             ) : (
-                              <><Link2 className="h-3.5 w-3.5" /> Copy Invite Link</>
+                              <>
+                                <Link2 className="h-3.5 w-3.5" /> Copy Invite
+                                Link
+                              </>
                             )}
                           </Button>
                         )}
@@ -287,12 +354,14 @@ export default function AdminPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleToggleAdmin(u.id, u.is_superadmin)}
+                            onClick={() =>
+                              handleToggleAdmin(u.id, u.is_superadmin)
+                            }
                           >
-                            {u.is_superadmin ? 'Remove Admin' : 'Make Admin'}
+                            {u.is_superadmin ? "Remove Admin" : "Make Admin"}
                           </Button>
                         )}
-                        {u.id !== user?.id && u.status === 'active' ? (
+                        {u.id !== user?.id && u.status === "active" ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -301,7 +370,7 @@ export default function AdminPage() {
                           >
                             Deactivate
                           </Button>
-                        ) : u.id !== user?.id && u.status === 'deactivated' ? (
+                        ) : u.id !== user?.id && u.status === "deactivated" ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -310,7 +379,9 @@ export default function AdminPage() {
                             Reactivate
                           </Button>
                         ) : u.id === user?.id ? (
-                          <span className="text-xs text-text-tertiary italic">You</span>
+                          <span className="text-xs text-text-tertiary italic">
+                            You
+                          </span>
                         ) : null}
                       </div>
                     </td>
@@ -322,5 +393,5 @@ export default function AdminPage() {
         )}
       </section>
     </div>
-  )
+  );
 }

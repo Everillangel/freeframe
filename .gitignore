@@ -50,7 +50,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
-
+/node_modules
+/node_modules/*
+node_modules/
 # Translations
 *.mo
 *.pot
