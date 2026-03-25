@@ -1133,7 +1133,19 @@ def get_share_stream_url(
         asset_name=asset.name,
     )
 
-    return {"url": url, "asset_type": asset.asset_type.value}
+    # Get thumbnail URL
+    thumb_url = None
+    if media_file.s3_key_thumbnail:
+        thumb_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
+
+    return {
+        "url": url,
+        "asset_type": asset.asset_type.value,
+        "name": asset.name,
+        "version_id": str(media_file.version_id) if media_file.version_id else None,
+        "thumbnail_url": thumb_url,
+        "duration_seconds": media_file.duration_seconds,
+    }
 
 
 @router.get("/share/{token}/thumbnail/{asset_id}")

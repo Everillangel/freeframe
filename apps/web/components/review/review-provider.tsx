@@ -45,10 +45,11 @@ const ReviewContext = createContext<ReviewContextValue | null>(null)
 
 interface ReviewProviderProps {
   assetId: string
+  shareToken?: string  // If set, uses share token API instead of authenticated API
   children: React.ReactNode
 }
 
-export function ReviewProvider({ assetId, children }: ReviewProviderProps) {
+export function ReviewProvider({ assetId, shareToken, children }: ReviewProviderProps) {
   const [asset, setAsset] = useState<AssetResponse | null>(null)
   const [versions, setVersions] = useState<AssetVersion[]>([])
   const [comments, setComments] = useState<Comment[]>([])
@@ -68,43 +69,86 @@ export function ReviewProvider({ assetId, children }: ReviewProviderProps) {
 
   const fetchAsset = useCallback(async () => {
     try {
-      // Backend returns flat AssetResponse with latest_version embedded
-      const data = await api.get<AssetResponse>(`/assets/${assetId}`)
-      if (!mountedRef.current) return
+      let data: AssetResponse
 
+      if (shareToken) {
+        // Share mode: fetch stream info to build a pseudo asset
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const headers: Record<string, string> = {}
+        try { const t = localStorage.getItem('ff_access_token'); if (t) headers['Authorization'] = `Bearer ${t}` } catch {}
+        const streamRes = await fetch(`${API_URL}/share/${shareToken}/stream/${assetId}`, { headers })
+        const streamData = streamRes.ok ? await streamRes.json() : null
+        // Build pseudo asset from available data
+        data = {
+          id: assetId,
+          name: streamData?.name || 'Asset',
+          asset_type: streamData?.asset_type || 'image',
+          status: 'in_review',
+          project_id: '',
+          created_by: '',
+          created_at: '',
+          updated_at: '',
+          stream_url: streamData?.url,
+          thumbnail_url: streamData?.thumbnail_url,
+          latest_version: streamData?.version_id ? {
+            id: streamData.version_id,
+            asset_id: assetId,
+            version_number: 1,
+            processing_status: 'ready',
+            created_by: '',
+            created_at: '',
+            files: [],
+          } : null,
+        } as AssetResponse
+      } else {
+        // Normal mode: authenticated API
+        data = await api.get<AssetResponse>(`/assets/${assetId}`)
+      }
+
+      if (!mountedRef.current) return
       setAsset(data)
       setCurrentAsset(data)
 
-      // Fetch all versions for the version switcher
-      const allVersions = await api.get<AssetVersion[]>(`/assets/${assetId}/versions`)
-      if (!mountedRef.current) return
-      setVersions(allVersions ?? [])
+      if (!shareToken) {
+        // Fetch all versions for the version switcher (not available in share mode)
+        const allVersions = await api.get<AssetVersion[]>(`/assets/${assetId}/versions`)
+        if (!mountedRef.current) return
+        setVersions(allVersions ?? [])
 
-      // Set the latest ready version as current
-      const readyVersion = (allVersions ?? [])
-        .sort((a, b) => b.version_number - a.version_number)
-        .find((v) => v.processing_status === 'ready')
-      if (readyVersion) {
-        setCurrentVersion(readyVersion)
+        const readyVersion = (allVersions ?? [])
+          .sort((a, b) => b.version_number - a.version_number)
+          .find((v) => v.processing_status === 'ready')
+        if (readyVersion) {
+          setCurrentVersion(readyVersion)
+        } else if (data.latest_version) {
+          setCurrentVersion(data.latest_version)
+        }
       } else if (data.latest_version) {
-        // Fallback to latest version even if not ready (shows processing state)
         setCurrentVersion(data.latest_version)
       }
     } catch (err) {
       if (!mountedRef.current) return
       setError(err instanceof Error ? err.message : 'Failed to load asset')
     }
-  }, [assetId, setCurrentAsset, setCurrentVersion])
+  }, [assetId, shareToken, setCurrentAsset, setCurrentVersion])
 
   const fetchComments = useCallback(async () => {
     try {
-      const data = await api.get<Comment[]>(`/assets/${assetId}/comments`)
+      let data: Comment[]
+      if (shareToken) {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const res = await fetch(`${API_URL}/share/${shareToken}/comments?asset_id=${assetId}`)
+        const json = res.ok ? await res.json() : { comments: [] }
+        data = json.comments ?? []
+      } else {
+        data = await api.get<Comment[]>(`/assets/${assetId}/comments`)
+      }
       if (!mountedRef.current) return
       setComments(data ?? [])
     } catch {
       // Comments failing silently — asset is still viewable
     }
-  }, [assetId])
+  }, [assetId, shareToken])
 
   const refetchComments = useCallback(async () => {
     await fetchComments()
@@ -120,7 +164,21 @@ export function ReviewProvider({ assetId, children }: ReviewProviderProps) {
 
   const addComment = useCallback(
     async (payload: CreateCommentPayload): Promise<Comment> => {
-      const comment = await api.post<Comment>(`/assets/${assetId}/comments`, payload)
+      let comment: Comment
+      if (shareToken) {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        try { const t = localStorage.getItem('ff_access_token'); if (t) headers['Authorization'] = `Bearer ${t}` } catch {}
+        const res = await fetch(`${API_URL}/share/${shareToken}/comment`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...payload, asset_id: assetId }),
+        })
+        if (!res.ok) throw new Error('Failed to post comment')
+        comment = await res.json()
+      } else {
+        comment = await api.post<Comment>(`/assets/${assetId}/comments`, payload)
+      }
       if (mountedRef.current) {
         setComments((prev) => [...prev, comment])
       }

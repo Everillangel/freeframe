@@ -657,111 +657,180 @@ function HlsVideo({ src, className }: { src: string; className?: string }) {
 }
 
 function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetViewerProps) {
-  const [streamUrl, setStreamUrl] = React.useState<string | null>(null)
-  const [loading, setLoading] = React.useState(true)
-  const [sidebarOpen, setSidebarOpen] = React.useState(true)
-  const [comments, setComments] = React.useState<GuestComment[]>([])
-  const [loadingComments, setLoadingComments] = React.useState(false)
-  const [commentRefresh, setCommentRefresh] = React.useState(0)
+  // Use the same ReviewProvider as the project review page, but with shareToken
+  // This gives us the same video player, image viewer, comment panel, etc.
+  return (
+    <div className="fixed inset-0 z-50">
+      <ShareReviewScreen
+        token={token}
+        assetId={asset.id}
+        assetName={asset.name}
+        permission={permission}
+        allowDownload={allowDownload}
+        onBack={onBack}
+      />
+    </div>
+  )
+}
+
+/** Lazy-imported review components to avoid circular deps */
+function ShareReviewScreen({
+  token, assetId, assetName, permission, allowDownload, onBack,
+}: {
+  token: string; assetId: string; assetName: string; permission: SharePermission; allowDownload: boolean; onBack: () => void
+}) {
+  const [ReviewProvider, setProvider] = React.useState<any>(null)
+  const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
+  const [ImageViewer, setImageViewer] = React.useState<any>(null)
+  const [AudioPlayer, setAudioPlayer] = React.useState<any>(null)
+  const [CommentPanel, setCommentPanel] = React.useState<any>(null)
+  const [CommentInput, setCommentInput] = React.useState<any>(null)
+  const [loaded, setLoaded] = React.useState(false)
 
   React.useEffect(() => {
-    setLoading(true)
-    const headers: Record<string, string> = {}
-    try {
-      const t = localStorage.getItem('ff_access_token')
-      if (t) headers['Authorization'] = `Bearer ${t}`
-    } catch {}
-    fetch(`${API_URL}/share/${token}/stream/${asset.id}`, { headers })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.url) setStreamUrl(data.url) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [token, asset.id])
+    // Dynamic import to avoid SSR issues
+    Promise.all([
+      import('@/components/review/review-provider'),
+      import('@/components/review/video-player'),
+      import('@/components/review/image-viewer'),
+      import('@/components/review/audio-player'),
+      import('@/components/review/comment-panel'),
+      import('@/components/review/comment-input'),
+    ]).then(([provider, video, image, audio, comments, input]) => {
+      setProvider(() => provider.ReviewProvider)
+      setVideoPlayer(() => video.VideoPlayer)
+      setImageViewer(() => image.ImageViewer)
+      setAudioPlayer(() => audio.AudioPlayer)
+      setCommentPanel(() => comments.CommentPanel)
+      setCommentInput(() => input.CommentInput)
+      setLoaded(true)
+    })
+  }, [])
 
-  // Fetch comments for this asset
-  React.useEffect(() => {
-    setLoadingComments(true)
-    fetch(`${API_URL}/share/${token}/comments?asset_id=${asset.id}`)
-      .then((r) => (r.ok ? r.json() : { comments: [] }))
-      .then((data) => setComments(data.comments ?? []))
-      .catch(() => setComments([]))
-      .finally(() => setLoadingComments(false))
-  }, [token, asset.id, commentRefresh])
-
-  const canComment = permission === 'comment' || permission === 'approve'
+  if (!loaded || !ReviewProvider) {
+    return <div className="flex items-center justify-center h-screen bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+  }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-bg-primary text-text-primary z-50">
-      {/* Top bar */}
-      <header className="flex items-center gap-3 border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
-        <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <span className="text-[13px] font-medium text-text-primary truncate">{asset.name}</span>
-        <div className="flex-1" />
-        {allowDownload && (
-          <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, asset.name)}>
-            <Download className="h-3 w-3" /> Download
-          </button>
-        )}
-        <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
-          {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-        </button>
-      </header>
+    <ReviewProvider assetId={assetId} shareToken={token}>
+      <ShareReviewInner
+        token={token}
+        assetName={assetName}
+        permission={permission}
+        allowDownload={allowDownload}
+        onBack={onBack}
+        VideoPlayer={VideoPlayer}
+        ImageViewer={ImageViewer}
+        AudioPlayer={AudioPlayer}
+        CommentPanel={CommentPanel}
+        CommentInput={CommentInput}
+      />
+    </ReviewProvider>
+  )
+}
 
+function ShareReviewInner({
+  token, assetName, permission, allowDownload, onBack,
+  VideoPlayer, ImageViewer, AudioPlayer, CommentPanel, CommentInput,
+}: any) {
+  // Import hooks from the review system
+  const { useReview } = require('@/components/review/review-provider')
+  const { useReviewStore } = require('@/stores/review-store')
+  const { useComments } = require('@/hooks/use-comments')
+
+  const { asset, versions, isLoading, comments, refetchComments } = useReview()
+  const { currentVersion, isDrawingMode } = useReviewStore()
+  const [sidebarOpen, setSidebarOpen] = React.useState(true)
+  const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
+
+  const canComment = permission === 'comment' || permission === 'approve'
+  const versionReady = currentVersion?.processing_status === 'ready'
+
+  if (isLoading || !asset) {
+    return <div className="flex items-center justify-center h-screen bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-bg-primary text-text-primary">
+      {/* Top bar — same style as project review */}
+      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
+        <div className="flex items-center gap-1 min-w-0 flex-1">
+          <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {allowDownload && (
+            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, assetName)}>
+              <Download className="h-3 w-3" /> Download
+            </button>
+          )}
+          <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-8 w-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
+            {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Main: viewer + sidebar */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Media viewer */}
-        <div className="flex-1 flex items-center justify-center bg-black overflow-hidden min-w-0">
-          {loading ? (
-            <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-          ) : asset.asset_type === 'video' ? (
-            streamUrl ? <HlsVideo src={streamUrl} className="max-h-[calc(100vh-48px)] max-w-full" /> : (
-              <div className="text-center text-zinc-500"><Video className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Video unavailable</p></div>
-            )
-          ) : asset.asset_type === 'audio' ? (
-            streamUrl ? (
-              <div className="w-full max-w-lg space-y-4">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="h-20 w-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center"><Music className="h-8 w-8 text-zinc-500" /></div>
-                  <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
-                </div>
-                <audio src={streamUrl} controls autoPlay className="w-full" />
-              </div>
-            ) : <div className="text-center text-zinc-500"><Music className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Audio unavailable</p></div>
+        {/* Media viewer — reuses project components */}
+        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
+          {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
+            <VideoPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
+          ) : asset.asset_type === 'audio' && versionReady && AudioPlayer ? (
+            <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
+          ) : (asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && versionReady && ImageViewer ? (
+            <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden">
+              <ImageViewer asset={asset} version={currentVersion} />
+            </div>
           ) : (
-            (streamUrl || asset.thumbnail_url) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={streamUrl || asset.thumbnail_url!} alt={asset.name} className="max-h-[calc(100vh-48px)] max-w-full object-contain" />
-            ) : <div className="text-center text-zinc-500"><ImageIcon className="h-12 w-12 mx-auto mb-2" /><p className="text-sm">Image unavailable</p></div>
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+            </div>
           )}
         </div>
 
-        {/* Comment sidebar */}
+        {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-[360px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
-            {/* Tab header — matching project review style */}
+          <div className="w-[360px] flex flex-col border-l border-border bg-bg-secondary shrink-0">
             <div className="px-4 pt-3 pb-2 shrink-0">
               <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
-                <div className="flex-1 py-1.5 text-[13px] font-medium rounded-md text-center bg-bg-hover text-text-primary shadow-sm">
+                <button onClick={() => setActiveTab('comments')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'comments' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
                   Comments
-                </div>
+                </button>
+                <button onClick={() => setActiveTab('fields')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'fields' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
+                  Fields
+                </button>
               </div>
             </div>
 
-            {/* Comments header */}
-            <div className="px-4 py-2 flex items-center justify-between border-b border-border shrink-0">
-              <span className="text-xs text-text-tertiary">All comments</span>
-              <span className="text-2xs text-text-tertiary">{comments.length}</span>
-            </div>
-
-            {/* Comment list */}
-            <div className="flex-1 overflow-y-auto">
-              <ShareCommentList comments={comments} loading={loadingComments} canComment={canComment} />
-            </div>
-
-            {/* Comment input */}
-            {canComment && (
-              <ShareCommentInput token={token} assetId={asset.id} onCommentPosted={() => setCommentRefresh(k => k + 1)} />
+            {activeTab === 'comments' && CommentPanel && (
+              <>
+                <CommentPanel
+                  comments={comments}
+                  onResolve={() => {}}
+                  onDelete={() => {}}
+                  onAddReaction={() => {}}
+                  onRemoveReaction={() => {}}
+                  onReply={() => {}}
+                  onSubmitReply={async () => {}}
+                />
+                {canComment && CommentInput && (
+                  <CommentInput
+                    assetId={asset.id}
+                    projectId={asset.project_id || ''}
+                    assetType={asset.asset_type}
+                    onSubmit={async (body: string) => {
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+                      try { const t = localStorage.getItem('ff_access_token'); if (t) headers['Authorization'] = `Bearer ${t}` } catch {}
+                      await fetch(`${API_URL}/share/${token}/comment`, { method: 'POST', headers, body: JSON.stringify({ body, asset_id: asset.id }) })
+                      refetchComments()
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         )}
