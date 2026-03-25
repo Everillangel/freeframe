@@ -135,14 +135,14 @@ function SubfolderCard({ subfolder, onClick }: SubfolderCardProps) {
 
   return (
     <button
-      className="group flex flex-col rounded-lg border border-white/[0.08] bg-white/[0.02] overflow-hidden text-left transition-all cursor-pointer hover:border-white/[0.15] hover:bg-white/[0.04]"
+      className="group flex flex-col rounded-lg border border-border bg-bg-tertiary overflow-hidden text-left transition-all cursor-pointer hover:border-border-focus hover:bg-bg-hover"
       onClick={() => onClick(subfolder)}
     >
       {/* Thumbnail area */}
-      <div className="w-full aspect-[16/10] relative overflow-hidden bg-zinc-900/50">
+      <div className="w-full aspect-[16/10] relative overflow-hidden bg-bg-tertiary">
         {thumbs.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <Folder className="h-10 w-10 text-zinc-600" />
+            <Folder className="h-10 w-10 text-text-tertiary" />
           </div>
         ) : thumbs.length === 1 ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -177,8 +177,8 @@ function SubfolderCard({ subfolder, onClick }: SubfolderCardProps) {
 
       {/* Info */}
       <div className="px-3 py-2.5">
-        <p className="text-sm font-medium text-white truncate">{subfolder.name}</p>
-        <p className="text-xs text-zinc-500 mt-0.5">
+        <p className="text-sm font-medium text-text-primary truncate">{subfolder.name}</p>
+        <p className="text-xs text-text-tertiary mt-0.5">
           {subfolder.item_count} {subfolder.item_count === 1 ? 'Item' : 'Items'}
         </p>
       </div>
@@ -227,22 +227,22 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOp
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <TypeIcon className="h-10 w-10 text-zinc-600" />
+            <TypeIcon className="h-10 w-10 text-text-tertiary" />
           </div>
         )}
 
         {/* Comment count badge — bottom left */}
         {asset.comment_count > 0 && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
-            <MessageSquare className="h-3 w-3 text-white" />
-            <span className="text-[10px] font-medium text-white">{asset.comment_count}</span>
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-bg-primary/80 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+            <MessageSquare className="h-3 w-3 text-text-primary" />
+            <span className="text-[10px] font-medium text-text-primary">{asset.comment_count}</span>
           </div>
         )}
 
         {/* Duration badge — bottom right (video/audio) */}
         {asset.duration_seconds != null && asset.duration_seconds > 0 && (
-          <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
-            <span className="text-[10px] font-medium text-white tabular-nums">
+          <div className="absolute bottom-2 right-2 bg-bg-primary/80 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+            <span className="text-[10px] font-medium text-text-primary tabular-nums">
               {formatDuration(asset.duration_seconds)}
             </span>
           </div>
@@ -251,7 +251,7 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOp
         {/* Download button overlay */}
         {allowDownload && (
           <button
-            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-bg-primary/70 hover:bg-bg-primary/90 text-text-primary backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               handleDownload(token, asset.id, asset.name)
@@ -292,13 +292,13 @@ function SectionHeader({ label, count, totalSize, expanded, onToggle }: SectionH
   return (
     <button className="flex items-center gap-2 py-2 w-full text-left group" onClick={onToggle}>
       <ChevronDown
-        className={cn('h-4 w-4 shrink-0 transition-transform text-zinc-500', !expanded && '-rotate-90')}
+        className={cn('h-4 w-4 shrink-0 transition-transform text-text-tertiary', !expanded && '-rotate-90')}
       />
-      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+      <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
         {count} {label}
       </span>
       {totalSize && (
-        <span className="text-xs text-zinc-600">&middot; {totalSize}</span>
+        <span className="text-xs text-text-tertiary">&middot; {totalSize}</span>
       )}
     </button>
   )
@@ -347,10 +347,10 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
   if (!selectedAsset) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-        <div className="h-14 w-14 rounded-full bg-white/5 flex items-center justify-center mb-3">
-          <MessageSquare className="h-7 w-7 text-zinc-600" />
+        <div className="h-14 w-14 rounded-full bg-bg-tertiary flex items-center justify-center mb-3">
+          <MessageSquare className="h-7 w-7 text-text-tertiary" />
         </div>
-        <p className="text-sm font-medium text-zinc-300">Select an asset to view details</p>
+        <p className="text-sm font-medium text-text-primary">Select an asset to view details</p>
       </div>
     )
   }
@@ -360,19 +360,19 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Asset info header */}
-      <div className="px-4 py-4 border-b border-white/[0.06] shrink-0">
+      <div className="px-4 py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-2 mb-2">
-          <TypeIcon className="h-4 w-4 text-zinc-400 shrink-0" />
-          <span className="text-xs text-zinc-400 uppercase font-medium">
+          <TypeIcon className="h-4 w-4 text-text-secondary shrink-0" />
+          <span className="text-xs text-text-secondary uppercase font-medium">
             {getAssetTypeBadgeLabel(selectedAsset.asset_type)}
           </span>
         </div>
-        <h3 className="text-sm font-semibold text-white leading-snug">{selectedAsset.name}</h3>
+        <h3 className="text-sm font-semibold text-text-primary leading-snug">{selectedAsset.name}</h3>
         <div className="mt-2 space-y-1">
           {selectedAsset.created_by_name && (
-            <p className="text-xs text-zinc-500">By {selectedAsset.created_by_name}</p>
+            <p className="text-xs text-text-tertiary">By {selectedAsset.created_by_name}</p>
           )}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-text-tertiary">
             {formatDate(selectedAsset.created_at)}
             {selectedAsset.file_size != null && <> &middot; {formatFileSize(selectedAsset.file_size)}</>}
             {selectedAsset.duration_seconds != null && selectedAsset.duration_seconds > 0 && (
@@ -393,7 +393,7 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
           )}
           {allowDownload && (
             <button
-              className="flex items-center gap-2 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-xs font-medium text-text-primary hover:text-text-primary transition-colors"
               onClick={() => handleDownload(token, selectedAsset.id, selectedAsset.name)}
             >
               <Download className="h-3.5 w-3.5" />
@@ -466,7 +466,7 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
           <div key={comment.id} className="py-3 border-b border-border last:border-0">
             {/* Comment header */}
             <div className="flex items-start gap-3">
-              <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0', color)}>
+              <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-text-primary shrink-0', color)}>
                 {name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -497,7 +497,7 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
                   const rColor = getAvatarColor(rName)
                   return (
                     <div key={r.id} className="flex items-start gap-2.5 py-1">
-                      <div className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0', rColor)}>
+                      <div className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-text-primary shrink-0', rColor)}>
                         {rName.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -576,7 +576,7 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
   }
 
   return (
-    <div className="border-t border-white/[0.06] p-3 shrink-0 space-y-2">
+    <div className="border-t border-border p-3 shrink-0 space-y-2">
       {!isLoggedIn && (
         <div className="flex gap-2">
           <input
@@ -584,14 +584,14 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
             placeholder="Your name"
-            className="flex-1 h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-accent/50"
+            className="flex-1 h-8 rounded-md border border-border bg-bg-hover px-2.5 text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
           />
           <input
             type="email"
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
             placeholder="Email"
-            className="flex-1 h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-accent/50"
+            className="flex-1 h-8 rounded-md border border-border bg-bg-hover px-2.5 text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
           />
         </div>
       )}
@@ -603,12 +603,12 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() } }}
           placeholder="Leave a comment…"
           disabled={submitting}
-          className="flex-1 h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-accent/50"
+          className="flex-1 h-8 rounded-md border border-border bg-bg-hover px-2.5 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50"
         />
         <button
           onClick={handleSubmit}
           disabled={submitting || !body.trim()}
-          className="h-8 px-3 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors shrink-0"
+          className="h-8 px-3 rounded-md bg-accent text-text-primary text-xs font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors shrink-0"
         >
           {submitting ? '...' : 'Post'}
         </button>
@@ -1048,21 +1048,21 @@ export function FolderShareViewer({
   }
 
   return (
-    <div className="flex-1 min-h-screen flex flex-col bg-[#0d0d0f] text-white">
+    <div className="flex-1 min-h-screen flex flex-col bg-bg-primary text-text-primary">
       {/* ─── Top Bar (Frame.io style) ─────────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-white/[0.06] px-4 h-12 bg-[#111113] shrink-0">
+      <header className="flex items-center justify-between border-b border-border px-4 h-12 bg-bg-secondary shrink-0">
         {/* Left: viewer profile + breadcrumb */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Viewer avatar (logged-in user) or project avatar */}
           {viewerName ? (
             <div className="relative group shrink-0">
-              <button className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all">
+              <button className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all">
                 {viewerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
               </button>
               {/* Dropdown */}
-              <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-white/10 bg-[#1a1a1e] shadow-xl py-1">
-                <div className="px-3 py-2 border-b border-white/[0.06]">
-                  <p className="text-sm font-medium text-white">{viewerName}</p>
+              <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-bg-elevated shadow-xl py-1">
+                <div className="px-3 py-2 border-b border-border">
+                  <p className="text-sm font-medium text-text-primary">{viewerName}</p>
                 </div>
                 <button
                   onClick={() => {
@@ -1075,7 +1075,7 @@ export function FolderShareViewer({
                       window.location.href = '/'
                     }
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
                 >
                   Back to Dashboard
                 </button>
@@ -1103,7 +1103,7 @@ export function FolderShareViewer({
             />
           ) : (
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary shrink-0"
               style={{ backgroundColor: accentColor }}
             >
               {(branding?.custom_title ?? folderName ?? 'FF').substring(0, 2).toUpperCase()}
@@ -1111,14 +1111,14 @@ export function FolderShareViewer({
           )}
 
           {/* Breadcrumb */}
-          <span className="text-[13px] font-medium text-white truncate">{currentTitle}</span>
+          <span className="text-[13px] font-medium text-text-primary truncate">{currentTitle}</span>
         </div>
 
         {/* Right: Download All + panel toggle */}
         <div className="flex items-center gap-2 shrink-0">
           {allowDownload && (
             <button
-              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
+              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-primary bg-indigo-600 hover:bg-indigo-500 transition-colors"
               onClick={() => {
                 // Download all visible assets
                 filteredAssets.forEach((a) => handleDownload(token, a.id, a.name))
@@ -1130,7 +1130,7 @@ export function FolderShareViewer({
           )}
           <button
             onClick={() => setPanelOpen((v) => !v)}
-            className="flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             title={panelOpen ? 'Hide panel' : 'Show panel'}
           >
             {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -1143,10 +1143,10 @@ export function FolderShareViewer({
         {/* ─── Left: folder contents ─────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Sub-header: title, summary, breadcrumb, search */}
-          <div className="border-b border-white/[0.06] px-5 py-4">
-            <h1 className="text-lg font-bold text-white leading-tight">{title || folderName}</h1>
+          <div className="border-b border-border px-5 py-4">
+            <h1 className="text-lg font-bold text-text-primary leading-tight">{title || folderName}</h1>
             {!loading && (
-              <p className="mt-0.5 text-sm text-zinc-500">
+              <p className="mt-0.5 text-sm text-text-tertiary">
                 {createdByName && <>Created by {createdByName} &middot; </>}
                 {summaryText || 'Empty folder'}
               </p>
@@ -1157,8 +1157,8 @@ export function FolderShareViewer({
               <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
                 <button
                   className={cn(
-                    'shrink-0 font-medium hover:underline text-zinc-400 hover:text-white',
-                    breadcrumbs.length === 0 && 'text-white pointer-events-none',
+                    'shrink-0 font-medium hover:underline text-text-secondary hover:text-text-primary',
+                    breadcrumbs.length === 0 && 'text-text-primary pointer-events-none',
                   )}
                   onClick={() => navigateToBreadcrumb(-1)}
                 >
@@ -1166,13 +1166,13 @@ export function FolderShareViewer({
                 </button>
                 {breadcrumbs.map((crumb, i) => (
                   <React.Fragment key={crumb.id}>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
                     <button
                       className={cn(
                         'truncate max-w-[160px] hover:underline',
                         i === breadcrumbs.length - 1
-                          ? 'text-white font-medium pointer-events-none'
-                          : 'text-zinc-400 hover:text-white',
+                          ? 'text-text-primary font-medium pointer-events-none'
+                          : 'text-text-secondary hover:text-text-primary',
                       )}
                       onClick={() => navigateToBreadcrumb(i)}
                       title={crumb.name}
@@ -1185,13 +1185,13 @@ export function FolderShareViewer({
 
               {/* Search */}
               <div className="relative flex items-center shrink-0">
-                <Search className="absolute left-2.5 h-3.5 w-3.5 pointer-events-none text-zinc-500" />
+                <Search className="absolute left-2.5 h-3.5 w-3.5 pointer-events-none text-text-tertiary" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search assets…"
-                  className="h-8 w-52 pl-8 pr-3 rounded-md text-sm border bg-zinc-900/50 border-white/[0.08] text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  className="h-8 w-52 pl-8 pr-3 rounded-md text-sm border bg-bg-tertiary border-border text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
                 />
               </div>
             </div>
@@ -1201,16 +1201,16 @@ export function FolderShareViewer({
           <div className="flex-1 overflow-y-auto px-5 py-5">
             {loading ? (
               <div className="flex items-center justify-center py-24">
-                <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
               </div>
             ) : error ? (
               <div className="flex items-center justify-center py-24">
-                <p className="text-sm text-zinc-500">{error}</p>
+                <p className="text-sm text-text-tertiary">{error}</p>
               </div>
             ) : filteredSubfolders.length === 0 && filteredAssets.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 gap-3">
-                <Folder className="h-12 w-12 text-zinc-700" />
-                <p className="text-sm text-zinc-500">
+                <Folder className="h-12 w-12 text-text-tertiary" />
+                <p className="text-sm text-text-tertiary">
                   {searchQuery.trim() ? 'No results found' : 'This folder is empty'}
                 </p>
               </div>
@@ -1276,7 +1276,7 @@ export function FolderShareViewer({
                             <button
                               onClick={loadMore}
                               disabled={loadingMore}
-                              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20 disabled:opacity-50 transition-colors"
+                              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border border-border text-text-primary hover:bg-bg-tertiary hover:border-border-focus disabled:opacity-50 transition-colors"
                             >
                               {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
                               {loadingMore ? 'Loading…' : 'Load more'}
@@ -1292,15 +1292,15 @@ export function FolderShareViewer({
           </div>
 
           {/* Footer */}
-          <footer className="border-t border-white/[0.06] px-5 py-3 shrink-0">
+          <footer className="border-t border-border px-5 py-3 shrink-0">
             <div className="flex items-center justify-between">
               {branding?.custom_footer ? (
-                <p className="text-xs text-zinc-600">{branding.custom_footer}</p>
+                <p className="text-xs text-text-tertiary">{branding.custom_footer}</p>
               ) : (
                 <span />
               )}
               {!loading && (
-                <p className="text-xs tabular-nums text-zinc-600">
+                <p className="text-xs tabular-nums text-text-tertiary">
                   {assets.length + subfolders.length} item{assets.length + subfolders.length === 1 ? '' : 's'}
                 </p>
               )}
@@ -1310,7 +1310,7 @@ export function FolderShareViewer({
 
         {/* ─── Right Panel ───────────────────────────────────────────── */}
         {panelOpen && (
-          <div className="w-[320px] shrink-0 border-l border-white/[0.06] bg-[#111113] flex flex-col overflow-hidden">
+          <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
             <RightPanel
               selectedAsset={selectedAsset}
               token={token}
