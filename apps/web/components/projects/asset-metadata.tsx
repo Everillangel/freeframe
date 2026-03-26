@@ -302,12 +302,6 @@ export function AssetMetadataEditor({ asset, projectId, onUpdated }: AssetMetada
 
   return (
     <div className="space-y-4">
-      {/* Status */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Status</label>
-        <StatusSelect value={status} onChange={setStatus} />
-      </div>
-
       {/* Rating */}
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Rating</label>

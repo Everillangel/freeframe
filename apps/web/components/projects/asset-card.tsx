@@ -3,7 +3,7 @@
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Film, Music, Image as ImageIcon, Images, MessageSquare, MoreHorizontal, Check, Share2, Download, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react'
-import { cn, formatRelativeTime } from '@/lib/utils'
+import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import type { Asset, AssetType, User } from '@/types'
 import type { AspectRatio, ThumbnailScale, TitleLines } from '@/stores/view-store'
 
@@ -36,8 +36,11 @@ interface AssetCardProps {
   onDownload?: () => void
   onRename?: () => void
   onDelete?: () => void
+  fileSize?: number | null
   // Appearance settings
   showInfo?: boolean
+  showFileSize?: boolean
+  showUploader?: boolean
   titleLines?: TitleLines
   aspectRatio?: AspectRatio
   thumbnailScale?: ThumbnailScale
@@ -71,7 +74,10 @@ export function AssetCard({
   onDownload,
   onRename,
   onDelete,
+  fileSize,
   showInfo = true,
+  showFileSize = true,
+  showUploader = true,
   titleLines = '1',
   aspectRatio = 'landscape',
   thumbnailScale = 'fit',
@@ -218,10 +224,11 @@ export function AssetCard({
             </DropdownMenu.Root>
           </div>
 
-          {/* Author + date row */}
+          {/* Author + date + file size row */}
           <p className="text-2xs text-text-tertiary line-clamp-1">
-            {authorName && <span>{authorName} &bull; </span>}
+            {showUploader && authorName && <span>{authorName} &bull; </span>}
             {formatRelativeTime(asset.created_at)}
+            {showFileSize && fileSize ? <span> &bull; {formatBytes(fileSize)}</span> : null}
           </p>
         </div>
       )}

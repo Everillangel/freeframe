@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check, Film, Music, Image as ImageIcon, Images, Link as LinkIcon, Pencil } from 'lucide-react'
+import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, FolderIcon, Check, Film, Music, Image as ImageIcon, Images, Link as LinkIcon, Pencil } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -139,6 +139,8 @@ export function AssetGrid({
     showCardInfo,
     titleLines,
     flattenFolders,
+    showFileSize,
+    showUploader,
     sortKey,
     sortDirection,
   } = useViewStore()
@@ -267,8 +269,8 @@ export function AssetGrid({
         </div>
       )}
 
-      {/* ─── Folders section ────────────────────────────────────────────── */}
-      {showFolders && (
+      {/* ─── Grid view: folders section ──────────────────────────────── */}
+      {showFolders && layout === 'grid' && (
         <>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
@@ -287,7 +289,6 @@ export function AssetGrid({
                   )}
                   onClick={shareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
                 >
-                  {/* Selection checkbox overlay — always visible on hover */}
                   <button
                     className={cn(
                       'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-all',
@@ -321,7 +322,7 @@ export function AssetGrid({
         </>
       )}
 
-      {/* ─── Assets ─────────────────────────────────────────────────────── */}
+      {/* ─── Assets (grid) ───────────────────────────────────────────── */}
       {filtered.length === 0 && !showFolders ? (
         <div className="rounded-lg border border-border bg-bg-secondary">
           <EmptyState
@@ -331,7 +332,7 @@ export function AssetGrid({
             action={!searchQuery && onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
           />
         </div>
-      ) : filtered.length === 0 ? null : layout === 'grid' ? (
+      ) : layout === 'grid' && filtered.length > 0 ? (
         <div className={cn('grid gap-3', gridColsMap[cardSize])}>
           {filtered.map((asset) => (
             <div
@@ -350,9 +351,12 @@ export function AssetGrid({
                 assignee={asset.assignee_id ? assignees[asset.assignee_id] : null}
                 authorName={authorNames[asset.created_by]}
                 thumbnailUrl={thumbnails[asset.id]}
+                fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
                 onSelect={() => toggleAssetSelect(asset.id)}
                 showInfo={showCardInfo}
+                showFileSize={showFileSize}
+                showUploader={showUploader}
                 titleLines={titleLines}
                 aspectRatio={aspectRatio}
                 thumbnailScale={thumbnailScale}
@@ -374,19 +378,131 @@ export function AssetGrid({
             </div>
           ))}
         </div>
-      ) : (
-        /* List view */
+      ) : layout === 'list' && (showFolders || filtered.length > 0) ? (
+        /* ─── Unified list view (folders + assets) ─────────────────── */
         <div className="rounded-lg border border-border overflow-hidden">
           {/* Column headers */}
-          <div className="flex items-center gap-4 px-1 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
-            <div className="h-14 w-14 shrink-0" />
+          <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+            <div className="h-10 w-10 shrink-0" />
             <div className="flex-1 min-w-0">Name</div>
-            <div className="hidden sm:block w-24 text-right">Size</div>
+            {showUploader && <div className="hidden md:block w-32">Uploader</div>}
+            {showFileSize && <div className="hidden sm:block w-24 text-right">Size</div>}
             <div className="hidden md:block w-10 text-center">Ver.</div>
             <div className="hidden sm:block w-28">Date</div>
             <div className="w-8 shrink-0" />
             <div className="w-8 shrink-0" />
           </div>
+
+          {/* Folder rows */}
+          {showFolders && folders!.map((folder, i) => {
+            const isFolderSelected = selectedFolderIds.has(folder.id)
+            return (
+              <div
+                key={folder.id}
+                className={cn(
+                  'group flex items-center gap-4 px-3 py-2.5 transition-colors hover:bg-bg-hover cursor-pointer',
+                  i !== folders!.length - 1 || filtered.length > 0 ? 'border-b border-border' : '',
+                  isFolderSelected && 'bg-accent/5',
+                )}
+                onClick={() => onFolderOpen?.(folder)}
+                onDoubleClick={() => onFolderOpen?.(folder)}
+              >
+                {/* Folder icon with checkbox overlay — aligned with asset thumbnail */}
+                <div className="relative h-10 w-10 shrink-0 rounded-md bg-bg-tertiary flex items-center justify-center overflow-hidden">
+                  <FolderIcon className="h-5 w-5 text-text-tertiary/60" />
+                  <button
+                    className={cn(
+                      'absolute inset-0 flex items-center justify-center transition-all',
+                      isFolderSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                    )}
+                    onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
+                  >
+                    <div className={cn(
+                      'h-4 w-4 rounded border flex items-center justify-center transition-all',
+                      isFolderSelected
+                        ? 'bg-accent border-accent text-white'
+                        : 'bg-black/40 border-white/40 text-transparent',
+                    )}>
+                      {isFolderSelected && <Check className="h-2.5 w-2.5" />}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Name */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{folder.name}</p>
+                  <p className="text-xs text-text-tertiary mt-0.5">{folder.item_count ?? 0} item{(folder.item_count ?? 0) !== 1 ? 's' : ''}</p>
+                </div>
+
+                {/* Uploader placeholder */}
+                {showUploader && <div className="hidden md:block w-32 text-xs text-text-tertiary">—</div>}
+
+                {/* Size placeholder */}
+                {showFileSize && <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary">—</div>}
+
+                {/* Version placeholder */}
+                <div className="hidden md:block w-10 text-center text-xs text-text-tertiary">—</div>
+
+                {/* Date */}
+                <div className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
+                  {new Date(folder.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+
+                {/* Assignee placeholder — keeps column alignment */}
+                <div className="w-8 shrink-0" />
+
+                {/* Context menu */}
+                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex h-6 w-6 items-center justify-center rounded hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors outline-none"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        align="end"
+                        sideOffset={4}
+                        className="z-[100] min-w-[160px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {onFolderShare && (
+                          <DropdownMenu.Item
+                            onSelect={() => onFolderShare(folder.id, folder.name)}
+                            className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                          >
+                            <Share2 className="h-3.5 w-3.5 text-text-tertiary" />
+                            Share
+                          </DropdownMenu.Item>
+                        )}
+                        {onFolderRename && (
+                          <DropdownMenu.Item
+                            onSelect={() => onFolderRename(folder.id, folder.name)}
+                            className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-text-tertiary" />
+                            Rename
+                          </DropdownMenu.Item>
+                        )}
+                        {onFolderDelete && (
+                          <DropdownMenu.Item
+                            onSelect={() => onFolderDelete(folder.id)}
+                            className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </DropdownMenu.Item>
+                        )}
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                </div>
+              </div>
+            )
+          })}
           {filtered.map((asset, i) => {
             const thumb = thumbnails[asset.id]
             const assignee = asset.assignee_id ? assignees[asset.assignee_id] : null
@@ -400,40 +516,52 @@ export function AssetGrid({
                 onClick={(e) => onAssetSelect?.(asset, e)}
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
-                  'group flex items-center gap-4 px-1 py-2 transition-colors hover:bg-bg-hover cursor-pointer rounded-lg',
+                  'group flex items-center gap-4 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
                   i !== filtered.length - 1 && 'border-b border-border',
                   selectedAssetId === asset.id ? 'bg-accent/10' : selectedAssetIds.has(asset.id) && 'bg-accent/5',
                 )}
               >
-                {/* Square thumbnail */}
-                <div className="h-14 w-14 shrink-0 rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center">
+                {/* Square thumbnail with checkbox overlay */}
+                <div className="relative h-10 w-10 shrink-0 rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center">
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={thumb} alt={asset.name} className="h-full w-full object-cover" />
                   ) : (
                     <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
                   )}
+                  <button
+                    className={cn(
+                      'absolute inset-0 flex items-center justify-center transition-all',
+                      selectedAssetIds.has(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                    )}
+                    onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id) }}
+                  >
+                    <div className={cn(
+                      'h-4 w-4 rounded border flex items-center justify-center transition-all',
+                      selectedAssetIds.has(asset.id)
+                        ? 'bg-accent border-accent text-white'
+                        : 'bg-black/40 border-white/40 text-transparent',
+                    )}>
+                      {selectedAssetIds.has(asset.id) && <Check className="h-2.5 w-2.5" />}
+                    </div>
+                  </button>
                 </div>
                 {/* Name + status */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={cn(
-                      'inline-block text-[10px] font-medium capitalize rounded px-1.5 py-0.5',
-                      asset.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400'
-                        : asset.status === 'rejected' ? 'bg-red-500/10 text-red-400'
-                        : asset.status === 'in_review' ? 'bg-amber-500/10 text-amber-400'
-                        : 'bg-bg-tertiary text-text-tertiary',
-                    )}>
-                      {asset.status.replace('_', ' ')}
-                    </span>
-                    {author && <span className="text-xs text-text-tertiary truncate">&middot; {author}</span>}
+                </div>
+                {/* Uploader */}
+                {showUploader && (
+                  <div className="hidden md:block w-32 text-xs text-text-tertiary truncate shrink-0">
+                    {author || '—'}
                   </div>
-                </div>
+                )}
                 {/* File size */}
-                <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
-                  {fileSize ? formatBytes(fileSize) : '—'}
-                </div>
+                {showFileSize && (
+                  <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
+                    {fileSize ? formatBytes(fileSize) : '—'}
+                  </div>
+                )}
                 {/* Version */}
                 <div className="hidden md:block w-10 text-center text-xs text-text-tertiary tabular-nums shrink-0">
                   {versionCount ? `v${versionCount}` : 'v1'}
@@ -512,7 +640,7 @@ export function AssetGrid({
             )
           })}
         </div>
-      )}
+      ) : null}
 
       {/* Bottom selection action bar (Frame.io style) */}
       {!shareMode && totalSelected > 0 && (
@@ -540,6 +668,19 @@ export function AssetGrid({
           {onBulkMove && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setMoveDialogOpen(true)}>
               <FolderInput className="h-4 w-4" /> Move to
+            </Button>
+          )}
+          {onCreateShareLink && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                onCreateShareLink(Array.from(selectedAssetIds), Array.from(selectedFolderIds))
+                clearSelection()
+              }}
+            >
+              <Share2 className="h-4 w-4" /> Share
             </Button>
           )}
           {selectedAssetIds.size > 0 && (

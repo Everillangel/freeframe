@@ -129,6 +129,8 @@ export function AppearancePopover() {
     showCardInfo, setShowCardInfo,
     titleLines, setTitleLines,
     flattenFolders, setFlattenFolders,
+    showFileSize, setShowFileSize,
+    showUploader, setShowUploader,
   } = useViewStore()
 
   return (
@@ -229,6 +231,15 @@ export function AppearancePopover() {
 
           {/* Flatten Folders */}
           <ToggleRow label="Flatten Folders" checked={flattenFolders} onCheckedChange={setFlattenFolders} />
+
+          {/* Fields section */}
+          <div className="pt-1 border-t border-white/10">
+            <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-2.5">Fields</p>
+            <div className="space-y-3">
+              <ToggleRow label="File Size" checked={showFileSize} onCheckedChange={setShowFileSize} />
+              <ToggleRow label="Uploaded By" checked={showUploader} onCheckedChange={setShowUploader} />
+            </div>
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

@@ -103,7 +103,7 @@ export function ShareLinksTable({
                   <tr
                     key={link.token}
                     className={cn(
-                      'group transition-colors hover:bg-white/[0.03]',
+                      'group transition-colors hover:bg-bg-hover/40',
                       !isLast && 'border-b border-border',
                     )}
                   >
@@ -132,7 +132,7 @@ export function ShareLinksTable({
                         </span>
                         <button
                           onClick={(e) => handleCopy(link.token, e)}
-                          className="flex items-center justify-center h-6 w-6 rounded border border-border bg-bg-tertiary hover:bg-white/10 text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+                          className="flex items-center justify-center h-6 w-6 rounded border border-border bg-bg-tertiary hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors shrink-0"
                           title="Copy link"
                         >
                           {isCopied ? (
@@ -151,7 +151,7 @@ export function ShareLinksTable({
                         onCheckedChange={(checked) => onToggleEnabled(link.token, checked)}
                         className={cn(
                           'relative h-5 w-9 rounded-full transition-colors outline-none cursor-pointer',
-                          link.is_enabled ? 'bg-accent' : 'bg-white/15',
+                          link.is_enabled ? 'bg-accent' : 'bg-border',
                         )}
                       >
                         <Switch.Thumb

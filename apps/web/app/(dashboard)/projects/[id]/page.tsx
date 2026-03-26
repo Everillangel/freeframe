@@ -265,6 +265,28 @@ export default function ProjectDetailPage() {
   const canSeeShareLinks = currentRole === "owner" || currentRole === "editor";
   const canComment = currentRole !== "viewer";
 
+  function openShareDialog(assetIds: string[], folderIds: string[]) {
+    if (folderIds.length === 1 && assetIds.length === 0) {
+      const folder = subfolders?.find((f) => f.id === folderIds[0]);
+      setShareDialogPreselect({
+        type: "folder",
+        id: folderIds[0],
+        name: folder?.name || "Shared Folder",
+      });
+    } else if (assetIds.length === 1 && folderIds.length === 0) {
+      const asset = assets?.find((a) => a.id === assetIds[0]);
+      setShareDialogPreselect({
+        type: "asset",
+        id: assetIds[0],
+        name: asset?.name || "Shared Asset",
+      });
+    } else {
+      setShareDialogPreselect(null);
+    }
+    setShareDialogResult(null);
+    setShareDialogOpen(true);
+  }
+
   React.useEffect(() => {
     const anyComplete = uploadFiles.some(
       (f) => f.projectId === projectId && f.status === "complete",
@@ -374,7 +396,7 @@ export default function ProjectDetailPage() {
                   e.stopPropagation();
                   setShowShareLinks(false);
                   setShowTrash(false);
-                  setShareMode(true);
+                  openShareDialog([], []);
                 }}
                 className="text-text-tertiary hover:text-text-primary transition-colors"
                 title="Create share link"
@@ -539,6 +561,7 @@ export default function ProjectDetailPage() {
               frontendUrl={
                 typeof window !== "undefined" ? window.location.origin : ""
               }
+              onUpdate={mutateShareLinks}
             />
           ) : showTrash ? (
             <div className="flex-1 overflow-y-auto">
@@ -651,83 +674,18 @@ export default function ProjectDetailPage() {
                 mutateAssets();
                 mutateSubfolders();
               }}
-              shareMode={shareMode}
+              shareMode={false}
               onShareModeChange={setShareMode}
-              onCreateShareLink={async (assetIds, folderIds) => {
-                try {
-                  let result: ShareLink;
-                  let title = "";
-                  let itemType: "asset" | "folder" = "folder";
-                  let thumbUrl: string | null = null;
-
-                  if (folderIds.length === 1 && assetIds.length === 0) {
-                    const folder = subfolders?.find(
-                      (f) => f.id === folderIds[0],
-                    );
-                    title = folder?.name || "Shared Folder";
-                    result = await api.post<ShareLink>(
-                      `/folders/${folderIds[0]}/share`,
-                      { title },
-                    );
-                  } else if (assetIds.length === 1 && folderIds.length === 0) {
-                    const asset = assets?.find((a) => a.id === assetIds[0]);
-                    title = asset?.name || "Shared Asset";
-                    itemType = "asset";
-                    thumbUrl = asset?.thumbnail_url ?? null;
-                    result = await api.post<ShareLink>(
-                      `/assets/${assetIds[0]}/share`,
-                      { title },
-                    );
-                  } else if (currentFolderId) {
-                    const folder = subfolders?.find(
-                      (f) => f.id === currentFolderId,
-                    );
-                    title = folder?.name || "Shared Folder";
-                    result = await api.post<ShareLink>(
-                      `/folders/${currentFolderId}/share`,
-                      { title },
-                    );
-                  } else {
-                    title = project?.name || "Shared Project";
-                    result = await api.post<ShareLink>(
-                      `/projects/${projectId}/share`,
-                      { title },
-                    );
-                  }
-                  mutateShareLinks();
-                  // Open dialog with the created share link
-                  setShareDialogPreselect(null);
-                  setShareDialogResult({
-                    token: result.token,
-                    title: result.title || title,
-                    itemType,
-                    thumbnailUrl: thumbUrl,
-                    assetId: result.asset_id ?? null,
-                    folderId: result.folder_id ?? null,
-                    projectId: result.project_id ?? null,
-                  });
-                  setShareDialogOpen(true);
-                } catch {}
-              }}
-              onAssetShare={async (asset) => {
-                try {
-                  const result = await api.post<ShareLink>(
-                    `/assets/${asset.id}/share`,
-                    { title: asset.name },
-                  );
-                  mutateShareLinks();
-                  setShareDialogPreselect(null);
-                  setShareDialogResult({
-                    token: result.token,
-                    title: result.title || asset.name,
-                    itemType: "asset",
-                    thumbnailUrl: (asset as AssetResponse).thumbnail_url ?? null,
-                    assetId: result.asset_id ?? null,
-                    folderId: null,
-                    projectId: result.project_id ?? null,
-                  });
-                  setShareDialogOpen(true);
-                } catch {}
+              onCreateShareLink={openShareDialog}
+              onAssetShare={(asset) => {
+                // Open dialog in configure phase — creation happens when user clicks "Create"
+                setShareDialogPreselect({
+                  type: "asset",
+                  id: asset.id,
+                  name: asset.name,
+                });
+                setShareDialogResult(null);
+                setShareDialogOpen(true);
               }}
               onAssetDownload={async (asset) => {
                 try {
@@ -789,7 +747,7 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => setShareMode(true)}
+                      onClick={() => openShareDialog([], [])}
                     >
                       <Share2 className="h-4 w-4" />
                       Share
@@ -994,6 +952,26 @@ export default function ProjectDetailPage() {
                           {formatRelativeTime(selectedAsset.created_at)}
                         </span>
                       </div>
+                      {authorNames[selectedAsset.created_by] && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-text-tertiary">
+                            Uploaded by
+                          </span>
+                          <span className="text-xs text-text-primary">
+                            {authorNames[selectedAsset.created_by]}
+                          </span>
+                        </div>
+                      )}
+                      {fileSizes[selectedAsset.id] != null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-text-tertiary">
+                            File size
+                          </span>
+                          <span className="text-xs text-text-primary">
+                            {formatBytes(fileSizes[selectedAsset.id])}
+                          </span>
+                        </div>
+                      )}
                       {selectedAsset.latest_version && (
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-text-tertiary">

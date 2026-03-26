@@ -17,6 +17,8 @@ interface ViewSettings {
   showCardInfo: boolean
   titleLines: TitleLines
   flattenFolders: boolean
+  showFileSize: boolean
+  showUploader: boolean
   sortKey: SortKey
   sortDirection: SortDirection
   rightPanelOpen: boolean
@@ -30,6 +32,8 @@ interface ViewStore extends ViewSettings {
   setShowCardInfo: (show: boolean) => void
   setTitleLines: (lines: TitleLines) => void
   setFlattenFolders: (flatten: boolean) => void
+  setShowFileSize: (show: boolean) => void
+  setShowUploader: (show: boolean) => void
   setSortKey: (key: SortKey) => void
   setSortDirection: (dir: SortDirection) => void
   toggleSortDirection: () => void
@@ -46,6 +50,8 @@ export const useViewStore = create<ViewStore>()(
       showCardInfo: true,
       titleLines: '1',
       flattenFolders: false,
+      showFileSize: true,
+      showUploader: true,
       sortKey: 'date',
       sortDirection: 'desc',
       rightPanelOpen: true,
@@ -57,6 +63,8 @@ export const useViewStore = create<ViewStore>()(
       setShowCardInfo: (show) => set({ showCardInfo: show }),
       setTitleLines: (lines) => set({ titleLines: lines }),
       setFlattenFolders: (flatten) => set({ flattenFolders: flatten }),
+      setShowFileSize: (show) => set({ showFileSize: show }),
+      setShowUploader: (show) => set({ showUploader: show }),
       setSortKey: (key) => set({ sortKey: key }),
       setSortDirection: (dir) => set({ sortDirection: dir }),
       toggleSortDirection: () =>

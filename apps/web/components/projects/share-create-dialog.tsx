@@ -245,6 +245,217 @@ function ShareInviteInput({ token, shareLink }: { token: string; shareLink: { as
   )
 }
 
+// ─── Share Config (pre-creation settings) ────────────────────────────────────
+
+interface ShareConfig {
+  title: string
+  allowComments: boolean
+  allowDownloads: boolean
+  passphrase: string | null
+  expiresAt: string | null
+  watermark: boolean
+  visibility: 'public' | 'secure'
+}
+
+// ─── Configure Phase ──────────────────────────────────────────────────────────
+
+interface ConfigurePhaseProps {
+  defaultTitle: string
+  onBack: () => void
+  onCreate: (config: ShareConfig) => void
+  creating: boolean
+}
+
+function ConfigurePhase({ defaultTitle, onBack, onCreate, creating }: ConfigurePhaseProps) {
+  const [title, setTitle] = React.useState(defaultTitle)
+  const [allowComments, setAllowComments] = React.useState(false)
+  const [allowDownloads, setAllowDownloads] = React.useState(false)
+  const [passphrase, setPassphrase] = React.useState(false)
+  const [passphraseValue, setPassphraseValue] = React.useState('')
+  const [showPassphraseInput, setShowPassphraseInput] = React.useState(false)
+  const [watermark, setWatermark] = React.useState(false)
+  const [expiresAt, setExpiresAt] = React.useState('')
+  const [visibility, setVisibility] = React.useState<'public' | 'secure'>('public')
+
+  function handleCreate() {
+    onCreate({
+      title: title.trim() || defaultTitle,
+      allowComments,
+      allowDownloads,
+      passphrase: passphrase && passphraseValue ? passphraseValue : null,
+      expiresAt: expiresAt || null,
+      watermark,
+      visibility,
+    })
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <button onClick={onBack} className="text-text-tertiary hover:text-text-primary transition-colors shrink-0">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <Dialog.Title className="text-sm font-semibold text-text-primary truncate">
+            Configure Share Link
+          </Dialog.Title>
+        </div>
+        <Dialog.Close className="text-text-tertiary hover:text-text-primary transition-colors">
+          <X className="h-4 w-4" />
+        </Dialog.Close>
+      </div>
+
+      {/* Content */}
+      <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+        {/* Link name */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-text-secondary">Link name</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={defaultTitle}
+            className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+          />
+        </div>
+
+        <div className="space-y-1">
+          {/* Visibility */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <Globe className="h-4 w-4 text-text-tertiary" />
+              <span className="text-sm text-text-primary">Visibility</span>
+            </div>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as 'public' | 'secure')}
+              className="shrink-0 rounded-full border border-border bg-bg-secondary px-2 py-0.5 text-2xs font-medium text-text-primary outline-none cursor-pointer"
+            >
+              <option value="public">🌐 Public</option>
+              <option value="secure">🔒 Secure</option>
+            </select>
+          </div>
+
+          {/* Allow comments */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <MessageSquare className="h-4 w-4 text-text-tertiary" />
+              <span className="text-sm text-text-primary">Allow comments</span>
+            </div>
+            <Switch.Root
+              checked={allowComments}
+              onCheckedChange={setAllowComments}
+              className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+            >
+              <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+            </Switch.Root>
+          </div>
+
+          {/* Allow downloads */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <Download className="h-4 w-4 text-text-tertiary" />
+              <span className="text-sm text-text-primary">Allow downloads</span>
+            </div>
+            <Switch.Root
+              checked={allowDownloads}
+              onCheckedChange={setAllowDownloads}
+              className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+            >
+              <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+            </Switch.Root>
+          </div>
+
+          {/* Passphrase */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between py-2.5">
+              <div className="flex items-center gap-2.5">
+                <Key className="h-4 w-4 text-text-tertiary" />
+                <span className="text-sm text-text-primary">Passphrase</span>
+              </div>
+              <Switch.Root
+                checked={passphrase}
+                onCheckedChange={(v) => {
+                  setPassphrase(v)
+                  setShowPassphraseInput(v)
+                  if (!v) setPassphraseValue('')
+                }}
+                className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+              >
+                <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+              </Switch.Root>
+            </div>
+            {passphrase && (
+              <div className="relative">
+                <input
+                  type={showPassphraseInput ? 'text' : 'password'}
+                  value={passphraseValue}
+                  onChange={(e) => setPassphraseValue(e.target.value)}
+                  placeholder="Enter passphrase"
+                  className="w-full rounded-md border border-border bg-bg-secondary px-3 py-2 pr-14 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassphraseInput(!showPassphraseInput)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-text-tertiary hover:text-text-primary transition-colors px-1 py-0.5"
+                >
+                  {showPassphraseInput ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Expiration date */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <Clock className="h-4 w-4 text-text-tertiary" />
+              <span className="text-sm text-text-primary">Expiration date</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="w-[120px] rounded border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary outline-none focus:border-accent [color-scheme:dark]"
+              />
+              {expiresAt && (
+                <button onClick={() => setExpiresAt('')} className="text-text-tertiary hover:text-text-primary">
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Watermark */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <Droplets className="h-4 w-4 text-text-tertiary" />
+              <span className="text-sm text-text-primary">Watermark</span>
+            </div>
+            <Switch.Root
+              checked={watermark}
+              onCheckedChange={setWatermark}
+              className="w-9 h-5 rounded-full relative bg-bg-tertiary border border-border data-[state=checked]:bg-accent transition-colors"
+            >
+              <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow transition-transform translate-x-0.5 data-[state=checked]:translate-x-[18px]" />
+            </Switch.Root>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-end border-t border-border px-5 py-3 gap-2">
+        <Button variant="secondary" size="sm" onClick={onBack}>
+          Back
+        </Button>
+        <Button size="sm" onClick={handleCreate} loading={creating} disabled={creating}>
+          Create
+        </Button>
+      </div>
+    </>
+  )
+}
+
 // ─── Selection Phase ─────────────────────────────────────────────────────────
 
 interface SelectionPhaseProps {
@@ -255,7 +466,6 @@ interface SelectionPhaseProps {
   onToggle: (item: SelectedItem) => void
   onCancel: () => void
   onCreate: () => void
-  creating: boolean
 }
 
 function SelectionPhase({
@@ -266,7 +476,6 @@ function SelectionPhase({
   onToggle,
   onCancel,
   onCreate,
-  creating,
 }: SelectionPhaseProps) {
   const hasItems = folders.length > 0 || assets.length > 0
   const totalItems = folders.length + assets.length
@@ -329,10 +538,9 @@ function SelectionPhase({
         <Button
           size="sm"
           onClick={onCreate}
-          disabled={creating || totalItems === 0}
-          loading={creating}
+          disabled={totalItems === 0}
         >
-          Create Share Link
+          Next
         </Button>
       </div>
     </>
@@ -739,11 +947,24 @@ export function ShareCreateDialog({
   onShareCreated,
   onAdvancedSettings,
 }: ShareCreateDialogProps) {
+  type Phase = 'selection' | 'configure' | 'result'
+
   const [selectedItems, setSelectedItems] = React.useState<Map<string, SelectedItem>>(new Map())
+  const [phase, setPhase] = React.useState<Phase>(initialResult ? 'result' : 'selection')
+  const [configureDefaultTitle, setConfigureDefaultTitle] = React.useState('')
   const [creating, setCreating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [createdResult, setCreatedResult] = React.useState<CreatedShareResult | null>(null)
   const [allCreatedResults, setAllCreatedResults] = React.useState<CreatedShareResult[]>([])
+
+  // Compute default title from a given items map (avoids stale state reads)
+  function computeDefaultTitle(items: Map<string, SelectedItem>): string {
+    const list = Array.from(items.values())
+    const singleItem = list.length === 1 ? list[0] : null
+    if (singleItem) return singleItem.name
+    if (currentFolderId) return folders.find(f => f.id === currentFolderId)?.name || 'Shared Folder'
+    return 'Shared Project'
+  }
 
   // Reset state when dialog opens/closes
   React.useEffect(() => {
@@ -765,6 +986,9 @@ export function ShareCreateDialog({
         }
       }
       setSelectedItems(initial)
+      setConfigureDefaultTitle(computeDefaultTitle(initial))
+      // Skip selection phase when we already know what to share
+      setPhase(initialResult ? 'result' : preselectedItem ? 'configure' : 'selection')
       setCreating(false)
       setError(null)
       setCreatedResult(initialResult ?? null)
@@ -785,7 +1009,7 @@ export function ShareCreateDialog({
     })
   }
 
-  async function handleCreate() {
+  async function handleCreate(config: ShareConfig) {
     setCreating(true)
     setError(null)
 
@@ -799,40 +1023,38 @@ export function ShareCreateDialog({
       const singleItem = items.length === 1 ? items[0] : null
 
       if (singleItem?.type === 'asset') {
-        // Share a single asset
         shareLink = await api.post<ShareLink>(`/assets/${singleItem.id}/share`, {
-          title: singleItem.name,
+          title: config.title,
         })
         itemType = 'asset'
         thumbUrl = singleItem.thumbnailUrl
       } else if (singleItem?.type === 'folder') {
-        // Share a specific folder
         shareLink = await api.post<ShareLink>(`/folders/${singleItem.id}/share`, {
-          title: singleItem.name,
+          title: config.title,
         })
       } else if (currentFolderId) {
-        // Share the current folder (contains everything visible)
-        const folderName = folders.find(f => f.id === currentFolderId)?.name || 'Shared Folder'
         shareLink = await api.post<ShareLink>(`/folders/${currentFolderId}/share`, {
-          title: folderName,
+          title: config.title,
         })
       } else {
-        // Share project root (all root folders + assets in one link)
         shareLink = await api.post<ShareLink>(`/projects/${projectId}/share`, {
-          title: 'Shared Project',
+          title: config.title,
         })
       }
 
-      setCreatedResult({
-        token: shareLink.token,
-        title: shareLink.title || 'Share Link',
-        itemType,
-        thumbnailUrl: thumbUrl,
-        assetId: shareLink.asset_id ?? null,
-        folderId: shareLink.folder_id ?? null,
-        projectId: shareLink.project_id ?? null,
-      })
+      // Apply configured settings
+      const patches: Record<string, unknown> = {
+        visibility: config.visibility,
+        permission: config.allowComments ? 'comment' : 'view',
+        allow_download: config.allowDownloads,
+        show_watermark: config.watermark,
+      }
+      if (config.passphrase) patches.password = config.passphrase
+      if (config.expiresAt) patches.expires_at = new Date(config.expiresAt).toISOString()
+      await api.patch(`/share/${shareLink.token}`, patches)
+
       onShareCreated()
+      onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create share link')
     } finally {
@@ -868,13 +1090,20 @@ export function ShareCreateDialog({
             </div>
           )}
 
-          {createdResult ? (
+          {phase === 'result' && createdResult ? (
             <LinkCreatedPhase
               result={createdResult}
               allResults={allCreatedResults}
               onSelectResult={(r) => setCreatedResult(r)}
               onDone={handleDone}
               onAdvancedSettings={onAdvancedSettings}
+            />
+          ) : phase === 'configure' ? (
+            <ConfigurePhase
+              defaultTitle={configureDefaultTitle}
+              onBack={preselectedItem ? () => onOpenChange(false) : () => setPhase('selection')}
+              onCreate={handleCreate}
+              creating={creating}
             />
           ) : (
             <SelectionPhase
@@ -884,8 +1113,10 @@ export function ShareCreateDialog({
               selectedItems={selectedItems}
               onToggle={handleToggle}
               onCancel={() => onOpenChange(false)}
-              onCreate={handleCreate}
-              creating={creating}
+              onCreate={() => {
+                setConfigureDefaultTitle(computeDefaultTitle(selectedItems))
+                setPhase('configure')
+              }}
             />
           )}
         </Dialog.Content>

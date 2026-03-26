@@ -606,8 +606,7 @@ function ShareRightPanel({
             <div className="space-y-3">
               <FieldRow label="Name" value={asset.name} />
               <FieldRow label="Type" value={asset.asset_type.replace('_', ' ')} capitalize />
-              <FieldRow label="Status" value={asset.status} capitalize />
-              {asset.description && <FieldRow label="Description" value={asset.description} />}
+{asset.description && <FieldRow label="Description" value={asset.description} />}
               {asset.rating != null && <FieldRow label="Rating" value={`${asset.rating}/5`} />}
               {asset.due_date && (
                 <FieldRow

@@ -547,6 +547,7 @@ interface ShareLinkContentProps {
   projectId: string;
   onBack: () => void;
   frontendUrl: string;
+  onUpdate?: () => void;
 }
 
 interface ShareLinkSettingsPanelProps {
@@ -560,6 +561,7 @@ export function ShareLinkContent({
   projectId,
   onBack,
   frontendUrl,
+  onUpdate,
 }: ShareLinkContentProps) {
   const { shareLink, immediateUpdate } = useShareLinkData(token);
 
@@ -660,7 +662,7 @@ export function ShareLinkContent({
           onChange={(e) => setLocalTitle(e.target.value)}
           onBlur={() => {
             if (localTitle !== shareLink.title) {
-              immediateUpdate({ title: localTitle });
+              immediateUpdate({ title: localTitle }).then(() => onUpdate?.());
             }
           }}
           placeholder="Untitled Share Link"
