@@ -375,18 +375,18 @@ export function ProgressBar({
   const bufferedPercent = timeToPercent(buffered)
 
   return (
-    <div className={cn('relative flex flex-col w-full group/progress', className)}>
+    <div className={cn('relative flex flex-col w-full group/progress py-1', className)}>
       {/* Track area */}
       <div
         ref={trackRef}
-        className="relative w-full h-1 group-hover/progress:h-1.5 transition-all duration-150 cursor-pointer bg-white/15 rounded-full"
+        className="relative w-full h-1 group-hover/progress:h-1.5 transition-all duration-150 cursor-pointer bg-border rounded-full"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleMouseDown}
       >
         {/* Buffered range */}
         <div
-          className="absolute inset-y-0 left-0 bg-white/20 rounded-full"
+          className="absolute inset-y-0 left-0 bg-border-secondary rounded-full"
           style={{ width: `${bufferedPercent}%` }}
         />
 
@@ -418,7 +418,7 @@ export function ProgressBar({
 
         {/* Playhead thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
           style={{ left: `${playPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}
         />
       </div>

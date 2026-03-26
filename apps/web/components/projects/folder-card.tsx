@@ -2,12 +2,44 @@
 
 import React, { useCallback, useState } from 'react'
 import useSWR from 'swr'
-import { Folder, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
+import { Folder, Film, Music, Image as ImageIcon, Images, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { NameDialog } from './name-dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { Folder as FolderType, AssetResponse } from '@/types'
+
+const assetTypeIcons = {
+  video: Film,
+  audio: Music,
+  image: ImageIcon,
+  image_carousel: Images,
+} as const
+
+function ThumbCell({ asset, className }: { asset: AssetResponse; className?: string }) {
+  const [failed, setFailed] = React.useState(false)
+  const TypeIcon = assetTypeIcons[asset.asset_type as keyof typeof assetTypeIcons] ?? ImageIcon
+
+  if (failed || !asset.thumbnail_url) {
+    return (
+      <div className={cn('overflow-hidden bg-bg-tertiary flex items-center justify-center', className)}>
+        <TypeIcon className="h-6 w-6 text-text-tertiary/50" />
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('overflow-hidden bg-bg-tertiary', className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={asset.thumbnail_url}
+        alt={asset.name}
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover"
+      />
+    </div>
+  )
+}
 
 function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: string; folderId: string; itemCount: number }) {
   const { data: assets } = useSWR<AssetResponse[]>(
@@ -16,7 +48,9 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
     { revalidateOnFocus: false },
   )
 
-  const thumbs = (assets ?? []).filter((a) => a.thumbnail_url).slice(0, 3)
+  // Prefer assets with thumbnails first, fill with any up to 3
+  const sorted = (assets ?? []).sort((a, b) => (b.thumbnail_url ? 1 : 0) - (a.thumbnail_url ? 1 : 0))
+  const thumbs = sorted.slice(0, 3)
 
   if (thumbs.length === 0) {
     return (
@@ -30,24 +64,14 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
     <div className={cn(
       'aspect-[4/3] rounded-t-lg overflow-hidden grid gap-px bg-bg-tertiary',
       thumbs.length === 1 && 'grid-cols-1',
-      thumbs.length === 2 && 'grid-cols-2',
-      thumbs.length >= 3 && 'grid-cols-2',
+      thumbs.length >= 2 && 'grid-cols-2',
     )}>
       {thumbs.map((asset, i) => (
-        <div
+        <ThumbCell
           key={asset.id}
-          className={cn(
-            'overflow-hidden bg-zinc-900',
-            thumbs.length === 3 && i === 0 && 'row-span-2',
-          )}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={asset.thumbnail_url!}
-            alt={asset.name}
-            className="h-full w-full object-cover"
-          />
-        </div>
+          asset={asset}
+          className={thumbs.length === 3 && i === 0 ? 'row-span-2' : undefined}
+        />
       ))}
     </div>
   )

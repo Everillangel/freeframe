@@ -72,6 +72,7 @@ export function AssetCard({
 }: AssetCardProps) {
   const TypeIcon = assetTypeIcons[asset.asset_type]
   const lineClamp = titleLines === '1' ? 'line-clamp-1' : titleLines === '2' ? 'line-clamp-2' : 'line-clamp-3'
+  const [imgError, setImgError] = React.useState(false)
 
   return (
     <div
@@ -91,18 +92,23 @@ export function AssetCard({
         'relative w-full bg-bg-tertiary overflow-hidden flex items-center justify-center',
         aspectMap[aspectRatio],
       )}>
-        {thumbnailUrl ? (
+        {thumbnailUrl && !imgError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumbnailUrl}
             alt={asset.name}
+            onError={() => setImgError(true)}
             className={cn(
               'h-full w-full transition-transform duration-200 group-hover:scale-[1.02]',
               thumbnailScale === 'fill' ? 'object-cover' : 'object-contain',
             )}
           />
         ) : (
-          <TypeIcon className="h-12 w-12 text-text-tertiary/50" />
+          <div className="flex items-center justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
+              <TypeIcon className="h-7 w-7" />
+            </div>
+          </div>
         )}
 
         {/* Selection checkbox — top-left */}

@@ -329,7 +329,7 @@ export function VideoPlayer({
       </div>
 
       {/* Progress bar */}
-      <div className="px-4 shrink-0 bg-bg-primary">
+      <div className="shrink-0 bg-bg-primary">
         <ProgressBar
           currentTime={currentTime}
           duration={duration}

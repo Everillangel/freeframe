@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { X, Copy, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check } from 'lucide-react'
+import { X, Copy, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check, Film, Music, Image as ImageIcon, Images } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -12,6 +12,13 @@ import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
 import { useViewStore } from '@/stores/view-store'
 import type { Asset, AssetStatus, User, Folder } from '@/types'
+
+const assetTypeIcons: Record<string, React.ElementType> = {
+  video: Film,
+  audio: Music,
+  image: ImageIcon,
+  image_carousel: Images,
+}
 
 const statusOrder: Record<AssetStatus, number> = {
   in_review: 0,
@@ -49,6 +56,7 @@ interface AssetGridProps {
   onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
   onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
   onBulkDownload?: (assetIds: string[]) => void
+  onContextMenu?: (asset: Asset, e: React.MouseEvent) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
 }
@@ -93,6 +101,7 @@ export function AssetGrid({
   onBulkDelete,
   onBulkMove,
   onBulkDownload,
+  onContextMenu,
   actions,
 }: AssetGridProps) {
   const [searchQuery] = React.useState('')
@@ -352,14 +361,13 @@ export function AssetGrid({
         /* List view */
         <div className="rounded-lg border border-border overflow-hidden">
           {/* Column headers */}
-          <div className="flex items-center gap-3 px-3 py-2 border-b border-border bg-bg-secondary/50 text-2xs text-text-tertiary font-medium uppercase tracking-wider">
-            <div className="w-16 shrink-0" />
+          <div className="flex items-center gap-4 px-1 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+            <div className="h-14 w-14 shrink-0" />
             <div className="flex-1 min-w-0">Name</div>
             <div className="hidden sm:block w-24 text-right">Size</div>
-            <div className="hidden md:block w-20 text-center">Type</div>
-            <div className="hidden md:block w-16 text-center">Ver.</div>
-            <div className="hidden lg:block w-32">Added by</div>
+            <div className="hidden md:block w-10 text-center">Ver.</div>
             <div className="hidden sm:block w-28">Date</div>
+            <div className="w-8 shrink-0" />
             <div className="w-8 shrink-0" />
           </div>
           {filtered.map((asset, i) => {
@@ -368,72 +376,67 @@ export function AssetGrid({
             const fileSize = fileSizes[asset.id]
             const versionCount = versionCounts[asset.id]
             const author = authorNames[asset.created_by]
-            const typeLabel = asset.asset_type === 'image_carousel' ? 'Carousel' : asset.asset_type.charAt(0).toUpperCase() + asset.asset_type.slice(1)
+            const TypeIcon = assetTypeIcons[asset.asset_type] ?? ImageIcon
             return (
               <div
                 key={asset.id}
                 onClick={(e) => onAssetSelect?.(asset, e)}
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
+                  'group flex items-center gap-4 px-1 py-2 transition-colors hover:bg-bg-hover cursor-pointer rounded-lg',
                   i !== filtered.length - 1 && 'border-b border-border',
                   selectedAssetId === asset.id ? 'bg-accent/10' : selectedAssetIds.has(asset.id) && 'bg-accent/5',
                 )}
               >
-                {/* Thumbnail */}
-                <div className="h-10 w-16 shrink-0 rounded bg-bg-tertiary overflow-hidden flex items-center justify-center">
+                {/* Square thumbnail */}
+                <div className="h-14 w-14 shrink-0 rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center">
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={thumb} alt={asset.name} className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-2xs text-text-tertiary uppercase font-bold">{asset.asset_type}</span>
+                    <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
                   )}
                 </div>
                 {/* Name + status */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">{asset.name}</p>
-                  <span className={cn(
-                    'inline-block text-[10px] font-medium capitalize mt-0.5 rounded px-1.5 py-0.5',
-                    asset.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400'
-                      : asset.status === 'rejected' ? 'bg-red-500/10 text-red-400'
-                      : asset.status === 'in_review' ? 'bg-amber-500/10 text-amber-400'
-                      : 'bg-bg-tertiary text-text-tertiary',
-                  )}>
-                    {asset.status.replace('_', ' ')}
-                  </span>
+                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={cn(
+                      'inline-block text-[10px] font-medium capitalize rounded px-1.5 py-0.5',
+                      asset.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400'
+                        : asset.status === 'rejected' ? 'bg-red-500/10 text-red-400'
+                        : asset.status === 'in_review' ? 'bg-amber-500/10 text-amber-400'
+                        : 'bg-bg-tertiary text-text-tertiary',
+                    )}>
+                      {asset.status.replace('_', ' ')}
+                    </span>
+                    {author && <span className="text-xs text-text-tertiary truncate">&middot; {author}</span>}
+                  </div>
                 </div>
                 {/* File size */}
-                <div className="hidden sm:block w-24 text-right text-xs text-text-tertiary tabular-nums">
+                <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
                   {fileSize ? formatBytes(fileSize) : '—'}
                 </div>
-                {/* Type */}
-                <div className="hidden md:block w-20 text-center">
-                  <span className="text-[10px] font-medium text-text-tertiary uppercase bg-bg-tertiary rounded px-1.5 py-0.5">
-                    {typeLabel}
-                  </span>
-                </div>
                 {/* Version */}
-                <div className="hidden md:block w-16 text-center text-xs text-text-tertiary tabular-nums">
+                <div className="hidden md:block w-10 text-center text-xs text-text-tertiary tabular-nums shrink-0">
                   {versionCount ? `v${versionCount}` : 'v1'}
                 </div>
-                {/* Author */}
-                <div className="hidden lg:flex items-center gap-1.5 w-32">
-                  {author ? (
-                    <>
-                      <Avatar name={author} size="sm" />
-                      <span className="text-xs text-text-secondary truncate">{author}</span>
-                    </>
-                  ) : (
-                    <span className="text-xs text-text-tertiary">—</span>
-                  )}
-                </div>
                 {/* Date */}
-                <div className="hidden sm:block w-28 text-xs text-text-tertiary">
+                <div className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
                   {new Date(asset.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
                 {/* Assignee */}
                 <div className="w-8 shrink-0 flex justify-center">
                   {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
+                </div>
+                {/* Context menu — hidden until hover */}
+                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onContextMenu?.(asset, e) }}
+                    className="flex h-6 w-6 items-center justify-center rounded hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             )

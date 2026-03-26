@@ -894,6 +894,16 @@ export function FolderShareViewer({
     }
   }, [isDark])
 
+  // Apply accent color as CSS variable so all accent-colored UI elements pick it up
+  React.useEffect(() => {
+    const root = document.documentElement
+    const prev = root.style.getPropertyValue('--accent')
+    root.style.setProperty('--accent', accentColor)
+    return () => {
+      root.style.setProperty('--accent', prev || '')
+    }
+  }, [accentColor])
+
   // Whether clicking opens viewer
   const openInViewer = appearance.open_in_viewer !== false
 
@@ -980,10 +990,20 @@ export function FolderShareViewer({
     setSearchQuery('')
   }
 
-  // Client-side search filter
-  const filteredAssets = searchQuery.trim()
-    ? assets.filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
-    : assets
+  // Client-side search filter + sort
+  const sortBy = appearance.sort_by ?? 'created_at'
+  const filteredAssets = React.useMemo(() => {
+    const list = searchQuery.trim()
+      ? assets.filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+      : [...assets]
+    list.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name)
+      if (sortBy === 'file_size') return (b.file_size ?? 0) - (a.file_size ?? 0)
+      // default: created_at desc
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    return list
+  }, [assets, searchQuery, sortBy])
 
   const filteredSubfolders = searchQuery.trim()
     ? subfolders.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
@@ -1225,22 +1245,74 @@ export function FolderShareViewer({
 
                     {assetsExpanded && (
                       <>
-                        <div className={cn('grid gap-3 mt-2', gridCols)}>
-                          {filteredAssets.map((asset) => (
-                            <AssetGridCard
-                              key={asset.id}
-                              asset={asset}
-                              allowDownload={allowDownload}
-                              token={token}
-                              isSelected={selectedAsset?.id === asset.id}
-                              onSelect={setSelectedAsset}
-                              onOpen={openInViewer ? setViewingAsset : () => {}}
-                              aspectClass={aspectClass}
-                              thumbnailScale={thumbnailScale}
-                              showCardInfo={showCardInfo}
-                            />
-                          ))}
-                        </div>
+                        {isGridLayout ? (
+                          <div className={cn('grid gap-3 mt-2', gridCols)}>
+                            {filteredAssets.map((asset) => (
+                              <AssetGridCard
+                                key={asset.id}
+                                asset={asset}
+                                allowDownload={allowDownload}
+                                token={token}
+                                isSelected={selectedAsset?.id === asset.id}
+                                onSelect={setSelectedAsset}
+                                onOpen={openInViewer ? setViewingAsset : () => {}}
+                                aspectClass={aspectClass}
+                                thumbnailScale={thumbnailScale}
+                                showCardInfo={showCardInfo}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-1">
+                            {filteredAssets.map((asset, i) => {
+                              const TypeIcon = getAssetTypeIcon(asset.asset_type)
+                              return (
+                                <div
+                                  key={asset.id}
+                                  className={cn(
+                                    'group flex items-center gap-4 py-2 px-1 cursor-pointer transition-colors rounded-lg hover:bg-bg-hover',
+                                    selectedAsset?.id === asset.id && 'bg-accent/5',
+                                    i !== filteredAssets.length - 1 && 'border-b border-border',
+                                  )}
+                                  onClick={() => setSelectedAsset(asset)}
+                                  onDoubleClick={() => openInViewer && setViewingAsset(asset)}
+                                >
+                                  {/* Square thumbnail */}
+                                  <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-bg-tertiary flex items-center justify-center">
+                                    {asset.thumbnail_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                    ) : (
+                                      <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
+                                    )}
+                                  </div>
+                                  {/* Name + meta */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                                    <p className="text-xs text-text-tertiary mt-0.5 truncate">
+                                      {asset.created_by_name && <>{asset.created_by_name} &middot; </>}
+                                      {formatShortDate(asset.created_at)}
+                                    </p>
+                                  </div>
+                                  {/* File size — right aligned */}
+                                  <span className="hidden sm:block text-sm text-text-tertiary tabular-nums shrink-0 min-w-[60px] text-right">
+                                    {asset.file_size != null ? formatFileSize(asset.file_size) : '—'}
+                                  </span>
+                                  {/* Download */}
+                                  {allowDownload && (
+                                    <button
+                                      className="shrink-0 flex items-center justify-center h-7 w-7 rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all"
+                                      onClick={(e) => { e.stopPropagation(); handleDownload(token, asset.id, asset.name) }}
+                                      title="Download"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
 
                         {/* Load more */}
                         {hasMore && (

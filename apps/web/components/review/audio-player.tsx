@@ -15,6 +15,7 @@ import {
 import { cn, formatTime, formatTimecode, formatFrames } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useReviewStore, type TimeFormat } from '@/stores/review-store'
+import { ProgressBar } from './progress-bar'
 import type { Asset, AssetVersion, Comment } from '@/types'
 
 interface StreamResponse {
@@ -22,69 +23,6 @@ interface StreamResponse {
 }
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
-
-// ─── Comment Markers on timeline ─────────────────────────────────────────────
-
-interface TimelineProps {
-  currentTime: number
-  duration: number
-  comments: Comment[]
-  onSeek: (time: number) => void
-}
-
-function Timeline({ currentTime, duration, comments, onSeek }: TimelineProps) {
-  const trackRef = React.useRef<HTMLDivElement>(null)
-
-  const markers = comments.filter(
-    (c) => c.timecode_start != null && !c.resolved && !c.deleted_at,
-  )
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (!trackRef.current || duration <= 0) return
-    const rect = trackRef.current.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    onSeek(pct * duration)
-  }
-
-  return (
-    <div className="relative w-full px-4">
-      <div
-        ref={trackRef}
-        onClick={handleClick}
-        className="relative h-1 w-full cursor-pointer rounded-full bg-bg-hover group"
-      >
-        {/* Progress */}
-        <div
-          className="absolute left-0 top-0 h-full rounded-full bg-accent transition-[width] duration-75"
-          style={{ width: `${progress}%` }}
-        />
-        {/* Playhead */}
-        <div
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: `${progress}%` }}
-        />
-        {/* Comment markers */}
-        {markers.map((c) => {
-          const pct = ((c.timecode_start ?? 0) / duration) * 100
-          return (
-            <div
-              key={c.id}
-              className="absolute top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full bg-status-warning border-2 border-bg-primary cursor-pointer z-10"
-              style={{ left: `${pct}%` }}
-              title={c.body.slice(0, 60)}
-              onClick={(e) => {
-                e.stopPropagation()
-                onSeek(c.timecode_start ?? 0)
-              }}
-            />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -162,12 +100,16 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
       wavesurferRef.current = null
     }
 
+    const cssVars = getComputedStyle(document.documentElement)
+    const waveColor = cssVars.getPropertyValue('--text-tertiary').trim() || '#5e5e6e'
+    const accentColor = cssVars.getPropertyValue('--accent').trim() || '#5b8def'
+
     const ws = WaveSurfer.create({
       container: waveformRef.current,
       height: 160,
-      waveColor: '#3a3a48',
-      progressColor: '#5b8def',
-      cursorColor: '#5b8def',
+      waveColor,
+      progressColor: accentColor,
+      cursorColor: accentColor,
       cursorWidth: 2,
       barWidth: 3,
       barGap: 2,
@@ -299,12 +241,14 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
       </div>
 
       {/* Timeline scrubber with comment markers */}
-      <Timeline
-        currentTime={currentTime}
-        duration={duration}
-        comments={comments}
-        onSeek={handleSeek}
-      />
+      <div className="shrink-0 bg-bg-primary">
+        <ProgressBar
+          currentTime={currentTime}
+          duration={duration}
+          comments={comments}
+          onSeek={handleSeek}
+        />
+      </div>
 
       {/* Bottom transport bar */}
       <div className="flex items-center justify-between h-12 px-4 bg-bg-secondary/80 border-t border-border shrink-0">

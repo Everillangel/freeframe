@@ -35,11 +35,13 @@ def _build_asset_response(asset: Asset, db: Session) -> AssetResponse:
         files = db.query(MediaFile).filter(MediaFile.version_id == latest_version.id).all()
         version_response = AssetVersionResponse.model_validate(latest_version)
         version_response.files = [MediaFileResponse.model_validate(f) for f in files]
-        # Get thumbnail from first file that has one
-        for f in files:
-            if f.s3_key_thumbnail:
-                thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
-                break
+        # Get thumbnail from first file that has one.
+        # Audio stores waveform JSON in s3_key_thumbnail — skip it, it's not an image.
+        if asset.asset_type != AssetType.audio:
+            for f in files:
+                if f.s3_key_thumbnail:
+                    thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
+                    break
 
     resp = AssetResponse.model_validate(asset)
     resp.latest_version = version_response
@@ -87,10 +89,12 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
             files = files_by_version.get(version.id, [])
             version_response = AssetVersionResponse.model_validate(version)
             version_response.files = [MediaFileResponse.model_validate(f) for f in files]
-            for f in files:
-                if f.s3_key_thumbnail:
-                    thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
-                    break
+            # Audio stores waveform JSON in s3_key_thumbnail — skip it, it's not an image.
+            if asset.asset_type != AssetType.audio:
+                for f in files:
+                    if f.s3_key_thumbnail:
+                        thumbnail_url = generate_presigned_get_url(f.s3_key_thumbnail)
+                        break
 
         asset_resp = AssetResponse.model_validate(asset)
         asset_resp.latest_version = version_response

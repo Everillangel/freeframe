@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { api } from '@/lib/api'
 import type { AssetResponse } from '@/types'
 
@@ -54,6 +55,8 @@ interface UploadStore {
   updateProcessingProgress: (assetId: string, percent: number) => void
   markProcessingComplete: (assetId: string) => void
   markProcessingFailed: (assetId: string, error: string) => void
+  // Fallback poll: re-check processing items from backend (catches missed SSE events)
+  refreshProcessingItems: () => Promise<void>
 }
 
 function mapProcessingStatus(status: string): UploadStatus {
@@ -101,7 +104,9 @@ function mergeHistoryAssets(existing: UploadFile[], assets: AssetResponse[]): Up
   return [...existing, ...newFiles]
 }
 
-export const useUploadStore = create<UploadStore>((set, get) => ({
+export const useUploadStore = create<UploadStore>()(
+  persist(
+    (set, get) => ({
   files: [],
   panelOpen: false,
   historyLoaded: false,
@@ -142,10 +147,15 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       const controller = new AbortController()
       abortControllers[id] = controller
 
+      // Track initiate response fields so catch block can call /upload/abort
+      let upload_id: string | undefined
+      let s3_key: string | undefined
+      let version_id: string | undefined
+
       try {
         updateFile(id, { status: 'uploading' })
 
-        const { upload_id, s3_key, asset_id, version_id } = await api.post<InitiateResponse>(
+        const initRes = await api.post<InitiateResponse>(
           '/upload/initiate',
           {
             project_id: projectId,
@@ -156,6 +166,10 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
             folder_id: folderId ?? null,
           },
         )
+        upload_id = initRes.upload_id
+        s3_key = initRes.s3_key
+        version_id = initRes.version_id
+        const asset_id = initRes.asset_id
 
         updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
 
@@ -215,6 +229,11 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
         } else {
           const message = err instanceof Error ? err.message : 'Upload failed'
           updateFile(id, { status: 'failed', error: message })
+        }
+        // Notify backend so the version is marked failed (not stuck at uploading).
+        // This ensures post-refresh history shows the item in "Failed", not "Active".
+        if (upload_id && s3_key && version_id) {
+          api.post('/upload/abort', { s3_key, upload_id, version_id }).catch(() => {})
         }
       } finally {
         delete abortControllers[id]
@@ -306,4 +325,41 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       ),
     }))
   },
-}))
+
+  refreshProcessingItems: async () => {
+    const processingFiles = get().files.filter((f) => f.status === 'processing' && f.assetId)
+    if (!processingFiles.length) return
+    try {
+      const results = await Promise.all(
+        processingFiles.map((f) =>
+          api.get<AssetResponse>(`/assets/${f.assetId}`).catch(() => null),
+        ),
+      )
+      set((s) => ({
+        files: s.files.map((f) => {
+          if (f.status !== 'processing' || !f.assetId) return f
+          const idx = processingFiles.findIndex((pf) => pf.assetId === f.assetId)
+          const asset = idx >= 0 ? results[idx] : null
+          if (!asset?.latest_version) return f
+          const status = mapProcessingStatus(asset.latest_version.processing_status)
+          if (status === 'processing') return f
+          return { ...f, status, processingProgress: status === 'complete' ? 100 : 0 }
+        }),
+      }))
+    } catch {
+      // SSE is the primary mechanism; ignore poll errors
+    }
+  },
+}),
+    {
+      name: 'ff-uploads',
+      // Only persist failed/cancelled items — in-progress uploads can't be resumed
+      // and successful ones are fetched from the API history on panel open.
+      partialize: (state) => ({
+        files: state.files.filter(
+          (f) => f.status === 'failed' || f.status === 'cancelled',
+        ),
+      }),
+    },
+  ),
+)
