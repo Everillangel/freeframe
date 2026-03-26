@@ -11,8 +11,9 @@ import { AssetCard } from './asset-card'
 import { FolderCard } from './folder-card'
 import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
+import { MoveToDialog } from './move-to-dialog'
 import { useViewStore } from '@/stores/view-store'
-import type { Asset, AssetStatus, User, Folder } from '@/types'
+import type { Asset, AssetStatus, User, Folder, FolderTreeNode } from '@/types'
 
 const assetTypeIcons: Record<string, React.ElementType> = {
   video: Film,
@@ -57,6 +58,8 @@ interface AssetGridProps {
   onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
   onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
   onBulkDownload?: (assetIds: string[]) => void
+  projectName?: string
+  folderTree?: FolderTreeNode[]
   onAssetShare?: (asset: Asset) => void
   onAssetDownload?: (asset: Asset) => void
   onAssetRename?: (asset: Asset) => void
@@ -105,6 +108,8 @@ export function AssetGrid({
   onBulkDelete,
   onBulkMove,
   onBulkDownload,
+  projectName = 'Project',
+  folderTree = [],
   onAssetShare,
   onAssetDownload,
   onAssetRename,
@@ -114,6 +119,7 @@ export function AssetGrid({
   const [searchQuery] = React.useState('')
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set())
   const [selectedFolderIds, setSelectedFolderIds] = React.useState<Set<string>>(new Set())
+  const [moveDialogOpen, setMoveDialogOpen] = React.useState(false)
 
   // Legacy alias
   const selectedIds = selectedAssetIds
@@ -531,9 +537,11 @@ export function AssetGrid({
           >
             <Trash2 className="h-4 w-4" /> Delete
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1.5">
-            <FolderInput className="h-4 w-4" /> Move to
-          </Button>
+          {onBulkMove && (
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setMoveDialogOpen(true)}>
+              <FolderInput className="h-4 w-4" /> Move to
+            </Button>
+          )}
           {selectedAssetIds.size > 0 && (
             <Button
               variant="ghost"
@@ -546,6 +554,19 @@ export function AssetGrid({
           )}
         </div>
       )}
+
+      <MoveToDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        projectName={projectName}
+        tree={folderTree}
+        currentFolderId={currentFolderId ?? null}
+        movingFolderIds={Array.from(selectedFolderIds)}
+        onMove={(targetFolderId) => {
+          onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
+          clearSelection()
+        }}
+      />
     </div>
   )
 }

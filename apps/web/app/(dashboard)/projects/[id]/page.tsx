@@ -611,6 +611,8 @@ export default function ProjectDetailPage() {
               folders={subfolders ?? []}
               currentFolderId={currentFolderId}
               projectId={projectId}
+              projectName={project?.name ?? 'Project'}
+              folderTree={tree ?? []}
               isLoading={loadingAssets}
               assignees={assigneesMap}
               thumbnails={thumbnails}
@@ -744,6 +746,12 @@ export default function ProjectDetailPage() {
               }}
               onAssetRename={(asset) => setAssetToRename(asset as AssetResponse)}
               onAssetDelete={(asset) => setAssetToDelete(asset as AssetResponse)}
+              onBulkMove={async (assetIds, folderIds, targetFolderId) => {
+                await bulkMove(assetIds, folderIds, targetFolderId);
+                mutateAssets();
+                mutateSubfolders();
+                mutateTree();
+              }}
               onBulkDelete={(assetIds, folderIds) => {
                 setPendingBulkDelete({ assetIds, folderIds });
               }}
