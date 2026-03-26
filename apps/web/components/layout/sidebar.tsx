@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useUploadStore } from '@/stores/upload-store'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useBrandingStore } from '@/stores/branding-store'
+import { useThemeStore } from '@/stores/theme-store'
 import { Avatar } from '@/components/shared/avatar'
 import { NotificationDrawer } from './notification-drawer'
 
@@ -41,7 +42,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user, logout } = useAuthStore()
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
   const { unreadCount, fetchNotifications } = useNotificationStore()
-  const { orgName, orgLogoUrl } = useBrandingStore()
+  const { orgName, orgLogoDark, orgLogoLight } = useBrandingStore()
+  const { theme } = useThemeStore()
+  // Pick logo based on resolved theme; fall back to the other if only one is set
+  const customLogo = theme === 'light'
+    ? (orgLogoLight ?? orgLogoDark)
+    : (orgLogoDark ?? orgLogoLight)
   const [notifOpen, setNotifOpen] = React.useState(false)
   const activeUploads = uploadFiles.filter((f) => f.status === 'uploading' || f.status === 'pending' || f.status === 'processing').length
 
@@ -64,11 +70,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? 'justify-center px-0' : 'px-4 gap-2.5',
         )}
       >
-        {/* Logo: custom if set, otherwise default FreeFrame icons */}
-        {orgLogoUrl ? (
+        {/* Logo: theme-aware custom logo, or default FreeFrame icons */}
+        {customLogo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={orgLogoUrl}
+            src={customLogo}
             alt={orgName}
             className="h-7 w-7 shrink-0 object-contain rounded"
           />

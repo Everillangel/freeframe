@@ -3,19 +3,35 @@ import { persist } from 'zustand/middleware'
 
 interface BrandingState {
   orgName: string
-  orgLogoUrl: string | null
+  /** Logo for dark theme (shown on dark backgrounds) */
+  orgLogoDark: string | null
+  /** Logo for light theme (shown on light backgrounds) */
+  orgLogoLight: string | null
   setOrgName: (name: string) => void
-  setOrgLogoUrl: (url: string | null) => void
+  setOrgLogoDark: (url: string | null) => void
+  setOrgLogoLight: (url: string | null) => void
+  resetAll: () => void
 }
 
 export const useBrandingStore = create<BrandingState>()(
   persist(
     (set) => ({
       orgName: 'FreeFrame',
-      orgLogoUrl: null,
+      orgLogoDark: null,
+      orgLogoLight: null,
       setOrgName: (name) => set({ orgName: name }),
-      setOrgLogoUrl: (url) => set({ orgLogoUrl: url }),
+      setOrgLogoDark: (url) => set({ orgLogoDark: url }),
+      setOrgLogoLight: (url) => set({ orgLogoLight: url }),
+      resetAll: () => set({ orgName: 'FreeFrame', orgLogoDark: null, orgLogoLight: null }),
     }),
-    { name: 'ff-branding' },
+    {
+      name: 'ff-branding',
+      version: 2,
+      migrate: () => ({
+        orgName: 'FreeFrame',
+        orgLogoDark: null,
+        orgLogoLight: null,
+      }),
+    },
   ),
 )
