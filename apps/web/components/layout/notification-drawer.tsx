@@ -52,7 +52,8 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
     if (!notification.read) markAsRead(notification.id)
     // Navigate to asset if possible
     if (notification.project_id && notification.asset_id) {
-      window.location.href = `/projects/${notification.project_id}/assets/${notification.asset_id}`
+      const qs = notification.comment_id ? `?commentId=${notification.comment_id}` : ''
+      window.location.href = `/projects/${notification.project_id}/assets/${notification.asset_id}${qs}`
       onClose()
     }
   }

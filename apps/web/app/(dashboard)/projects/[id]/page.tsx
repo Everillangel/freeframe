@@ -252,6 +252,17 @@ export default function ProjectDetailPage() {
     return Object.fromEntries(assigneeUsers.map((u) => [u.id, u]));
   }, [assigneeUsers]);
 
+  // ─── Role-based permissions ───────────────────────────────────────────────
+  const currentMember = members?.find((m) => m.user_id === user?.id);
+  const currentRole = currentMember?.role ?? "viewer";
+  // owner → Full Access, editor → Edit & Share, reviewer → Comment Only, viewer → View Only
+  const canUpload = currentRole === "owner" || currentRole === "editor";
+  const canCreateFolder = currentRole === "owner" || currentRole === "editor";
+  const canShare = currentRole === "owner" || currentRole === "editor";
+  const canManageMembers = currentRole === "owner";
+  const canSeeShareLinks = currentRole === "owner" || currentRole === "editor";
+  const canComment = currentRole !== "viewer";
+
   React.useEffect(() => {
     const anyComplete = uploadFiles.some(
       (f) => f.projectId === projectId && f.status === "complete",
@@ -304,9 +315,11 @@ export default function ProjectDetailPage() {
             <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
               Assets
             </span>
-            <button className="text-text-tertiary hover:text-text-primary transition-colors">
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+            {canCreateFolder && (
+              <button className="text-text-tertiary hover:text-text-primary transition-colors">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Project folder tree */}
@@ -344,8 +357,8 @@ export default function ProjectDetailPage() {
           />
         </div>
 
-        {/* Share Links section */}
-        <div className="px-3 py-2 border-t border-border">
+        {/* Share Links section — only visible to owner/editor */}
+        {canSeeShareLinks && <div className="px-3 py-2 border-t border-border">
           <div className="w-full flex items-center justify-between px-2 mb-1">
             <span
               className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider cursor-pointer"
@@ -491,7 +504,7 @@ export default function ProjectDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -716,35 +729,43 @@ export default function ProjectDetailPage() {
               }}
               actions={
                 <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setMembersDialogOpen(true)}
-                  >
-                    <Users className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShareMode(true)}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    Share
-                  </Button>
-                  <button
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
-                    onClick={() => {
-                      setFolderDialogParentId(currentFolderId);
-                      setFolderDialogOpen(true);
-                    }}
-                  >
-                    <FolderPlus className="h-4 w-4" />
-                    New Folder
-                  </button>
-                  <Button size="sm" onClick={() => setUploadOpen(true)}>
-                    <Upload className="h-4 w-4" />
-                    Upload
-                  </Button>
+                  {canManageMembers && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setMembersDialogOpen(true)}
+                    >
+                      <Users className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canShare && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShareMode(true)}
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share
+                    </Button>
+                  )}
+                  {canCreateFolder && (
+                    <button
+                      className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
+                      onClick={() => {
+                        setFolderDialogParentId(currentFolderId);
+                        setFolderDialogOpen(true);
+                      }}
+                    >
+                      <FolderPlus className="h-4 w-4" />
+                      New Folder
+                    </button>
+                  )}
+                  {canUpload && (
+                    <Button size="sm" onClick={() => setUploadOpen(true)}>
+                      <Upload className="h-4 w-4" />
+                      Upload
+                    </Button>
+                  )}
                 </>
               }
             />

@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, ChevronDown, ArrowLeft, Users, Crown, Loader2 } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { X, ChevronDown, ArrowLeft, Users, Crown, Loader2, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -48,56 +49,45 @@ function RoleDropdown({
   onChange: (role: ProjectRole) => void
   compact?: boolean
 }) {
-  const [open, setOpen] = React.useState(false)
-  const ref = React.useRef<HTMLDivElement>(null)
-
-  React.useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
-
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={cn(
-          'flex items-center gap-1 text-accent hover:text-accent-hover font-medium transition-colors',
-          compact ? 'text-xs' : 'text-sm',
-        )}
-      >
-        {roleLabelFor(value)}
-        <ChevronDown className="h-3.5 w-3.5" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 w-72 rounded-lg border border-border bg-bg-secondary shadow-xl z-50">
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1 text-accent hover:text-accent-hover font-medium transition-colors outline-none',
+            compact ? 'text-xs' : 'text-sm',
+          )}
+        >
+          {roleLabelFor(value)}
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          className="z-[200] w-72 rounded-xl border border-border bg-bg-secondary shadow-2xl py-1 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+        >
           {ROLES.map((r) => (
-            <button
+            <DropdownMenu.Item
               key={r.value}
-              type="button"
-              onClick={() => {
-                onChange(r.value)
-                setOpen(false)
-              }}
+              onSelect={() => onChange(r.value)}
               className={cn(
-                'w-full px-3 py-2.5 text-left hover:bg-bg-hover transition-colors first:rounded-t-lg last:rounded-b-lg',
-                value === r.value && 'bg-bg-hover',
+                'flex items-start gap-3 px-3 py-2.5 cursor-pointer outline-none transition-colors mx-1 rounded-lg',
+                value === r.value ? 'bg-bg-hover' : 'hover:bg-bg-hover',
               )}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-text-primary">{r.label}</span>
-                {value === r.value && <span className="text-accent text-sm">&#10003;</span>}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary">{r.label}</p>
+                <p className="text-xs text-text-tertiary mt-0.5">{r.description}</p>
               </div>
-              <p className="text-xs text-text-tertiary mt-0.5">{r.description}</p>
-            </button>
+              {value === r.value && <Check className="h-4 w-4 text-accent shrink-0 mt-0.5" />}
+            </DropdownMenu.Item>
           ))}
-        </div>
-      )}
-    </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 

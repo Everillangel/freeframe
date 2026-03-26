@@ -894,13 +894,18 @@ export function FolderShareViewer({
     }
   }, [isDark])
 
-  // Apply accent color as CSS variable so all accent-colored UI elements pick it up
+  // Apply accent color via injected <style> tag — more reliable than inline CSS var override
   React.useEffect(() => {
-    const root = document.documentElement
-    const prev = root.style.getPropertyValue('--accent')
-    root.style.setProperty('--accent', accentColor)
+    const styleId = 'ff-share-accent'
+    let el = document.getElementById(styleId) as HTMLStyleElement | null
+    if (!el) {
+      el = document.createElement('style')
+      el.id = styleId
+      document.head.appendChild(el)
+    }
+    el.textContent = `:root { --accent: ${accentColor} !important; }`
     return () => {
-      root.style.setProperty('--accent', prev || '')
+      document.getElementById(styleId)?.remove()
     }
   }, [accentColor])
 
@@ -1110,7 +1115,7 @@ export function FolderShareViewer({
         <div className="flex items-center gap-2 shrink-0">
           {allowDownload && (
             <button
-              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-primary bg-indigo-600 hover:bg-indigo-500 transition-colors"
+              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
               onClick={() => {
                 // Download all visible assets
                 filteredAssets.forEach((a) => handleDownload(token, a.id, a.name))
@@ -1263,14 +1268,22 @@ export function FolderShareViewer({
                             ))}
                           </div>
                         ) : (
-                          <div className="mt-1">
+                          <div className="mt-2 rounded-lg border border-border overflow-hidden">
+                            {/* Column headers */}
+                            <div className="flex items-center gap-4 px-1 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+                              <div className="h-14 w-14 shrink-0" />
+                              <div className="flex-1 min-w-0">Name</div>
+                              <div className="hidden sm:block w-24 text-right shrink-0">Size</div>
+                              <div className="hidden sm:block w-28 shrink-0">Date</div>
+                              {allowDownload && <div className="w-7 shrink-0" />}
+                            </div>
                             {filteredAssets.map((asset, i) => {
                               const TypeIcon = getAssetTypeIcon(asset.asset_type)
                               return (
                                 <div
                                   key={asset.id}
                                   className={cn(
-                                    'group flex items-center gap-4 py-2 px-1 cursor-pointer transition-colors rounded-lg hover:bg-bg-hover',
+                                    'group flex items-center gap-4 py-2 px-1 cursor-pointer transition-colors hover:bg-bg-hover',
                                     selectedAsset?.id === asset.id && 'bg-accent/5',
                                     i !== filteredAssets.length - 1 && 'border-b border-border',
                                   )}
@@ -1294,14 +1307,18 @@ export function FolderShareViewer({
                                       {formatShortDate(asset.created_at)}
                                     </p>
                                   </div>
-                                  {/* File size — right aligned */}
-                                  <span className="hidden sm:block text-sm text-text-tertiary tabular-nums shrink-0 min-w-[60px] text-right">
+                                  {/* File size */}
+                                  <span className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
                                     {asset.file_size != null ? formatFileSize(asset.file_size) : '—'}
+                                  </span>
+                                  {/* Date */}
+                                  <span className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
+                                    {formatDate(asset.created_at)}
                                   </span>
                                   {/* Download */}
                                   {allowDownload && (
                                     <button
-                                      className="shrink-0 flex items-center justify-center h-7 w-7 rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all"
+                                      className="w-7 shrink-0 flex items-center justify-center h-7 rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all"
                                       onClick={(e) => { e.stopPropagation(); handleDownload(token, asset.id, asset.name) }}
                                       title="Download"
                                     >

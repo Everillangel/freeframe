@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { ReviewProvider, useReview } from '@/components/review/review-provider'
 import { VideoPlayer } from '@/components/review/video-player'
@@ -30,23 +30,34 @@ import {
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
-import type { Project, AssetResponse } from '@/types'
+import type { Project, AssetResponse, ProjectMember } from '@/types'
 
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { asset, versions, isLoading, refetchComments } = useReview()
-  const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
+  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   usePageTitle(asset?.name ?? null)
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [activeTab, setActiveTab] = useState<'comments' | 'fields'>('comments')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const deepLinkApplied = useRef(false)
 
   // Fetch project info for breadcrumb
   const { data: project } = useSWR<Project>(
     `/projects/${projectId}`,
     () => api.get<Project>(`/projects/${projectId}`),
   )
+
+  // Role-based permissions
+  const { data: members } = useSWR<ProjectMember[]>(
+    `/projects/${projectId}/members`,
+    () => api.get<ProjectMember[]>(`/projects/${projectId}/members`),
+  )
+  const currentMember = members?.find((m) => m.user_id === user?.id)
+  const currentRole = currentMember?.role ?? 'viewer'
+  const canComment = currentRole !== 'viewer'
 
   // Fetch all assets for navigation (1 of N)
   const { data: allAssets } = useSWR<AssetResponse[]>(
@@ -62,6 +73,24 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     addReaction,
     removeReaction,
   } = useComments(asset?.id || '', currentVersion?.id || '')
+
+  // Deep-link to a specific comment from notification (?commentId=...)
+  // Runs once after comments are loaded — seeks to timecode, focuses comment, shows annotation
+  useEffect(() => {
+    const commentId = searchParams.get('commentId')
+    if (!commentId || deepLinkApplied.current || comments.length === 0) return
+    const target = comments.find((c: any) => c.id === commentId)
+    if (!target) return
+    deepLinkApplied.current = true
+    setFocusedCommentId(commentId)
+    setActiveTab('comments')
+    if ((target as any).timecode_start !== null && (target as any).timecode_start !== undefined) {
+      seekTo((target as any).timecode_start, true)
+    }
+    if ((target as any).annotation?.drawing_data) {
+      setActiveAnnotation((target as any).annotation.drawing_data)
+    }
+  }, [comments, searchParams, seekTo, setFocusedCommentId, setActiveAnnotation])
 
   // Asset navigation
   const currentIndex = allAssets?.findIndex((a) => a.id === asset?.id) ?? -1
@@ -355,13 +384,15 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                     onReply={() => {}}
                     onSubmitReply={handleSubmitReply}
                   />
-                  <CommentInput
-                    assetId={asset.id}
-                    projectId={asset.project_id}
-                    assetType={asset.asset_type}
-                    onSubmit={handleSubmitComment}
-                    annotationData={annotationData}
-                  />
+                  {canComment && (
+                    <CommentInput
+                      assetId={asset.id}
+                      projectId={asset.project_id}
+                      assetType={asset.asset_type}
+                      onSubmit={handleSubmitComment}
+                      annotationData={annotationData}
+                    />
+                  )}
                 </>
               ) : (
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
