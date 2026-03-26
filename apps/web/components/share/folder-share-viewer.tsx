@@ -186,6 +186,22 @@ function SubfolderCard({ subfolder, onClick }: SubfolderCardProps) {
   )
 }
 
+// ─── List row thumbnail with error fallback ───────────────────────────────────
+
+function ListRowThumb({ asset, TypeIcon }: { asset: FolderShareAssetItem; TypeIcon: React.ElementType }) {
+  const [imgError, setImgError] = React.useState(false)
+  return (
+    <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-bg-tertiary flex items-center justify-center">
+      {asset.thumbnail_url && !imgError ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
+      ) : (
+        <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
+      )}
+    </div>
+  )
+}
+
 // ─── Asset Grid Card (Frame.io style) ────────────────────────────────────────
 
 interface AssetGridCardProps {
@@ -202,6 +218,7 @@ interface AssetGridCardProps {
 
 function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOpen, aspectClass = 'aspect-[16/10]', thumbnailScale = 'fill', showCardInfo = true }: AssetGridCardProps) {
   const TypeIcon = getAssetTypeIcon(asset.asset_type)
+  const [imgError, setImgError] = React.useState(false)
 
   return (
     <div
@@ -217,17 +234,19 @@ function AssetGridCard({ asset, allowDownload, token, isSelected, onSelect, onOp
     >
       {/* Thumbnail */}
       <div className={cn('w-full relative overflow-hidden bg-bg-tertiary', aspectClass)}>
-        {asset.thumbnail_url ? (
+        {asset.thumbnail_url && !imgError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={asset.thumbnail_url}
             alt={asset.name}
             className={cn('h-full w-full transition-transform duration-200 group-hover:scale-[1.02]', thumbnailScale === 'fill' ? 'object-cover' : 'object-contain')}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <TypeIcon className="h-10 w-10 text-text-tertiary" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
+              <TypeIcon className="h-7 w-7" />
+            </div>
           </div>
         )}
 
@@ -1291,14 +1310,7 @@ export function FolderShareViewer({
                                   onDoubleClick={() => openInViewer && setViewingAsset(asset)}
                                 >
                                   {/* Square thumbnail */}
-                                  <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-bg-tertiary flex items-center justify-center">
-                                    {asset.thumbnail_url ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={asset.thumbnail_url} alt={asset.name} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                                    ) : (
-                                      <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
-                                    )}
-                                  </div>
+                                  <ListRowThumb asset={asset} TypeIcon={TypeIcon} />
                                   {/* Name + meta */}
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>

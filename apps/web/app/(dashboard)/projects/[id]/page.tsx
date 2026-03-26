@@ -110,6 +110,8 @@ export default function ProjectDetailPage() {
     assetIds: string[];
     folderIds: string[];
   } | null>(null);
+  const [assetToRename, setAssetToRename] = React.useState<AssetResponse | null>(null);
+  const [assetToDelete, setAssetToDelete] = React.useState<AssetResponse | null>(null);
 
   const { files: uploadFiles, startUpload } = useUploadStore();
   const { user } = useAuthStore();
@@ -705,6 +707,43 @@ export default function ProjectDetailPage() {
                   setShareDialogOpen(true);
                 } catch {}
               }}
+              onAssetShare={async (asset) => {
+                try {
+                  const result = await api.post<ShareLink>(
+                    `/assets/${asset.id}/share`,
+                    { title: asset.name },
+                  );
+                  mutateShareLinks();
+                  setShareDialogPreselect(null);
+                  setShareDialogResult({
+                    token: result.token,
+                    title: result.title || asset.name,
+                    itemType: "asset",
+                    thumbnailUrl: (asset as AssetResponse).thumbnail_url ?? null,
+                    assetId: result.asset_id ?? null,
+                    folderId: null,
+                    projectId: result.project_id ?? null,
+                  });
+                  setShareDialogOpen(true);
+                } catch {}
+              }}
+              onAssetDownload={async (asset) => {
+                try {
+                  const data = await api.get<{ url: string }>(
+                    `/assets/${asset.id}/stream`,
+                  );
+                  if (data?.url) {
+                    const a = document.createElement("a");
+                    a.href = data.url;
+                    a.download = asset.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }
+                } catch {}
+              }}
+              onAssetRename={(asset) => setAssetToRename(asset as AssetResponse)}
+              onAssetDelete={(asset) => setAssetToDelete(asset as AssetResponse)}
               onBulkDelete={(assetIds, folderIds) => {
                 setPendingBulkDelete({ assetIds, folderIds });
               }}
@@ -1073,6 +1112,43 @@ export default function ProjectDetailPage() {
           mutateSubfolders();
           mutateTree();
           setPendingBulkDelete(null);
+        }}
+      />
+
+      {/* Rename asset dialog */}
+      <NameDialog
+        open={assetToRename !== null}
+        onOpenChange={(open) => { if (!open) setAssetToRename(null); }}
+        title="Rename asset"
+        defaultValue={assetToRename?.name ?? ""}
+        placeholder="Asset name..."
+        submitLabel="Rename"
+        onSubmit={async (name) => {
+          if (!assetToRename) return;
+          try {
+            await api.patch(`/assets/${assetToRename.id}`, { name });
+            mutateAssets();
+          } catch {}
+          setAssetToRename(null);
+        }}
+      />
+
+      {/* Delete asset confirmation */}
+      <ConfirmDialog
+        open={assetToDelete !== null}
+        onOpenChange={(open) => { if (!open) setAssetToDelete(null); }}
+        title={`Delete "${assetToDelete?.name}"?`}
+        description="This will move the asset to the trash. You can restore it later from Recently Deleted."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => {
+          if (!assetToDelete) return;
+          try {
+            await api.delete(`/assets/${assetToDelete.id}`);
+            mutateAssets();
+            if (selectedAsset?.id === assetToDelete.id) setSelectedAsset(null);
+          } catch {}
+          setAssetToDelete(null);
         }}
       />
     </div>

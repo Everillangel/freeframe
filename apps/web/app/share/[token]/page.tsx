@@ -894,14 +894,16 @@ export default function SharePage({
       }
 
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
+  const openLogged = React.useRef(false)
 
   async function validate(password?: string) {
     if (password) {
       setState({ stage: 'password_required', loading: true })
     }
     try {
-      const isFirstLoad = !password
-      const data = await fetchShareInfo(token, password, isFirstLoad)
+      const shouldLogOpen = !password && !openLogged.current
+      if (shouldLogOpen) openLogged.current = true
+      const data = await fetchShareInfo(token, password, shouldLogOpen)
       if (data.requires_auth) {
         setState({ stage: 'auth_required', title: data.title })
         return

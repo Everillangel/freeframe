@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
 
@@ -84,8 +84,20 @@ def _log_share_activity(
     actor_name: Optional[str] = None,
     asset_id: Optional[uuid.UUID] = None,
     asset_name: Optional[str] = None,
+    dedup_seconds: int = 30,
 ):
+    """Log share activity, skipping duplicates within dedup_seconds window."""
     try:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=dedup_seconds)
+        existing = db.query(ShareLinkActivity).filter(
+            ShareLinkActivity.share_link_id == share_link_id,
+            ShareLinkActivity.action == action,
+            ShareLinkActivity.actor_email == actor_email,
+            ShareLinkActivity.asset_id == asset_id,
+            ShareLinkActivity.created_at >= cutoff,
+        ).first()
+        if existing:
+            return
         activity = ShareLinkActivity(
             share_link_id=share_link_id,
             action=action,

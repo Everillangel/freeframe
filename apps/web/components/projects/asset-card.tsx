@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { Film, Music, Image as ImageIcon, Images, MessageSquare, MoreHorizontal, Check, Clock } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { Film, Music, Image as ImageIcon, Images, MessageSquare, MoreHorizontal, Check, Share2, Download, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import type { Asset, AssetType, User } from '@/types'
 import type { AspectRatio, ThumbnailScale, TitleLines } from '@/stores/view-store'
@@ -30,8 +31,11 @@ interface AssetCardProps {
   duration?: number | null
   selected?: boolean
   onSelect?: (e: React.MouseEvent) => void
-  onContextMenu?: (e: React.MouseEvent) => void
   onDragStart?: (e: React.DragEvent) => void
+  onShare?: () => void
+  onDownload?: () => void
+  onRename?: () => void
+  onDelete?: () => void
   // Appearance settings
   showInfo?: boolean
   titleLines?: TitleLines
@@ -62,8 +66,11 @@ export function AssetCard({
   duration,
   selected = false,
   onSelect,
-  onContextMenu,
   onDragStart,
+  onShare,
+  onDownload,
+  onRename,
+  onDelete,
   showInfo = true,
   titleLines = '1',
   aspectRatio = 'landscape',
@@ -150,12 +157,65 @@ export function AssetCard({
             <p className={cn('text-sm font-medium text-text-primary leading-tight', lineClamp)}>
               {asset.name}
             </p>
-            <button
-              onClick={(e) => { e.stopPropagation(); onContextMenu?.(e) }}
-              className="shrink-0 h-5 w-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:bg-bg-hover hover:text-text-primary transition-all"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 h-5 w-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:bg-bg-hover hover:text-text-primary transition-all outline-none"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={4}
+                  className="z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenu.Item
+                    onSelect={onShare}
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5 text-text-tertiary" />
+                    Create Share Link
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                  <DropdownMenu.Item
+                    onSelect={onDownload}
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5 text-text-tertiary" />
+                    Download
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => {
+                      const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
+                      navigator.clipboard.writeText(url)
+                    }}
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                  >
+                    <LinkIcon className="h-3.5 w-3.5 text-text-tertiary" />
+                    Copy Asset URL
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                  <DropdownMenu.Item
+                    onSelect={onRename}
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-text-tertiary" />
+                    Rename
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={onDelete}
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
 
           {/* Author + date row */}

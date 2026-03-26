@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { X, Copy, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check, Film, Music, Image as ImageIcon, Images } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, Check, Film, Music, Image as ImageIcon, Images, Link as LinkIcon, Pencil } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -56,7 +57,10 @@ interface AssetGridProps {
   onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
   onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
   onBulkDownload?: (assetIds: string[]) => void
-  onContextMenu?: (asset: Asset, e: React.MouseEvent) => void
+  onAssetShare?: (asset: Asset) => void
+  onAssetDownload?: (asset: Asset) => void
+  onAssetRename?: (asset: Asset) => void
+  onAssetDelete?: (asset: Asset) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
 }
@@ -101,7 +105,10 @@ export function AssetGrid({
   onBulkDelete,
   onBulkMove,
   onBulkDownload,
-  onContextMenu,
+  onAssetShare,
+  onAssetDownload,
+  onAssetRename,
+  onAssetDelete,
   actions,
 }: AssetGridProps) {
   const [searchQuery] = React.useState('')
@@ -343,6 +350,10 @@ export function AssetGrid({
                 titleLines={titleLines}
                 aspectRatio={aspectRatio}
                 thumbnailScale={thumbnailScale}
+                onShare={onAssetShare ? () => onAssetShare(asset) : undefined}
+                onDownload={onAssetDownload ? () => onAssetDownload(asset) : undefined}
+                onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
+                onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
                 onDragStart={(e: React.DragEvent) => {
                   const ids = selectedAssetIds.has(asset.id)
                     ? Array.from(selectedIds)
@@ -431,12 +442,65 @@ export function AssetGrid({
                 </div>
                 {/* Context menu — hidden until hover */}
                 <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onContextMenu?.(asset, e) }}
-                    className="flex h-6 w-6 items-center justify-center rounded hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors"
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </button>
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex h-6 w-6 items-center justify-center rounded hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors outline-none"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        align="end"
+                        sideOffset={4}
+                        className="z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenu.Item
+                          onSelect={() => onAssetShare?.(asset)}
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                        >
+                          <Share2 className="h-3.5 w-3.5 text-text-tertiary" />
+                          Create Share Link
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                        <DropdownMenu.Item
+                          onSelect={() => onAssetDownload?.(asset)}
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5 text-text-tertiary" />
+                          Download
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => {
+                            const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
+                            navigator.clipboard.writeText(url)
+                          }}
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                        >
+                          <LinkIcon className="h-3.5 w-3.5 text-text-tertiary" />
+                          Copy Asset URL
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                        <DropdownMenu.Item
+                          onSelect={() => onAssetRename?.(asset)}
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-text-tertiary" />
+                          Rename
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => onAssetDelete?.(asset)}
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
                 </div>
               </div>
             )
