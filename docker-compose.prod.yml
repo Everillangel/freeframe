@@ -142,7 +142,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: sh -c "celery -A apps.api.tasks.celery_app beat --loglevel=warning"
+    command: sh -c "celery -A apps.api.tasks.celery_app beat --loglevel=warning -s /tmp/celerybeat-schedule"
     restart: unless-stopped
 
   web:

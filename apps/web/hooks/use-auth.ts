@@ -33,12 +33,7 @@ export function useAuth(): UseAuthReturn {
     const me = await api.get<User>('/auth/me')
     setUser(me)
 
-    // Redirect based on role
-    if (me.is_superadmin) {
-      router.push('/god-mode')
-    } else {
-      router.push('/')
-    }
+    router.push('/projects')
   }
 
   function logout(): void {
