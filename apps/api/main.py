@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,13 +11,18 @@ async def lifespan(app: FastAPI):
     ensure_bucket_exists()
     yield
 
+_disable_docs = os.getenv("DISABLE_DOCS", "").lower() in ("true", "1", "yes")
+
 app = FastAPI(
     title="FreeFrame API",
     description="Media review platform API",
     version="1.0.0",
     lifespan=lifespan,
-    contact={"name": "FreeFrame", "url": "https://github.com/freeframe/freeframe"},
+    contact={"name": "FreeFrame", "url": "https://github.com/Techiebutler/freeframe"},
     license_info={"name": "MIT"},
+    docs_url=None if _disable_docs else "/docs",
+    redoc_url=None if _disable_docs else "/redoc",
+    openapi_url=None if _disable_docs else "/openapi.json",
 )
 
 app.add_middleware(

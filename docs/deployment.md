@@ -4,9 +4,63 @@ This guide covers deploying FreeFrame to a production server using Docker Compos
 
 ---
 
+## Hardware Requirements
+
+| | Minimum | Recommended | Heavy Workload |
+|---|---|---|---|
+| **CPU** | 2 cores | 4 cores | 8+ cores |
+| **RAM** | 4 GB | 8 GB | 16+ GB |
+| **Storage** | 20 GB SSD | 50 GB SSD | 100+ GB NVMe |
+| **Bandwidth** | 100 Mbps | 500 Mbps | 1 Gbps |
+
+- **Minimum** — Small teams (up to 10 users), light video transcoding
+- **Recommended** — Medium teams (10-50 users), regular video uploads
+- **Heavy Workload** — Large teams (50+ users), frequent 4K video processing
+
+> **Note:** Video transcoding is the most resource-intensive operation. Storage needs depend on your media volume — the actual media files are stored in S3, not on the server.
+
+---
+
+## Deployment Options
+
+FreeFrame runs anywhere Docker is available. Here are common hosting options:
+
+### VPS / Cloud VM (Simplest)
+
+Best for most teams. A single server running Docker Compose.
+
+| Provider | Recommended Plan | Est. Cost/mo |
+|----------|-----------------|--------------|
+| **Hetzner** | CPX31 (4 vCPU, 8 GB) | ~$15 |
+| **DigitalOcean** | Droplet (4 vCPU, 8 GB) | ~$48 |
+| **AWS EC2** | t3.medium (4 vCPU, 8 GB) | ~$60 |
+| **Google Cloud** | e2-custom (4 vCPU, 8 GB) | ~$75 |
+| **Azure** | B4s (4 vCPU, 8 GB) | ~$70 |
+| **Hostinger VPS** | KVM 4 (4 vCPU, 16 GB) | ~$16 |
+
+**Setup:** SSH into your server, install Docker, clone the repo, and follow the [Quick Setup](#quick-setup) below.
+
+### Cloud with Managed Services
+
+For teams that want managed databases and less maintenance. Use external PostgreSQL, Redis, and S3 instead of the Docker-included ones. See [Bring Your Own Infrastructure](#bring-your-own-infrastructure).
+
+| Component | AWS | GCP | Azure |
+|-----------|-----|-----|-------|
+| Server | EC2 / ECS | Compute Engine / Cloud Run | VM / Container Apps |
+| Database | RDS PostgreSQL | Cloud SQL | Azure Database for PostgreSQL |
+| Redis | ElastiCache | Memorystore | Azure Cache for Redis |
+| Storage | S3 | Cloud Storage | Blob Storage (via S3 API) |
+| Email | SES | (use SMTP) | (use SMTP) |
+
+### Bare Metal / On-Premise
+
+FreeFrame is fully self-contained. Install Docker on any Linux server (Ubuntu 22.04+ recommended) and follow the Quick Setup. Ideal for organizations that require media to stay on their own hardware.
+
+---
+
 ## Prerequisites
 
-- A server with **Docker** and **Docker Compose** installed (2+ CPU cores, 4GB+ RAM recommended)
+- A server meeting the [hardware requirements](#hardware-requirements) with **Docker** and **Docker Compose** installed
 - A **domain name** pointed to your server's IP (for SSL — optional for testing)
 - An **S3-compatible storage** bucket (AWS S3, Cloudflare R2, Backblaze B2, etc.)
 - An **SMTP server** or AWS SES for sending emails

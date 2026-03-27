@@ -3,6 +3,7 @@
 import * as React from 'react'
 import useSWR, { mutate as globalMutate } from 'swr'
 import { Star, ChevronDown, Check, CalendarDays, Tag, X } from 'lucide-react'
+import * as Select from '@radix-ui/react-select'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'

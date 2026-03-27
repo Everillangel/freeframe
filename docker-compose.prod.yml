@@ -12,7 +12,7 @@
 
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v2.11
     command:
       - --api.dashboard=false
       - --providers.docker=true
@@ -27,7 +27,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
     restart: unless-stopped
 
@@ -69,6 +69,8 @@ services:
       dockerfile: apps/api/Dockerfile.prod
     env_file:
       - .env.prod
+    environment:
+      - DISABLE_DOCS=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,13 +92,19 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
+      # HTTP router (always active)
       - traefik.http.routers.api.rule=PathPrefix(`/api`)
-      - traefik.http.routers.api.entrypoints=web,websecure
-      - traefik.http.routers.api.tls.certresolver=letsencrypt
+      - traefik.http.routers.api.entrypoints=web
       - traefik.http.routers.api.middlewares=strip-api-prefix
+      # HTTPS router (active when SSL is configured)
+      - traefik.http.routers.api-secure.rule=PathPrefix(`/api`)
+      - traefik.http.routers.api-secure.entrypoints=websecure
+      - traefik.http.routers.api-secure.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-secure.middlewares=strip-api-prefix
+      - traefik.http.routers.api-secure.service=api
+      # Shared
       - traefik.http.middlewares.strip-api-prefix.stripprefix.prefixes=/api
       - traefik.http.services.api.loadbalancer.server.port=8000
-      - traefik.http.routers.api.service=api
     restart: unless-stopped
 
   worker:
@@ -110,7 +118,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A apps.api.tasks.celery_app worker -Q transcoding -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning
+    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q transcoding -c $${TRANSCODING_CONCURRENCY:-2} --loglevel=warning"
     restart: unless-stopped
 
   email_worker:
@@ -122,7 +130,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c $${EMAIL_CONCURRENCY:-2} --loglevel=warning
+    command: sh -c "celery -A apps.api.tasks.celery_app worker -Q email_high,email_low -c $${EMAIL_CONCURRENCY:-2} --loglevel=warning"
     restart: unless-stopped
 
   beat:
@@ -134,7 +142,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: celery -A apps.api.tasks.celery_app beat --loglevel=warning
+    command: sh -c "celery -A apps.api.tasks.celery_app beat --loglevel=warning"
     restart: unless-stopped
 
   web:
@@ -148,17 +156,23 @@ services:
     depends_on:
       - api
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 5s
       start_period: 15s
       retries: 3
     labels:
       - traefik.enable=true
+      # HTTP router (always active)
       - traefik.http.routers.web.rule=PathPrefix(`/`)
-      - traefik.http.routers.web.entrypoints=web,websecure
-      - traefik.http.routers.web.tls.certresolver=letsencrypt
+      - traefik.http.routers.web.entrypoints=web
       - traefik.http.routers.web.priority=1
+      # HTTPS router (active when SSL is configured)
+      - traefik.http.routers.web-secure.rule=PathPrefix(`/`)
+      - traefik.http.routers.web-secure.entrypoints=websecure
+      - traefik.http.routers.web-secure.tls.certresolver=letsencrypt
+      - traefik.http.routers.web-secure.priority=1
+      - traefik.http.routers.web-secure.service=web
       - traefik.http.services.web.loadbalancer.server.port=3000
     restart: unless-stopped
 
