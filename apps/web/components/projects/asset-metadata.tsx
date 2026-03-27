@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import useSWR, { mutate as globalMutate } from 'swr'
-import * as Select from '@radix-ui/react-select'
 import { Star, ChevronDown, Check, CalendarDays, Tag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -17,59 +16,6 @@ import type {
   User,
   MetadataFieldType,
 } from '@/types'
-
-// ─── Status selector ─────────────────────────────────────────────────────────
-
-const STATUS_OPTIONS: { value: AssetStatus; label: string; className: string }[] = [
-  { value: 'draft', label: 'Draft', className: 'text-text-secondary' },
-  { value: 'in_review', label: 'In Review', className: 'text-status-warning' },
-  { value: 'approved', label: 'Approved', className: 'text-status-success' },
-  { value: 'rejected', label: 'Rejected', className: 'text-status-error' },
-  { value: 'archived', label: 'Archived', className: 'text-text-tertiary' },
-]
-
-function StatusSelect({
-  value,
-  onChange,
-}: {
-  value: AssetStatus
-  onChange: (v: AssetStatus) => void
-}) {
-  const current = STATUS_OPTIONS.find((o) => o.value === value)
-  return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as AssetStatus)}>
-      <Select.Trigger
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2.5 h-8 text-sm transition-colors hover:bg-bg-tertiary focus:outline-none focus:ring-1 focus:ring-border-focus',
-          current?.className,
-        )}
-      >
-        <Select.Value />
-        <ChevronDown className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content className="z-50 min-w-[140px] overflow-hidden rounded-md border border-border bg-bg-secondary shadow-xl">
-          <Select.Viewport className="p-1">
-            {STATUS_OPTIONS.map((opt) => (
-              <Select.Item
-                key={opt.value}
-                value={opt.value}
-                className="relative flex items-center gap-2 rounded-sm px-7 py-1.5 text-sm outline-none data-[highlighted]:bg-bg-hover cursor-pointer"
-              >
-                <Select.ItemIndicator className="absolute left-2">
-                  <Check className="h-3.5 w-3.5 text-accent" />
-                </Select.ItemIndicator>
-                <Select.ItemText>
-                  <span className={opt.className}>{opt.label}</span>
-                </Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
-  )
-}
 
 // ─── Star rating ──────────────────────────────────────────────────────────────
 

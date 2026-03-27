@@ -116,7 +116,6 @@ export function AssetGrid({
   onAssetDelete,
   actions,
 }: AssetGridProps) {
-  const [searchQuery] = React.useState('')
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set())
   const [selectedFolderIds, setSelectedFolderIds] = React.useState<Set<string>>(new Set())
   const [moveDialogOpen, setMoveDialogOpen] = React.useState(false)
@@ -174,11 +173,6 @@ export function AssetGrid({
   const filtered = React.useMemo(() => {
     let result = [...assets]
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      result = result.filter((a) => a.name.toLowerCase().includes(q))
-    }
-
     if (sortKey !== 'custom') {
       result.sort((a, b) => {
         let cmp = 0
@@ -196,7 +190,7 @@ export function AssetGrid({
     }
 
     return result
-  }, [assets, searchQuery, sortKey, sortDirection])
+  }, [assets, sortKey, sortDirection])
 
   const showFolders = !flattenFolders && folders && folders.length > 0
 
@@ -328,8 +322,8 @@ export function AssetGrid({
           <EmptyState
             icon={Layers}
             title="No assets"
-            description={searchQuery ? 'No assets match your search.' : 'Upload your first asset to get started.'}
-            action={!searchQuery && onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
+            description="Upload your first asset to get started."
+            action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
           />
         </div>
       ) : layout === 'grid' && filtered.length > 0 ? (
