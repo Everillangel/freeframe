@@ -296,11 +296,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               asset={asset}
               version={currentVersion as any}
               annotationCanvas={
-                isDrawingMode ? (
-                  <AnnotationCanvas
-                    onSave={(data) => setAnnotationData(data)}
-                  />
-                ) : undefined
+                <>
+                  <AnnotationOverlay key={focusedCommentId ?? 'none'} />
+                  {isDrawingMode && (
+                    <AnnotationCanvas
+                      onSave={(data) => setAnnotationData(data)}
+                    />
+                  )}
+                </>
               }
             />
           </div>

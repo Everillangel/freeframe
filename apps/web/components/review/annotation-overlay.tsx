@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react'
 import { useReviewStore } from '@/stores/review-store'
 
 /**
- * Read-only overlay that renders a saved Fabric.js annotation on top of the video.
+ * Read-only overlay that renders a saved Fabric.js annotation on top of the media.
  * Shown when a comment with an annotation is focused/hovered.
  */
 export function AnnotationOverlay() {
@@ -16,37 +16,48 @@ export function AnnotationOverlay() {
     if (!activeAnnotation || !canvasRef.current || !containerRef.current) return
 
     let disposed = false
+    let fabricCanvas: any = null
 
-    const render = async () => {
+    // Defer to next frame so the DOM has been laid out (offsetWidth/Height are valid)
+    const rafId = requestAnimationFrame(async () => {
+      if (disposed || !canvasRef.current || !containerRef.current) return
+
       const { Canvas } = await import('fabric')
       if (disposed || !canvasRef.current || !containerRef.current) return
 
-      const { width, height } = containerRef.current.getBoundingClientRect()
-      const w = Math.floor(width)
-      const h = Math.floor(height)
+      // Use offsetWidth/offsetHeight — layout dimensions before CSS transforms
+      let w = containerRef.current.offsetWidth
+      let h = containerRef.current.offsetHeight
 
-      const canvas = new Canvas(canvasRef.current, {
+      // Fallback to getBoundingClientRect if offset returns 0
+      if (!w || !h) {
+        const rect = containerRef.current.getBoundingClientRect()
+        w = Math.floor(rect.width)
+        h = Math.floor(rect.height)
+      }
+
+      if (!w || !h) return // container still has no size
+
+      fabricCanvas = new Canvas(canvasRef.current, {
         selection: false,
         renderOnAddRemove: false,
         skipTargetFind: true,
         interactive: false,
       })
 
-      canvas.setDimensions({ width: w, height: h })
+      fabricCanvas.setDimensions({ width: w, height: h })
 
       try {
-        // The drawing_data contains the original canvas dimensions + objects
-        const data = activeAnnotation as any
-        const origWidth = data.width || w
-        const origHeight = data.height || h
+        const data = activeAnnotation as Record<string, unknown>
+        const origWidth = (data.width as number) || w
+        const origHeight = (data.height as number) || h
         const scaleX = w / origWidth
         const scaleY = h / origHeight
 
-        await canvas.loadFromJSON(activeAnnotation)
+        await fabricCanvas.loadFromJSON(activeAnnotation)
 
-        // Scale objects to fit current container size
         if (scaleX !== 1 || scaleY !== 1) {
-          canvas.getObjects().forEach((obj) => {
+          fabricCanvas.getObjects().forEach((obj: any) => {
             obj.set({
               left: (obj.left ?? 0) * scaleX,
               top: (obj.top ?? 0) * scaleY,
@@ -57,22 +68,18 @@ export function AnnotationOverlay() {
           })
         }
 
-        canvas.renderAll()
+        fabricCanvas.renderAll()
       } catch {
         // annotation data may be invalid
       }
-
-      return () => {
-        try { canvas.dispose() } catch { /* ignore */ }
-      }
-    }
-
-    let cleanup: (() => void) | undefined
-    render().then((fn) => { cleanup = fn })
+    })
 
     return () => {
       disposed = true
-      cleanup?.()
+      cancelAnimationFrame(rafId)
+      if (fabricCanvas) {
+        try { fabricCanvas.dispose() } catch { /* ignore */ }
+      }
     }
   }, [activeAnnotation])
 

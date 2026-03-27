@@ -79,7 +79,7 @@ interface SingleImageProps {
   onImageLoad: (width: number, height: number) => void
 }
 
-function SingleImage({ url, alt, containerRef, onImageLoad }: SingleImageProps) {
+function SingleImage({ url, alt, containerRef, onImageLoad, annotationOverlay }: SingleImageProps & { annotationOverlay?: React.ReactNode }) {
   const imgRef = React.useRef<HTMLImageElement>(null)
 
   const handleLoad = () => {
@@ -90,7 +90,7 @@ function SingleImage({ url, alt, containerRef, onImageLoad }: SingleImageProps) 
   }
 
   return (
-    <div ref={containerRef} className="relative flex items-center justify-center w-full h-full">
+    <div ref={containerRef} className="relative inline-flex items-center justify-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
@@ -100,6 +100,12 @@ function SingleImage({ url, alt, containerRef, onImageLoad }: SingleImageProps) 
         className="max-w-full max-h-full object-contain select-none"
         draggable={false}
       />
+      {/* Annotation overlay — positioned on top of the image, moves with zoom/pan */}
+      {annotationOverlay && (
+        <div className="absolute inset-0 pointer-events-none">
+          {annotationOverlay}
+        </div>
+      )}
     </div>
   )
 }
@@ -128,7 +134,14 @@ interface ImageViewerProps {
 }
 
 export function ImageViewer({ asset, version, className, annotationCanvas }: ImageViewerProps) {
-  const { isDrawingMode } = useReviewStore()
+  const { isDrawingMode, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
+
+  const handleImageClick = () => {
+    if (!isDrawingMode) {
+      setFocusedCommentId(null)
+      setActiveAnnotation(null)
+    }
+  }
 
   // For carousel: track current position
   const [carouselIndex, setCarouselIndex] = React.useState(0)
@@ -242,8 +255,8 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
 
   return (
     <div className={cn('relative flex h-full w-full flex-col overflow-hidden bg-bg-primary', className)}>
-      {/* Zoom/pan area */}
-      <div className="relative flex-1 overflow-hidden">
+      {/* Zoom/pan area — click to deselect comment & hide annotation */}
+      <div className="relative flex-1 overflow-hidden" onClick={handleImageClick}>
         <TransformWrapper
           key={currentUrl}
           initialScale={1}
@@ -258,13 +271,14 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
             <>
               <TransformComponent
                 wrapperStyle={{ width: '100%', height: '100%' }}
-                contentStyle={{ width: '100%', height: '100%' }}
+                contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 <SingleImage
                   url={currentUrl}
                   alt={asset.name}
                   containerRef={containerRef}
                   onImageLoad={handleImageLoad}
+                  annotationOverlay={annotationCanvas}
                 />
               </TransformComponent>
 
@@ -272,26 +286,6 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
             </>
           )}
         </TransformWrapper>
-
-        {/* Annotation canvas overlay — sized to natural image dimensions */}
-        {annotationCanvas && imageDimensions && (
-          <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-            style={{ pointerEvents: isDrawingMode ? 'auto' : 'none' }}
-          >
-            <div
-              style={{
-                width: imageDimensions.w,
-                height: imageDimensions.h,
-                maxWidth: '100%',
-                maxHeight: '100%',
-                position: 'relative',
-              }}
-            >
-              {annotationCanvas}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Carousel navigation */}
