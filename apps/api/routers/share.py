@@ -65,6 +65,31 @@ def _get_folder(db: Session, folder_id: uuid.UUID) -> Folder:
     return folder
 
 
+def _validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
+    """Validate that an asset belongs to a share link (folder, asset, project, or multi-share)."""
+    if link.folder_id:
+        if asset.folder_id != link.folder_id:
+            if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):
+                raise HTTPException(status_code=403, detail="Asset is not within the shared folder")
+    elif link.asset_id:
+        if asset.id != link.asset_id:
+            raise HTTPException(status_code=403, detail="Asset does not match share link")
+    elif link.project_id:
+        if asset.project_id != link.project_id:
+            raise HTTPException(status_code=403, detail="Asset is not within the shared project")
+        # For multi-share links, also check ShareLinkItem entries
+        multi_items = db.query(ShareLinkItem).filter(ShareLinkItem.share_link_id == link.id).all()
+        if multi_items:
+            multi_asset_ids = {item.asset_id for item in multi_items if item.asset_id}
+            multi_folder_ids = {item.folder_id for item in multi_items if item.folder_id}
+            if asset.id not in multi_asset_ids:
+                # Check if asset is in one of the shared folders
+                if not any(asset.folder_id == fid or (asset.folder_id and _is_descendant_of(db, asset.folder_id, fid)) for fid in multi_folder_ids):
+                    raise HTTPException(status_code=403, detail="Asset is not in the shared items")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid share link")
+
+
 def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
     if link.project_id:
         return link.project_id
@@ -1004,23 +1029,39 @@ def add_asset_to_share_link(
     if link.asset_id == asset_id:
         return {"detail": "Asset already included in this share link"}
 
-    # If this is a single-asset share link, convert to project-level share
+    # Check if asset is already in share_link_items
+    existing_item = db.query(ShareLinkItem).filter(
+        ShareLinkItem.share_link_id == link.id,
+        ShareLinkItem.asset_id == asset_id,
+    ).first()
+    if existing_item:
+        return {"detail": "Asset already included in this share link"}
+
+    # If this is a single-asset share link, migrate to multi-item mode
     if link.asset_id and not link.project_id:
+        old_asset_id = link.asset_id
         link.project_id = link_project_id
         link.asset_id = None
         db.flush()
+        # Add the original asset as a ShareLinkItem
+        db.add(ShareLinkItem(share_link_id=link.id, asset_id=old_asset_id))
 
-    # If this is a folder-only share, convert to project-level
+    # If this is a folder-only share, migrate to multi-item mode
     if link.folder_id and not link.project_id:
+        old_folder_id = link.folder_id
         link.project_id = link_project_id
         link.folder_id = None
         db.flush()
+        # Add the original folder as a ShareLinkItem
+        db.add(ShareLinkItem(share_link_id=link.id, folder_id=old_folder_id))
 
     # Set project_id if not yet set
     if not link.project_id:
         link.project_id = link_project_id or asset.project_id
         db.flush()
 
+    # Add the new asset
+    db.add(ShareLinkItem(share_link_id=link.id, asset_id=asset_id))
     db.commit()
     return {"detail": "Asset added to share link"}
 
@@ -1118,6 +1159,67 @@ def get_folder_share_assets(
     is_project_share = link.project_id is not None
     if not link.folder_id and not is_project_share:
         raise HTTPException(status_code=400, detail="This share link is not a folder or project share")
+
+    # Check if this is a multi-share (project_id set with items in share_link_items)
+    multi_share_items = db.query(ShareLinkItem).filter(ShareLinkItem.share_link_id == link.id).all() if is_project_share else []
+    is_multi_share = len(multi_share_items) > 0
+
+    # For multi-share links at the root level, return only the selected items
+    if is_multi_share and not folder_id:
+        multi_asset_ids = [item.asset_id for item in multi_share_items if item.asset_id]
+        multi_folder_ids = [item.folder_id for item in multi_share_items if item.folder_id]
+
+        # Get shared folders
+        subfolder_items = []
+        if multi_folder_ids:
+            shared_folders = db.query(Folder).filter(
+                Folder.id.in_(multi_folder_ids),
+                Folder.deleted_at.is_(None),
+            ).order_by(Folder.name).all()
+            for sf in shared_folders:
+                asset_count = db.query(sa_func.count(Asset.id)).filter(
+                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
+                ).scalar() or 0
+                child_folder_count = db.query(sa_func.count(Folder.id)).filter(
+                    Folder.parent_id == sf.id, Folder.deleted_at.is_(None),
+                ).scalar() or 0
+                thumb_urls: list[str] = []
+                preview_assets = db.query(Asset).filter(
+                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
+                ).order_by(Asset.created_at.desc()).limit(4).all()
+                for pa in preview_assets:
+                    mf = _get_latest_media_file(db, pa.id)
+                    if mf and mf.s3_key_thumbnail:
+                        thumb_urls.append(generate_presigned_get_url(mf.s3_key_thumbnail))
+                subfolder_items.append(FolderShareSubfolder(
+                    id=sf.id, name=sf.name, item_count=asset_count + child_folder_count, thumbnail_urls=thumb_urls,
+                ))
+
+        # Get shared assets
+        asset_items = []
+        if multi_asset_ids:
+            total = len(multi_asset_ids)
+            offset = (page - 1) * per_page
+            shared_assets = db.query(Asset).filter(
+                Asset.id.in_(multi_asset_ids), Asset.deleted_at.is_(None),
+            ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
+            for a in shared_assets:
+                mf = _get_latest_media_file(db, a.id)
+                thumbnail_url = generate_presigned_get_url(mf.s3_key_thumbnail) if mf and mf.s3_key_thumbnail else None
+                comment_count = db.query(sa_func.count(Comment.id)).filter(
+                    Comment.asset_id == a.id, Comment.deleted_at.is_(None),
+                ).scalar() or 0
+                asset_items.append(FolderShareAssetItem(
+                    id=a.id, name=a.name, asset_type=a.asset_type.value if hasattr(a.asset_type, 'value') else str(a.asset_type),
+                    thumbnail_url=thumbnail_url, created_at=a.created_at.isoformat() if a.created_at else "",
+                    file_size_bytes=mf.file_size_bytes if mf else 0, comment_count=comment_count,
+                ))
+        else:
+            total = 0
+
+        return FolderShareAssetsResponse(
+            subfolders=subfolder_items, assets=asset_items, total=total, page=page, per_page=per_page,
+        )
 
     # Determine which folder to list contents from
     # For project shares, target_folder_id=None means project root
@@ -1253,20 +1355,7 @@ def get_share_stream_url(
     asset = _get_asset(db, asset_id)
 
     # Validate asset belongs to this share
-    if link.folder_id:
-        # Folder share: asset must be in the shared folder or a descendant
-        if asset.folder_id != link.folder_id:
-            if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):
-                raise HTTPException(status_code=403, detail="Asset is not within the shared folder")
-    elif link.asset_id:
-        if asset.id != link.asset_id:
-            raise HTTPException(status_code=403, detail="Asset does not match share link")
-    elif link.project_id:
-        # Project root share: asset must belong to this project
-        if asset.project_id != link.project_id:
-            raise HTTPException(status_code=403, detail="Asset is not within the shared project")
-    else:
-        raise HTTPException(status_code=400, detail="Invalid share link")
+    _validate_asset_in_share(db, link, asset)
 
     media_file = _get_latest_media_file(db, asset.id)
     if not media_file:
@@ -1316,15 +1405,7 @@ def get_share_thumbnail_url(
     asset = _get_asset(db, asset_id)
 
     # Validate asset belongs to this share
-    if link.folder_id:
-        if asset.folder_id != link.folder_id:
-            if not asset.folder_id or not _is_descendant_of(db, asset.folder_id, link.folder_id):
-                raise HTTPException(status_code=403, detail="Asset is not within the shared folder")
-    elif link.asset_id:
-        if asset.id != link.asset_id:
-            raise HTTPException(status_code=403, detail="Asset does not match share link")
-    else:
-        raise HTTPException(status_code=400, detail="Invalid share link")
+    _validate_asset_in_share(db, link, asset)
 
     media_file = _get_latest_media_file(db, asset.id)
     if not media_file or not media_file.s3_key_thumbnail:
