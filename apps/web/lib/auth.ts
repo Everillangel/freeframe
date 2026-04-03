@@ -32,7 +32,22 @@ export function clearTokens(): void {
   window.location.href = '/login'
 }
 
+// Deduplicate concurrent refresh calls — when access token expires, multiple
+// API calls may simultaneously get 401 and try to refresh. Only one should run.
+let _refreshPromise: Promise<string | null> | null = null
+
 export async function refreshAccessToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise
+
+  _refreshPromise = _doRefresh()
+  try {
+    return await _refreshPromise
+  } finally {
+    _refreshPromise = null
+  }
+}
+
+async function _doRefresh(): Promise<string | null> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) {
     clearTokens()
