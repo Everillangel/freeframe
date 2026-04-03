@@ -1114,13 +1114,6 @@ export function CommentPanel({
             <Search className="h-4 w-4" />
           </button>
 
-          {/* More */}
-          <button
-            className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
-            title="More"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
