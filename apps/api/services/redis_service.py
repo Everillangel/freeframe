@@ -132,3 +132,23 @@ def check_rate_limit(
     pipe.expire(key, window_seconds, nx=True)
     pipe.execute()
     return True, 0
+
+
+# ── Share link password sessions ──────────────────────────────────────────────
+
+SHARE_SESSION_PREFIX = "share_session:"
+SHARE_SESSION_EXPIRY_SECONDS = 3600  # 1 hour
+
+
+def create_share_session(token: str, session_id: str) -> None:
+    """Store a session after successful password verification."""
+    r = get_redis()
+    key = f"{SHARE_SESSION_PREFIX}{token}:{session_id}"
+    r.setex(key, SHARE_SESSION_EXPIRY_SECONDS, "1")
+
+
+def verify_share_session(token: str, session_id: str) -> bool:
+    """Check if a valid password session exists for this share link."""
+    r = get_redis()
+    key = f"{SHARE_SESSION_PREFIX}{token}:{session_id}"
+    return r.exists(key) > 0
