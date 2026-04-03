@@ -110,3 +110,78 @@ class TestRateLimitDependency:
         dep(mock_request)
 
         mock_check.assert_called_once_with("192.168.1.1", "test", 5, 60)
+
+
+class TestGlobalRateLimitMiddleware:
+    """Tests for the global rate limit middleware."""
+
+    def test_exempt_paths_skipped(self):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware, EXEMPT_PATHS
+
+        assert "/health" in EXEMPT_PATHS
+        assert "/docs" in EXEMPT_PATHS
+        assert "/redoc" in EXEMPT_PATHS
+        assert "/openapi.json" in EXEMPT_PATHS
+
+    @patch("apps.api.middleware.global_rate_limit.get_redis")
+    def test_get_identity_extracts_user_from_jwt(self, mock_get_redis):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+        from apps.api.config import settings
+
+        middleware = GlobalRateLimitMiddleware(app=MagicMock())
+
+        from jose import jwt
+        token = jwt.encode(
+            {"sub": "user-123", "type": "access"},
+            settings.jwt_secret,
+            algorithm=settings.jwt_algorithm,
+        )
+        mock_request = MagicMock()
+        mock_request.headers.get.return_value = f"Bearer {token}"
+
+        identity = middleware._get_identity(mock_request)
+        assert identity == "user:user-123"
+
+    def test_get_identity_falls_back_to_ip(self):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        middleware = GlobalRateLimitMiddleware(app=MagicMock())
+        mock_request = MagicMock()
+        mock_request.headers.get.side_effect = lambda key, default="": {
+            "authorization": "",
+            "x-real-ip": "203.0.113.1",
+        }.get(key, default)
+
+        identity = middleware._get_identity(mock_request)
+        assert identity == "ip:203.0.113.1"
+
+    @patch("apps.api.middleware.global_rate_limit.get_redis")
+    def test_check_allows_under_limit(self, mock_get_redis):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = None
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+        mock_get_redis.return_value = mock_redis
+
+        middleware = GlobalRateLimitMiddleware(app=MagicMock())
+        allowed, retry_after = middleware._check("user:123", "global_r", 600)
+
+        assert allowed is True
+        assert retry_after == 0
+
+    @patch("apps.api.middleware.global_rate_limit.get_redis")
+    def test_check_blocks_over_limit(self, mock_get_redis):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = "600"
+        mock_redis.ttl.return_value = 25
+        mock_get_redis.return_value = mock_redis
+
+        middleware = GlobalRateLimitMiddleware(app=MagicMock())
+        allowed, retry_after = middleware._check("user:123", "global_r", 600)
+
+        assert allowed is False
+        assert retry_after == 25

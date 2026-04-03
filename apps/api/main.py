@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import auth, users, projects, upload, events, assets, me, comments, approvals, share, metadata, branding, notifications, admin, setup, folders
 from .services.s3_service import ensure_bucket_exists
+from .middleware.global_rate_limit import GlobalRateLimitMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +37,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GlobalRateLimitMiddleware)
 
 app.include_router(auth.router)
 app.include_router(users.router)
