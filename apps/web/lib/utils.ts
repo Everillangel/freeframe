@@ -96,3 +96,9 @@ export function truncate(str: string, length: number): string {
   if (str.length <= length) return str
   return str.slice(0, length) + '...'
 }
+
+export function endOfDayISO(dateStr: string): string {
+  const d = new Date(dateStr)
+  d.setHours(23, 59, 59, 999)
+  return d.toISOString()
+}

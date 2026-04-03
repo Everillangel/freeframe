@@ -24,7 +24,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 import * as Switch from '@radix-ui/react-switch'
-import { cn } from '@/lib/utils'
+import { cn, endOfDayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import type { AssetResponse, Folder, ShareLink, ShareLinkAppearance } from '@/types'
@@ -39,6 +39,7 @@ interface ShareCreateDialogProps {
   assets: AssetResponse[]
   folders: Folder[]
   preselectedItem?: { type: 'folder' | 'asset'; id: string; name: string } | null
+  preselectedItems?: { type: 'folder' | 'asset'; id: string; name: string }[]
   /** Open dialog directly in result phase with a pre-created share link */
   initialResult?: CreatedShareResult | null
   onShareCreated: () => void
@@ -943,6 +944,7 @@ export function ShareCreateDialog({
   assets,
   folders,
   preselectedItem,
+  preselectedItems,
   initialResult,
   onShareCreated,
   onAdvancedSettings,
@@ -984,17 +986,43 @@ export function ShareCreateDialog({
             assetType: asset?.asset_type ?? 'image',
           })
         }
+      } else if (preselectedItems && preselectedItems.length > 0) {
+        for (const item of preselectedItems) {
+          const key = `${item.type}:${item.id}`
+          if (item.type === 'folder') {
+            initial.set(key, { type: 'folder', id: item.id, name: item.name })
+          } else {
+            const asset = assets.find(a => a.id === item.id)
+            if (asset) {
+              initial.set(key, {
+                type: 'asset',
+                id: item.id,
+                name: item.name,
+                thumbnailUrl: asset.thumbnail_url ?? null,
+                assetType: asset.asset_type ?? 'image',
+              })
+            } else {
+              initial.set(key, {
+                type: 'asset',
+                id: item.id,
+                name: item.name,
+                thumbnailUrl: null,
+                assetType: 'image',
+              })
+            }
+          }
+        }
       }
       setSelectedItems(initial)
       setConfigureDefaultTitle(computeDefaultTitle(initial))
       // Skip selection phase when we already know what to share
-      setPhase(initialResult ? 'result' : preselectedItem ? 'configure' : 'selection')
+      setPhase(initialResult ? 'result' : (preselectedItem || (preselectedItems && preselectedItems.length > 0)) ? 'configure' : 'selection')
       setCreating(false)
       setError(null)
       setCreatedResult(initialResult ?? null)
       setAllCreatedResults(initialResult ? [initialResult] : [])
     }
-  }, [open, preselectedItem, assets])
+  }, [open, preselectedItem, preselectedItems, assets])
 
   function handleToggle(item: SelectedItem) {
     const key = `${item.type}:${item.id}`
@@ -1020,38 +1048,57 @@ export function ShareCreateDialog({
 
       // Check if a specific item is selected (single asset or single folder)
       const items = Array.from(selectedItems.values())
-      const singleItem = items.length === 1 ? items[0] : null
 
-      if (singleItem?.type === 'asset') {
-        shareLink = await api.post<ShareLink>(`/assets/${singleItem.id}/share`, {
+      // Multi-item share — use the /share/multi endpoint
+      if (items.length >= 2) {
+        const body: Record<string, unknown> = {
+          asset_ids: items.filter(i => i.type === 'asset').map(i => i.id),
+          folder_ids: items.filter(i => i.type === 'folder').map(i => i.id),
           title: config.title,
-        })
-        itemType = 'asset'
-        thumbUrl = singleItem.thumbnailUrl
-      } else if (singleItem?.type === 'folder') {
-        shareLink = await api.post<ShareLink>(`/folders/${singleItem.id}/share`, {
-          title: config.title,
-        })
-      } else if (currentFolderId) {
-        shareLink = await api.post<ShareLink>(`/folders/${currentFolderId}/share`, {
-          title: config.title,
-        })
+          permission: config.allowComments ? 'comment' : 'view',
+          visibility: config.visibility,
+          allow_download: config.allowDownloads,
+          show_watermark: config.watermark,
+        }
+        if (config.passphrase) body.password = config.passphrase
+        if (config.expiresAt) body.expires_at = endOfDayISO(config.expiresAt)
+
+        const link = await api.post<ShareLink>(`/projects/${projectId}/share/multi`, body)
+        shareLink = link
       } else {
-        shareLink = await api.post<ShareLink>(`/projects/${projectId}/share`, {
-          title: config.title,
-        })
-      }
+        const singleItem = items.length === 1 ? items[0] : null
 
-      // Apply configured settings
-      const patches: Record<string, unknown> = {
-        visibility: config.visibility,
-        permission: config.allowComments ? 'comment' : 'view',
-        allow_download: config.allowDownloads,
-        show_watermark: config.watermark,
+        if (singleItem?.type === 'asset') {
+          shareLink = await api.post<ShareLink>(`/assets/${singleItem.id}/share`, {
+            title: config.title,
+          })
+          itemType = 'asset'
+          thumbUrl = singleItem.thumbnailUrl
+        } else if (singleItem?.type === 'folder') {
+          shareLink = await api.post<ShareLink>(`/folders/${singleItem.id}/share`, {
+            title: config.title,
+          })
+        } else if (currentFolderId) {
+          shareLink = await api.post<ShareLink>(`/folders/${currentFolderId}/share`, {
+            title: config.title,
+          })
+        } else {
+          shareLink = await api.post<ShareLink>(`/projects/${projectId}/share`, {
+            title: config.title,
+          })
+        }
+
+        // Apply configured settings
+        const patches: Record<string, unknown> = {
+          visibility: config.visibility,
+          permission: config.allowComments ? 'comment' : 'view',
+          allow_download: config.allowDownloads,
+          show_watermark: config.watermark,
+        }
+        if (config.passphrase) patches.password = config.passphrase
+        if (config.expiresAt) patches.expires_at = new Date(config.expiresAt).toISOString()
+        await api.patch(`/share/${shareLink.token}`, patches)
       }
-      if (config.passphrase) patches.password = config.passphrase
-      if (config.expiresAt) patches.expires_at = new Date(config.expiresAt).toISOString()
-      await api.patch(`/share/${shareLink.token}`, patches)
 
       onShareCreated()
       onOpenChange(false)
