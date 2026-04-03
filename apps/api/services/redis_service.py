@@ -117,21 +117,25 @@ def check_rate_limit(
     """
     Check if an IP has exceeded the rate limit for a given action.
     Returns (allowed, remaining_seconds_until_reset).
-    Uses a simple counter with TTL in Redis.
+    Uses a simple counter with TTL in Redis. Fails open if Redis is unavailable.
     """
-    r = get_redis()
-    key = f"{RATE_LIMIT_PREFIX}{action}:{ip}"
-    current = r.get(key)
+    try:
+        r = get_redis()
+        key = f"{RATE_LIMIT_PREFIX}{action}:{ip}"
+        current = r.get(key)
 
-    if current is not None and int(current) >= max_requests:
-        ttl = r.ttl(key)
-        return False, max(ttl, 1)
+        if current is not None and int(current) >= max_requests:
+            ttl = r.ttl(key)
+            return False, max(ttl, 1)
 
-    pipe = r.pipeline()
-    pipe.incr(key)
-    pipe.expire(key, window_seconds, nx=True)
-    pipe.execute()
-    return True, 0
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, window_seconds, nx=True)
+        pipe.execute()
+        return True, 0
+    except Exception:
+        # Fail open — allow the request if Redis is unavailable
+        return True, 0
 
 
 # ── Share link password sessions ──────────────────────────────────────────────

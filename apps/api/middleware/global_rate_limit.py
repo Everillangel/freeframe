@@ -83,16 +83,20 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
         return f"ip:{ip}"
 
     def _check(self, identity: str, action: str, max_requests: int) -> tuple[bool, int]:
-        r = get_redis()
-        key = f"grl:{action}:{identity}"
-        current = r.get(key)
+        try:
+            r = get_redis()
+            key = f"grl:{action}:{identity}"
+            current = r.get(key)
 
-        if current is not None and int(current) >= max_requests:
-            ttl = r.ttl(key)
-            return False, max(ttl, 1)
+            if current is not None and int(current) >= max_requests:
+                ttl = r.ttl(key)
+                return False, max(ttl, 1)
 
-        pipe = r.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, WINDOW_SECONDS, nx=True)
-        pipe.execute()
-        return True, 0
+            pipe = r.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, WINDOW_SECONDS, nx=True)
+            pipe.execute()
+            return True, 0
+        except Exception:
+            # Fail open — allow the request if Redis is unavailable
+            return True, 0
