@@ -268,6 +268,89 @@ Email sending is I/O-bound and lightweight. The default of `2` is sufficient for
 
 ---
 
+## Monitoring
+
+### Health Check
+
+The API exposes a health endpoint:
+
+```
+GET /health → { "status": "ok" }
+```
+
+Use this for uptime monitoring (UptimeRobot, Healthchecks.io, etc.) or Docker health checks.
+
+### Logs
+
+```bash
+# Follow all service logs
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f
+
+# Follow a specific service
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api
+
+# Last 100 lines
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail 100 api
+```
+
+### Key Metrics to Watch
+
+| Metric | How to Check | Warning Sign |
+|--------|-------------|--------------|
+| Disk space | `df -h` | > 80% used |
+| Memory | `free -m` | Swap in use |
+| API response | `curl -s localhost/health` | Non-200 response |
+| Worker queue | `docker compose exec api celery -A tasks.celery_app inspect active` | Growing backlog |
+| Database connections | `docker compose exec postgres psql -U freeframe -c "SELECT count(*) FROM pg_stat_activity;"` | > 80% of max |
+
+---
+
+## Backups
+
+### Database Backup
+
+```bash
+# One-time backup
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec postgres \
+  pg_dump -U freeframe freeframe | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# Restore from backup
+gunzip -c backup_20260403_120000.sql.gz | \
+  docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres \
+  psql -U freeframe freeframe
+```
+
+### Automated Daily Backups
+
+Add a cron job on your server:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (runs daily at 2 AM, keeps 30 days)
+0 2 * * * cd /path/to/freeframe && docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres pg_dump -U freeframe freeframe | gzip > /path/to/backups/freeframe_$(date +\%Y\%m\%d).sql.gz && find /path/to/backups -name "freeframe_*.sql.gz" -mtime +30 -delete
+```
+
+### S3 Media Backup
+
+Your media files are already in S3. For redundancy:
+
+- **AWS S3**: Enable [versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) and [cross-region replication](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html)
+- **Cloudflare R2**: Use [Sippy](https://developers.cloudflare.com/r2/data-migration/sippy/) for incremental migration/backup
+- **Self-hosted MinIO**: Use [`mc mirror`](https://min.io/docs/minio/linux/reference/minio-mc/mc-mirror.html) to replicate to a second location
+
+### What to Back Up
+
+| Data | Location | Priority |
+|------|----------|----------|
+| Database | PostgreSQL | **Critical** — all users, projects, comments, share links |
+| Media files | S3 bucket | **Important** — uploaded assets and transcoded files |
+| Environment config | `.env.prod` | **Important** — save a copy outside the server |
+| SSL certificates | `letsencrypt/` volume | Low — Traefik auto-renews them |
+
+---
+
 ## Updating
 
 ```bash
@@ -276,7 +359,15 @@ git pull origin main
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 ```
 
-Database migrations run automatically on API startup. Always check the release notes before updating.
+Database migrations run automatically on API startup. Always check the [CHANGELOG](../CHANGELOG.md) before updating.
+
+### Update Checklist
+
+1. **Read the changelog** — check for breaking changes or new env vars
+2. **Backup the database** — `pg_dump` before updating (see [Backups](#backups))
+3. **Pull and rebuild** — `git pull && docker compose up -d --build`
+4. **Verify** — check `/health`, test login, spot-check a share link
+5. **Rollback if needed** — `git checkout v1.x.x && docker compose up -d --build`
 
 ---
 
