@@ -51,6 +51,10 @@ def _make_user(
     u.avatar_url = None
     u.created_at = datetime.now(timezone.utc)
     u.deleted_at = None
+    u.is_superadmin = False
+    u.email_verified = False
+    u.preferences = {}
+    u.invite_token = None
     return u
 
 
