@@ -43,14 +43,53 @@ jobs:
       - name: Install dependencies
         run: pip install -r apps/api/requirements.txt
 
+      - name: Verify test files exist
+        run: |
+          TEST_COUNT=$(find apps/api/tests -name 'test_*.py' | wc -l)
+          echo "Found $TEST_COUNT test files"
+          if [ "$TEST_COUNT" -lt 5 ]; then
+            echo "::error::Expected at least 5 test files but found $TEST_COUNT — test files may have been deleted"
+            exit 1
+          fi
+
       - name: Run tests
-        run: python -m pytest apps/api/tests/ -v --tb=short
+        run: |
+          python -m pytest apps/api/tests/ -v --tb=short 2>&1 | tee test-output.txt
+          # Extract passed count and enforce minimum
+          PASSED=$(grep -oP '\d+ passed' test-output.txt | grep -oP '\d+')
+          echo "Tests passed: $PASSED"
+          if [ -z "$PASSED" ] || [ "$PASSED" -lt 40 ]; then
+            echo "::error::Expected at least 40 tests to pass but got ${PASSED:-0} — tests may have been deleted or gutted"
+            exit 1
+          fi
+
+      - name: Verify critical files exist
+        run: |
+          # Ensure core backend files haven't been deleted
+          for f in \
+            apps/api/main.py \
+            apps/api/middleware/global_rate_limit.py \
+            apps/api/middleware/rate_limit.py \
+            apps/api/middleware/auth.py \
+            apps/api/routers/auth.py \
+            apps/api/routers/share.py \
+            apps/api/routers/upload.py \
+            apps/api/services/permissions.py \
+            apps/api/services/redis_service.py \
+          ; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Critical file missing: $f"
+              exit 1
+            fi
+          done
+          echo "All critical backend files present"
 
       - name: Check imports resolve
         run: |
           python -c "
           from apps.api.main import app
           print(f'FastAPI app loaded: {len(app.routes)} routes')
+          assert len(app.routes) >= 30, f'Expected 30+ routes but got {len(app.routes)} — routers may have been removed'
           "
 
   # ─── Frontend ─────────────────────────────────────────────────────────────────
@@ -74,17 +113,49 @@ jobs:
         with:
           version: 10
 
+      - name: Verify critical frontend files exist
+        run: |
+          for f in \
+            package.json \
+            app/layout.tsx \
+            app/share/\[token\]/page.tsx \
+            components/layout/sidebar.tsx \
+            components/review/review-provider.tsx \
+            components/review/comment-panel.tsx \
+            components/share/folder-share-viewer.tsx \
+          ; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Critical file missing: apps/web/$f"
+              exit 1
+            fi
+          done
+          echo "All critical frontend files present"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Type check
         run: pnpm exec tsc --noEmit
-        continue-on-error: true  # Types may have minor issues — don't block CI yet
+        continue-on-error: true
 
       - name: Build
         run: pnpm build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
+
+      - name: Verify build output
+        run: |
+          if [ ! -d ".next" ]; then
+            echo "::error::Build output directory .next does not exist"
+            exit 1
+          fi
+          # Check key pages were built
+          PAGE_COUNT=$(find .next -name '*.html' -o -name '*.js' | wc -l)
+          echo "Build produced $PAGE_COUNT output files"
+          if [ "$PAGE_COUNT" -lt 20 ]; then
+            echo "::error::Build produced too few files ($PAGE_COUNT) — pages may have been removed"
+            exit 1
+          fi
 
   # ─── Lint ─────────────────────────────────────────────────────────────────────
   lint:
@@ -124,4 +195,4 @@ jobs:
       - name: Lint frontend
         run: pnpm lint
         working-directory: apps/web
-        continue-on-error: true  # Don't block on lint warnings initially
+        continue-on-error: true
