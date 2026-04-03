@@ -1,5 +1,5 @@
 import redis
-import random
+import secrets
 from typing import Optional
 from ..config import settings
 
@@ -24,7 +24,7 @@ MAX_MAGIC_CODE_ATTEMPTS = 5
 
 def generate_magic_code() -> str:
     """Generate a 6-digit magic code."""
-    return str(random.randint(100000, 999999))
+    return str(secrets.randbelow(900000) + 100000)
 
 
 def store_magic_code(email: str, code: str) -> None:
