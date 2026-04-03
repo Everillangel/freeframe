@@ -34,6 +34,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface FolderShareViewerProps {
   token: string
+  shareSession?: string | null
   folderName: string
   title: string
   description: string | null
@@ -949,6 +950,7 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
 
 export function FolderShareViewer({
   token,
+  shareSession,
   folderName,
   title,
   description,
@@ -961,6 +963,8 @@ export function FolderShareViewer({
   branding,
   onAssetClick,
 }: FolderShareViewerProps) {
+  // Build share_session query param for all API calls
+  const sessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
   const [currentSubfolderId, setCurrentSubfolderId] = React.useState<string | null>(null)
   const [breadcrumbs, setBreadcrumbs] = React.useState<{ id: string; name: string }[]>([])
   const [searchQuery, setSearchQuery] = React.useState('')
@@ -1068,7 +1072,7 @@ export function FolderShareViewer({
     setSelectedAsset(null)
 
     fetch(
-      `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=1&per_page=${perPage}`,
+      `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=1&per_page=${perPage}${sessionParam}`,
     )
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load assets')
@@ -1096,7 +1100,7 @@ export function FolderShareViewer({
     setLoadingMore(true)
     try {
       const r = await fetch(
-        `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=${nextPage}&per_page=${perPage}`,
+        `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=${nextPage}&per_page=${perPage}${sessionParam}`,
       )
       if (!r.ok) throw new Error('Failed to load more')
       const data = (await r.json()) as FolderShareAssetsResponse

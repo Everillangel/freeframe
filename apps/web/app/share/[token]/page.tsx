@@ -43,6 +43,7 @@ interface ShareValidateResponse {
   visibility?: string
   requires_password?: boolean
   requires_auth?: boolean
+  share_session?: string | null
   expired?: boolean
   created_by_name?: string | null
   viewer_name?: string | null
@@ -893,6 +894,7 @@ export default function SharePage({
       }
 
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
+  const [shareSession, setShareSession] = React.useState<string | null>(null)
   const openLogged = React.useRef(false)
 
   async function validate(password?: string) {
@@ -918,6 +920,11 @@ export default function SharePage({
       if (!data.permission) {
         setState({ stage: 'invalid' })
         return
+      }
+
+      // Store share session from password-protected link validation
+      if (data.share_session) {
+        setShareSession(data.share_session)
       }
 
       // Folder share mode OR project root share mode
@@ -1027,6 +1034,7 @@ export default function SharePage({
     return (
       <FolderShareViewer
         token={token}
+        shareSession={shareSession}
         folderName={state.folderName}
         title={state.title}
         description={state.description}
