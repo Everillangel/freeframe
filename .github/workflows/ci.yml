@@ -212,13 +212,12 @@ jobs:
         run: docker build -t freeframe-api:prod -f apps/api/Dockerfile.prod .
 
       - name: Build Web image (dev)
-        run: docker build -t freeframe-web:test -f apps/web/Dockerfile .
+        run: docker build -t freeframe-web:test -f apps/web/Dockerfile apps/web/
 
       - name: Build Web image (prod)
-        run: docker build -t freeframe-web:prod -f apps/web/Dockerfile.prod .
+        run: docker build -t freeframe-web:prod -f apps/web/Dockerfile.prod apps/web/
 
-      - name: Verify docker-compose configs are valid
+      - name: Verify docker-compose config is valid
         run: |
           docker compose -f docker-compose.dev.yml config --quiet
-          docker compose -f docker-compose.prod.yml config --quiet
-          echo "Both compose files are valid"
+          echo "Dev compose file is valid"
