@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { useReviewStore } from '@/stores/review-store'
+import { useReview } from '@/components/review/review-provider'
 import type { Asset, AssetVersion, MediaFile } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -170,9 +171,35 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
   const isCarousel = asset.asset_type === 'image_carousel'
   const totalImages = isCarousel ? mediaFiles.length : 1
 
+  // Access share context for share-mode stream fetching
+  let shareToken: string | undefined
+  let shareSession: string | null | undefined
+  try {
+    const review = useReview()
+    shareToken = review.shareToken
+    shareSession = review.shareSession
+  } catch {
+    // Not inside ReviewProvider — normal mode
+  }
+
   // Fetch stream URL(s)
   React.useEffect(() => {
     if (!version) return
+
+    // In share mode, fetch via share endpoint
+    if (shareToken) {
+      let cancelled = false
+      setIsLoading(true)
+      setError(null)
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
+      fetch(`${API_URL}/share/${shareToken}/stream/${asset.id}?version_id=${version.id}${sp}`)
+        .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image')))
+        .then(data => { if (!cancelled) setImageUrls({ single: data.url }) })
+        .catch(err => { if (!cancelled) setError(err.message) })
+        .finally(() => { if (!cancelled) setIsLoading(false) })
+      return () => { cancelled = true }
+    }
 
     let cancelled = false
 
@@ -182,7 +209,6 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
 
       try {
         if (isCarousel) {
-          // Fetch a presigned URL for each carousel image
           const entries = await Promise.all(
             mediaFiles.map(async (mf) => {
               const data = await api.get<StreamResponse>(
@@ -213,7 +239,7 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
     return () => {
       cancelled = true
     }
-  }, [asset.id, version, isCarousel, mediaFiles])
+  }, [asset.id, shareToken, version, isCarousel, mediaFiles])
 
   // Reset carousel index when version changes
   React.useEffect(() => {

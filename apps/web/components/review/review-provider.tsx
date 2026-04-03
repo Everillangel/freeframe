@@ -27,6 +27,8 @@ interface CreateCommentPayload {
 interface ReviewContextValue {
   assetId: string;
   asset: AssetResponse | null;
+  shareToken?: string;
+  shareSession?: string | null;
   versions: AssetVersion[];
   comments: Comment[];
   isLoading: boolean;
@@ -49,12 +51,14 @@ const ReviewContext = createContext<ReviewContextValue | null>(null);
 interface ReviewProviderProps {
   assetId: string;
   shareToken?: string; // If set, uses share token API instead of authenticated API
+  shareSession?: string | null;
   children: React.ReactNode;
 }
 
 export function ReviewProvider({
   assetId,
   shareToken,
+  shareSession,
   children,
 }: ReviewProviderProps) {
   const [asset, setAsset] = useState<AssetResponse | null>(null);
@@ -276,6 +280,8 @@ export function ReviewProvider({
     () => ({
       assetId,
       asset,
+      shareToken,
+      shareSession,
       versions,
       comments,
       isLoading,

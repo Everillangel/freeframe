@@ -15,6 +15,7 @@ import {
 import { cn, formatTime, formatTimecode, formatFrames } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useReviewStore, type TimeFormat } from '@/stores/review-store'
+import { useReview } from '@/components/review/review-provider'
 import { ProgressBar } from './progress-bar'
 import type { Asset, AssetVersion, Comment } from '@/types'
 
@@ -63,9 +64,35 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
   const [loop, setLoop] = React.useState(false)
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null)
 
+  // Access share context for share-mode stream fetching
+  let shareToken: string | undefined
+  let shareSession: string | null | undefined
+  try {
+    const review = useReview()
+    shareToken = review.shareToken
+    shareSession = review.shareSession
+  } catch {
+    // Not inside ReviewProvider — normal mode
+  }
+
   // Fetch presigned URL
   React.useEffect(() => {
     if (!version) return
+
+    // In share mode, fetch via share endpoint
+    if (shareToken) {
+      let cancelled = false
+      setIsLoading(true)
+      setError(null)
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
+      fetch(`${API_URL}/share/${shareToken}/stream/${asset.id}?version_id=${version.id}${sp}`)
+        .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load audio')))
+        .then(data => { if (!cancelled) setAudioUrl(data.url) })
+        .catch(err => { if (!cancelled) { setError(err.message); setIsLoading(false) } })
+      return () => { cancelled = true }
+    }
+
     let cancelled = false
 
     const fetchUrl = async () => {
@@ -89,7 +116,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
 
     fetchUrl()
     return () => { cancelled = true }
-  }, [asset.id, version])
+  }, [asset.id, shareToken, version])
 
   // Initialize WaveSurfer
   React.useEffect(() => {
