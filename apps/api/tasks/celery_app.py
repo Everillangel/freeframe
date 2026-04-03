@@ -1,6 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from kombu import Queue
+from kombu.exceptions import OperationalError
 
 try:
     from ..config import settings
@@ -63,16 +64,35 @@ celery_app.conf.beat_schedule = {
 }
 
 
-def send_task_safe(task, *args, **kwargs):
-    """Send a Celery task with automatic reconnect on stale connection.
+import threading
+import logging
 
-    In uvicorn's reload mode, the Celery connection pool can become stale.
-    This wrapper catches connection errors and retries with a fresh connection.
-    """
-    from kombu.exceptions import OperationalError
+_task_logger = logging.getLogger("celery.dispatch")
+
+
+def _dispatch_task(task, args, kwargs):
+    """Actually send the task to Celery broker (runs in background thread)."""
     try:
-        return task.delay(*args, **kwargs)
+        task.delay(*args, **kwargs)
     except (OperationalError, ConnectionError, OSError):
-        # Force fresh connection by acquiring a new producer
-        with celery_app.producer_or_acquire() as producer:
-            return task.apply_async(args=args, kwargs=kwargs, producer=producer)
+        try:
+            with celery_app.producer_or_acquire() as producer:
+                task.apply_async(args=args, kwargs=kwargs, producer=producer)
+        except Exception:
+            _task_logger.warning("Failed to dispatch task %s after retry", task.name)
+    except Exception:
+        _task_logger.warning("Failed to dispatch task %s", task.name)
+
+
+def send_task_safe(task, *args, **kwargs):
+    """Send a Celery task in a background thread so it never blocks the API response.
+
+    Broker connections can take seconds (especially with pool_limit=0).
+    This ensures the API returns immediately while the task is dispatched async.
+    """
+    thread = threading.Thread(
+        target=_dispatch_task,
+        args=(task, args, kwargs),
+        daemon=True,
+    )
+    thread.start()
