@@ -22,7 +22,6 @@ interface CreateCommentPayload {
   timecode_start?: number;
   timecode_end?: number;
   annotation?: { drawing_data: Record<string, unknown> };
-  annotation?: Record<string, unknown>;
 }
 
 interface ReviewContextValue {
