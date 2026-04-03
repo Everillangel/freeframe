@@ -339,6 +339,8 @@ interface GuestComment {
   guest_name: string
   guest_email: string
   author_name?: string
+  author?: { id: string; name: string; avatar_url?: string | null } | null
+  guest_author?: { id: string; name: string; email: string } | null
   created_at: string
   timecode_start?: number | null
   replies?: GuestComment[]
@@ -438,7 +440,7 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
   return (
     <div className="px-4 py-3 space-y-1">
       {comments.map((comment, i) => {
-        const name = comment.guest_name || comment.author_name || 'User'
+        const name = comment.author?.name || comment.guest_author?.name || comment.guest_name || comment.author_name || 'User'
         const color = getAvatarColor(name)
         return (
           <div key={comment.id} className="py-3 border-b border-border last:border-0">
@@ -471,7 +473,7 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
             {comment.replies && comment.replies.length > 0 && (
               <div className="ml-11 mt-2 space-y-2 border-l-2 border-border pl-3">
                 {comment.replies.map((r) => {
-                  const rName = r.guest_name || r.author_name || 'User'
+                  const rName = r.author?.name || r.guest_author?.name || r.guest_name || r.author_name || 'User'
                   const rColor = getAvatarColor(rName)
                   return (
                     <div key={r.id} className="flex items-start gap-2.5 py-1">
