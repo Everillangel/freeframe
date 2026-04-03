@@ -5,6 +5,16 @@ All notable changes to FreeFrame are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-04-04
+
+### Security
+- **Setup guard middleware** — all API routes return 503 and frontend redirects to `/setup` until initial superadmin is created. Exempt: `/setup/*`, `/health`, `/docs`, `/share/*`. Cached after first check for zero overhead.
+
+### Fixed
+- Branch protection `lock_branch` was preventing PR merges — unlocked while keeping review requirement
+
+---
+
 ## [1.1.0] - 2026-04-03
 
 ### Security
