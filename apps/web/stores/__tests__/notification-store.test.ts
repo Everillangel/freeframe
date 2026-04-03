@@ -20,6 +20,10 @@ const mockNotifications: Notification[] = [
     type: 'comment',
     read: false,
     created_at: '2024-01-01T00:00:00Z',
+    asset_name: null,
+    actor_name: null,
+    comment_preview: null,
+    project_id: null,
   },
   {
     id: 'n2',
@@ -29,6 +33,10 @@ const mockNotifications: Notification[] = [
     type: 'mention',
     read: true,
     created_at: '2024-01-02T00:00:00Z',
+    asset_name: null,
+    actor_name: null,
+    comment_preview: null,
+    project_id: null,
   },
 ]
 

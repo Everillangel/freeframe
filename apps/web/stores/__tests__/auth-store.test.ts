@@ -23,6 +23,7 @@ const mockUser: User = {
   status: 'active',
   is_superadmin: false,
   email_verified: true,
+  preferences: {},
   created_at: '2024-01-01T00:00:00Z',
   deleted_at: null,
 }
