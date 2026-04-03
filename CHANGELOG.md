@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SSE event auth** — token query param support + project membership validation (previously had no access control)
 - **Share link password sessions** — 1-hour Redis sessions after password verification so users don't re-enter passwords
 - **Multi-share scope enforcement** — share links only expose specifically selected items, not the entire project
+- **Rate limiters fail open** — graceful degradation when Redis is unavailable (no 500 errors)
+- **CI tamper guards** — minimum test count, critical file checks, and route count assertions prevent PRs that delete tests from passing
 
 ### Added
 - **Multi-item share links** — select multiple assets/folders and create a single share link (`ShareLinkItem` model + `POST /projects/{id}/share/multi` endpoint)
@@ -29,9 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SSE connection pooling** — Redis `ConnectionPool` prevents connection exhaustion under load
 - **Non-blocking Celery dispatch** — background daemon thread so API never blocks on broker connections
 - **Token refresh deduplication** — concurrent 401s share a single refresh call, preventing logout races
-- **GitHub Actions CI** — backend tests, frontend production build, and lint on every PR
-- **Dependabot** — automated weekly dependency updates for pip, npm, GitHub Actions, Docker
+- **GitHub Actions CI** — 4 parallel jobs: backend tests, frontend build, lint, Docker build
+- **CI tamper-proof guards** — minimum test file count (5), minimum passing tests (40), critical file existence checks, route count assertions
+- **Docker build CI** — all 4 Dockerfiles (api dev/prod, web dev/prod) built and verified on every PR
+- **Dependabot** — automated weekly dependency updates for pip, npm, GitHub Actions, Docker (major versions ignored)
 - **Community files** — CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md, issue templates, PR template
+- **GitHub Discussions** enabled
+- **10 repo topics** — media-review, frame-io-alternative, self-hosted, fastapi, nextjs, etc.
 
 ### Fixed
 - Share link viewer 403 errors — share token now flows through `ReviewProvider` → `ImageViewer` / `AudioPlayer` for stream URL fetching
@@ -57,9 +63,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend `guest_comment` activity log crash when authenticated user comments via share link
 - Pre-existing test failures in `test_auth` and `test_projects` (missing mock fields)
 - `playheadTime` and `seekTarget` reset on asset change in review store
+- Web Dockerfiles updated to use pnpm + Node 20 (were using npm + Node 18)
+- TypeScript annotation errors in test mocks (missing `preferences`, `asset_name`, etc.)
 
 ### Changed
 - `review-store`: added `setIsDrawingMode()` for explicit control (not just toggle)
+- Dependabot configured to skip major version bumps (manual migration only)
+- Branch protection: force push disabled on main
+
+### Dependencies Updated
+- next 14.2.29 → 14.2.35
+- sqlalchemy 2.0.35 → 2.0.49
+- pytest 8.3.3 → 8.4.2
+- python-jose 3.3.0 → 3.5.0
+- email-validator 2.2.0 → 2.3.0
+- psycopg2-binary 2.9.9 → 2.9.11
+- jinja2 3.1.4 → 3.1.6
+- wavesurfer.js 7.12.4 → 7.12.5
+- vitest 4.1.0 → 4.1.2
+- @types/node 22.19.15 → 22.19.17
+- actions/checkout v4 → v6
+- actions/setup-python v5 → v6
+- actions/setup-node v4 → v6
+- pnpm/action-setup v4 → v5
 
 ## [1.0.0] - 2026-03-27
 
