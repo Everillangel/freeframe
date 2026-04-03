@@ -367,7 +367,14 @@ export default function ProjectDetailPage() {
               Assets
             </span>
             {canCreateFolder && (
-              <button className="text-text-tertiary hover:text-text-primary transition-colors">
+              <button
+                className="text-text-tertiary hover:text-text-primary transition-colors"
+                onClick={() => {
+                  setFolderDialogParentId(currentFolderId);
+                  setFolderDialogOpen(true);
+                }}
+                title="New folder"
+              >
                 <Plus className="h-3.5 w-3.5" />
               </button>
             )}
@@ -1047,10 +1054,42 @@ export default function ProjectDetailPage() {
                           Open in Player
                         </Link>
                       </Button>
-                      <Button variant="secondary" size="sm" className="gap-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => {
+                          setShareDialogPreselect({
+                            type: "asset",
+                            id: selectedAsset.id,
+                            name: selectedAsset.name,
+                          });
+                          setShareDialogOpen(true);
+                        }}
+                      >
                         <LinkIcon className="h-3.5 w-3.5" /> Share
                       </Button>
-                      <Button variant="secondary" size="sm" className="gap-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="gap-1"
+                        onClick={async () => {
+                          try {
+                            const res = await api.get<{ url: string }>(`/assets/${selectedAsset.id}/stream`);
+                            if (res.url) {
+                              const a = document.createElement('a');
+                              a.href = res.url;
+                              a.download = selectedAsset.name;
+                              a.rel = 'noopener noreferrer';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                            }
+                          } catch {
+                            // Silent fail
+                          }
+                        }}
+                      >
                         <Download className="h-3.5 w-3.5" /> Download
                       </Button>
                     </div>
