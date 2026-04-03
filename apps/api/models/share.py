@@ -44,12 +44,28 @@ class ShareLink(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "(asset_id IS NOT NULL AND folder_id IS NULL AND project_id IS NULL) "
-            "OR (asset_id IS NULL AND folder_id IS NOT NULL AND project_id IS NULL) "
-            "OR (asset_id IS NULL AND folder_id IS NULL AND project_id IS NOT NULL)",
-            name="ck_share_link_asset_or_folder_or_project"
+            "(asset_id IS NOT NULL AND folder_id IS NULL) "
+            "OR (folder_id IS NOT NULL AND asset_id IS NULL) "
+            "OR (project_id IS NOT NULL AND asset_id IS NULL AND folder_id IS NULL)",
+            name="ck_share_link_type"
         ),
     )
+
+class ShareLinkItem(Base):
+    __tablename__ = "share_link_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    share_link_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("share_links.id"), nullable=False, index=True)
+    asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"), nullable=True)
+    folder_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "(asset_id IS NOT NULL AND folder_id IS NULL) OR (asset_id IS NULL AND folder_id IS NOT NULL)",
+            name="ck_share_link_item_asset_or_folder"
+        ),
+    )
+
 
 class AssetShare(Base):
     __tablename__ = "asset_shares"

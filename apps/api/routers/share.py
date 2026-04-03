@@ -15,7 +15,7 @@ from ..middleware.rate_limit import rate_limit
 from ..models.user import User
 from ..models.asset import Asset
 from ..models.folder import Folder
-from ..models.share import AssetShare, ShareLink, SharePermission, ShareLinkActivity, ShareActivityAction
+from ..models.share import AssetShare, ShareLink, ShareLinkItem, SharePermission, ShareLinkActivity, ShareActivityAction
 from ..models.activity import ActivityLog, ActivityAction
 from ..models.branding import ProjectBranding
 from ..models.asset import AssetVersion, AssetType, MediaFile, ProcessingStatus
@@ -26,6 +26,7 @@ from ..schemas.share import (
     FolderShareAssetItem,
     FolderShareAssetsResponse,
     FolderShareSubfolder,
+    MultiShareCreate,
     ShareLinkActivityResponse,
     ShareLinkCreate,
     ShareLinkListItem,
@@ -1022,6 +1023,82 @@ def add_asset_to_share_link(
 
     db.commit()
     return {"detail": "Asset added to share link"}
+
+
+@router.post("/projects/{project_id}/share/multi", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
+def create_multi_share_link(
+    project_id: uuid.UUID,
+    body: MultiShareCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a single share link containing multiple selected assets and/or folders."""
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
+
+    if not body.asset_ids and not body.folder_ids:
+        raise HTTPException(status_code=400, detail="At least one asset or folder is required")
+
+    # Validate all assets belong to this project
+    for aid in body.asset_ids:
+        asset = db.query(Asset).filter(Asset.id == aid, Asset.deleted_at.is_(None)).first()
+        if not asset or asset.project_id != project_id:
+            raise HTTPException(status_code=400, detail=f"Asset {aid} not found in this project")
+
+    # Validate all folders belong to this project
+    for fid in body.folder_ids:
+        folder = db.query(Folder).filter(Folder.id == fid, Folder.deleted_at.is_(None)).first()
+        if not folder or folder.project_id != project_id:
+            raise HTTPException(status_code=400, detail=f"Folder {fid} not found in this project")
+
+    # Determine title
+    title = body.title
+    if not title:
+        count = len(body.asset_ids) + len(body.folder_ids)
+        title = f"{count} items"
+
+    token = secrets.token_urlsafe(32)
+    password_hash = None
+    password_encrypted = None
+    if body.password:
+        plain_bytes = body.password[:72].encode("utf-8")
+        password_hash = bcrypt.hashpw(plain_bytes, bcrypt.gensalt()).decode("utf-8")
+        try:
+            password_encrypted = encrypt_password(body.password)
+        except Exception:
+            pass
+
+    link = ShareLink(
+        project_id=project_id,
+        token=token,
+        title=title,
+        description=None,
+        is_enabled=True,
+        permission=body.permission,
+        visibility=body.visibility,
+        allow_download=body.allow_download,
+        show_versions=body.show_versions,
+        show_watermark=body.show_watermark,
+        password_hash=password_hash,
+        password_encrypted=password_encrypted,
+        expires_at=body.expires_at,
+        appearance=body.appearance.model_dump(),
+        created_by=current_user.id,
+    )
+    db.add(link)
+    db.flush()
+
+    # Insert share_link_items
+    for aid in body.asset_ids:
+        db.add(ShareLinkItem(share_link_id=link.id, asset_id=aid))
+    for fid in body.folder_ids:
+        db.add(ShareLinkItem(share_link_id=link.id, folder_id=fid))
+
+    db.commit()
+    db.refresh(link)
+    return link
 
 
 # ── Folder share public endpoints ─────────────────────────────────────────────

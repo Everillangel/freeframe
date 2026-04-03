@@ -30,6 +30,20 @@ class ShareLinkCreate(BaseModel):
     appearance: ShareLinkAppearance = ShareLinkAppearance()
 
 
+class MultiShareCreate(BaseModel):
+    asset_ids: list[uuid.UUID] = []
+    folder_ids: list[uuid.UUID] = []
+    title: Optional[str] = None
+    permission: SharePermission = SharePermission.view
+    visibility: str = "public"
+    expires_at: Optional[datetime] = None
+    password: Optional[str] = None
+    allow_download: bool = False
+    show_versions: bool = True
+    show_watermark: bool = False
+    appearance: ShareLinkAppearance = ShareLinkAppearance()
+
+
 class ShareLinkResponse(BaseModel):
     id: uuid.UUID
     asset_id: Optional[uuid.UUID] = None
