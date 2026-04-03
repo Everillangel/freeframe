@@ -101,23 +101,25 @@ export function Header({ onSearchOpen }: HeaderProps) {
           </kbd>
         </button>
 
-        {/* Panel toggle */}
-        <button
-          onClick={toggleRightPanel}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-            rightPanelOpen
-              ? 'text-accent bg-accent-muted'
-              : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
-          )}
-          title={rightPanelOpen ? 'Hide panel' : 'Show panel'}
-        >
-          {rightPanelOpen ? (
-            <PanelRightClose className="h-4 w-4" />
-          ) : (
-            <PanelRightOpen className="h-4 w-4" />
-          )}
-        </button>
+        {/* Panel toggle — only on project detail pages, not the listing */}
+        {pathname !== '/projects' && (
+          <button
+            onClick={toggleRightPanel}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+              rightPanelOpen
+                ? 'text-accent bg-accent-muted'
+                : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
+            )}
+            title={rightPanelOpen ? 'Hide panel' : 'Show panel'}
+          >
+            {rightPanelOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" />
+            )}
+          </button>
+        )}
       </div>
     </header>
   )
