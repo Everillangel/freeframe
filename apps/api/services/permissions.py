@@ -5,6 +5,7 @@ from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset
 from ..models.share import AssetShare, ShareLink, SharePermission
+from ..services.redis_service import verify_share_session
 
 
 # ── Project-level ──────────────────────────────────────────────────────────────
@@ -123,4 +124,25 @@ def validate_share_link(db: Session, token: str) -> ShareLink:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Share link is disabled")
     if link.expires_at and link.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Share link has expired")
+    return link
+
+
+def validate_share_link_with_session(
+    db: Session,
+    token: str,
+    share_session: "str | None" = None,
+    current_user: "User | None" = None,
+) -> ShareLink:
+    """Validate a share link and verify password session if link is password-protected.
+    Skips password check if the caller is the authenticated link creator."""
+    link = validate_share_link(db, token)
+    if link.password_hash:
+        # Skip password for authenticated link creator (e.g. admin settings preview)
+        if current_user and link.created_by == current_user.id:
+            return link
+        if not share_session or not verify_share_session(token, share_session):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Password required",
+            )
     return link

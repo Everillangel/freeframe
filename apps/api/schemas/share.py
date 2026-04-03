@@ -73,6 +73,7 @@ class ShareLinkValidateResponse(BaseModel):
     viewer_email: Optional[str] = None  # Logged-in user's email (if authenticated)
     asset: Optional[dict] = None  # Full asset details for asset shares
     branding: Optional[dict] = None  # Project branding info
+    share_session: Optional[str] = None  # Session token for password-protected links
 
 
 class ShareLinkUpdate(BaseModel):

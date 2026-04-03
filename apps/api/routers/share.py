@@ -32,7 +32,8 @@ from ..schemas.share import (
     ShareLinkUpdate,
     ShareLinkValidateResponse,
 )
-from ..services.permissions import require_project_role, validate_share_link
+from ..services.permissions import require_project_role, validate_share_link, validate_share_link_with_session
+from ..services.redis_service import create_share_session
 from ..services.s3_service import generate_presigned_get_url
 from ..services.crypto_service import encrypt_password, decrypt_password
 from ..models.project import Project, ProjectRole
@@ -229,6 +230,7 @@ def validate_share_link_endpoint(
         if project:
             project_name = project.name
 
+    session_id = None
     if link.password_hash:
         if not password:
             return ShareLinkValidateResponse(
@@ -243,6 +245,9 @@ def validate_share_link_endpoint(
                 raise HTTPException(status_code=403, detail="Incorrect password")
         except ValueError:
             raise HTTPException(status_code=403, detail="Incorrect password")
+        # Password verified — create a session so subsequent requests skip re-verification
+        session_id = secrets.token_urlsafe(32)
+        create_share_session(token, session_id)
 
     if log_open:
         actor_email = current_user.email if current_user else "anonymous"
@@ -311,6 +316,7 @@ def validate_share_link_endpoint(
         viewer_email=current_user.email if current_user else None,
         asset=asset_data,
         branding=branding_data,
+        share_session=session_id,
     )
 
 
@@ -968,10 +974,11 @@ def get_folder_share_assets(
     folder_id: Optional[uuid.UUID] = None,
     page: int = 1,
     per_page: int = 50,
+    share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
 ):
     """Public endpoint — no auth required. Returns assets and subfolders for a folder or project share link."""
-    link = validate_share_link(db, token)
+    link = validate_share_link_with_session(db, token, share_session=share_session)
 
     is_project_share = link.project_id is not None
     if not link.folder_id and not is_project_share:
@@ -1101,11 +1108,12 @@ def get_folder_share_assets(
 def get_share_stream_url(
     token: str,
     asset_id: uuid.UUID,
+    share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link."""
-    link = validate_share_link(db, token)
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
     asset = _get_asset(db, asset_id)
 
@@ -1164,10 +1172,11 @@ def get_share_stream_url(
 def get_share_thumbnail_url(
     token: str,
     asset_id: uuid.UUID,
+    share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
 ):
     """Public endpoint — no auth required. Returns presigned thumbnail URL for an asset in a share link."""
-    link = validate_share_link(db, token)
+    link = validate_share_link_with_session(db, token, share_session=share_session)
 
     asset = _get_asset(db, asset_id)
 
