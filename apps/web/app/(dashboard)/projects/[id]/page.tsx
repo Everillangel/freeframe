@@ -586,9 +586,9 @@ export default function ProjectDetailPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Storage indicator — aligned with global sidebar bottom section */}
-        <div className="border-t border-border shrink-0 flex flex-col justify-center px-4" style={{ height: 90 }}>
-          <div className="flex items-center justify-between">
+        {/* Storage indicator — matches global sidebar bottom section (p-2 + space-y-1) */}
+        <div className="border-t border-border shrink-0 p-2 space-y-1">
+          <div className="flex items-center justify-between px-2.5 h-9">
             <span className="text-[11px] font-medium text-text-secondary">
               Storage
             </span>
@@ -596,6 +596,7 @@ export default function ProjectDetailPage() {
               {formatBytes(project?.storage_bytes ?? 0)}
             </span>
           </div>
+          <div className="h-8" />
         </div>
       </div>
 
