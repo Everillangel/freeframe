@@ -17,10 +17,11 @@ import type { AssetResponse, AssetVersion, Comment } from "@/types";
 
 interface CreateCommentPayload {
   body: string;
-  version_id: string;
+  version_id?: string;
   parent_id?: string;
   timecode_start?: number;
   timecode_end?: number;
+  annotation?: { drawing_data: Record<string, unknown> };
   annotation?: Record<string, unknown>;
 }
 

@@ -718,15 +718,20 @@ function ShareReviewInner({
   const { useReviewStore } = require('@/stores/review-store')
   const { useComments } = require('@/hooks/use-comments')
 
-  const { asset, versions, isLoading, comments, refetchComments } = useReview()
+  const { asset, versions, isLoading, comments, refetchComments, addComment } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
+  const [AnnotationCanvas, setAnnotationCanvas] = React.useState<any>(null)
 
   React.useEffect(() => {
-    import('@/components/review/annotation-overlay').then((mod) => {
-      setAnnotationOverlay(() => mod.AnnotationOverlay)
+    Promise.all([
+      import('@/components/review/annotation-overlay'),
+      import('@/components/review/annotation-canvas'),
+    ]).then(([overlayMod, canvasMod]) => {
+      setAnnotationOverlay(() => overlayMod.AnnotationOverlay)
+      setAnnotationCanvas(() => canvasMod.AnnotationCanvas)
     })
   }, [])
 
@@ -769,13 +774,27 @@ function ShareReviewInner({
               comments={comments}
               className="flex-1"
               initialStreamUrl={(asset as any).stream_url}
-              overlay={AnnotationOverlay ? <AnnotationOverlay key={focusedCommentId ?? 'none'} /> : undefined}
+              overlay={
+                <>
+                  {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
+                  {isDrawingMode && AnnotationCanvas && <AnnotationCanvas />}
+                </>
+              }
             />
           ) : asset.asset_type === 'audio' && versionReady && AudioPlayer ? (
             <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
           ) : (asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && versionReady && ImageViewer ? (
             <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden">
-              <ImageViewer asset={asset} version={currentVersion} annotationCanvas={AnnotationOverlay ? <AnnotationOverlay key={focusedCommentId ?? 'none'} /> : undefined} />
+              <ImageViewer
+                asset={asset}
+                version={currentVersion}
+                annotationCanvas={
+                  <>
+                    {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
+                    {isDrawingMode && AnnotationCanvas && <AnnotationCanvas />}
+                  </>
+                }
+              />
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -812,14 +831,16 @@ function ShareReviewInner({
                 {canComment && CommentInput && (
                   <CommentInput
                     assetId={asset.id}
-                    projectId={asset.project_id || ''}
+                    projectId=""
                     assetType={asset.asset_type}
-                    onSubmit={async (body: string) => {
-                      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-                      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-                      try { const t = localStorage.getItem('ff_access_token'); if (t) headers['Authorization'] = `Bearer ${t}` } catch {}
-                      await fetch(`${API_URL}/share/${token}/comment`, { method: 'POST', headers, body: JSON.stringify({ body, asset_id: asset.id }) })
-                      refetchComments()
+                    onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
+                      const payload: Record<string, unknown> = { body }
+                      if (currentVersion?.id) payload.version_id = currentVersion.id
+                      if (timecodeStart != null) payload.timecode_start = timecodeStart
+                      if (timecodeEnd != null) payload.timecode_end = timecodeEnd
+                      if (annotationData) payload.annotation = { drawing_data: annotationData }
+                      await addComment(payload)
+                      refetchComments().catch(() => {})
                     }}
                   />
                 )}
