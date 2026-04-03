@@ -603,6 +603,7 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
 
 interface AssetViewerProps {
   token: string
+  shareSession?: string | null
   asset: FolderShareAssetItem
   permission: SharePermission
   allowDownload: boolean
@@ -639,13 +640,14 @@ function HlsVideo({ src, className }: { src: string; className?: string }) {
   return <video ref={videoRef} controls className={className} />
 }
 
-function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetViewerProps) {
+function AssetViewer({ token, shareSession, asset, permission, allowDownload, onBack }: AssetViewerProps) {
   // Use the same ReviewProvider as the project review page, but with shareToken
   // This gives us the same video player, image viewer, comment panel, etc.
   return (
     <div className="fixed inset-0 z-50">
       <ShareReviewScreen
         token={token}
+        shareSession={shareSession}
         assetId={asset.id}
         assetName={asset.name}
         permission={permission}
@@ -658,9 +660,9 @@ function AssetViewer({ token, asset, permission, allowDownload, onBack }: AssetV
 
 /** Lazy-imported review components to avoid circular deps */
 function ShareReviewScreen({
-  token, assetId, assetName, permission, allowDownload, onBack,
+  token, shareSession, assetId, assetName, permission, allowDownload, onBack,
 }: {
-  token: string; assetId: string; assetName: string; permission: SharePermission; allowDownload: boolean; onBack: () => void
+  token: string; shareSession?: string | null; assetId: string; assetName: string; permission: SharePermission; allowDownload: boolean; onBack: () => void
 }) {
   const [ReviewProvider, setProvider] = React.useState<any>(null)
   const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
@@ -695,7 +697,7 @@ function ShareReviewScreen({
   }
 
   return (
-    <ReviewProvider assetId={assetId} shareToken={token}>
+    <ReviewProvider assetId={assetId} shareToken={token} shareSession={shareSession}>
       <ShareReviewInner
         token={token}
         assetName={assetName}
@@ -1172,6 +1174,7 @@ export function FolderShareViewer({
     return (
       <AssetViewer
         token={token}
+        shareSession={shareSession}
         asset={viewingAsset}
         permission={permission}
         allowDownload={allowDownload}

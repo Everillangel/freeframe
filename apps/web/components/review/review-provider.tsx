@@ -81,6 +81,8 @@ export function ReviewProvider({
     };
   }, []);
 
+  const shareSessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : '';
+
   const fetchAsset = useCallback(async () => {
     try {
       let data: AssetResponse;
@@ -95,7 +97,7 @@ export function ReviewProvider({
           if (t) headers["Authorization"] = `Bearer ${t}`;
         } catch {}
         const streamRes = await fetch(
-          `${API_URL}/share/${shareToken}/stream/${assetId}`,
+          `${API_URL}/share/${shareToken}/stream/${assetId}?_=1${shareSessionParam}`,
           { headers },
         );
         const streamData = streamRes.ok ? await streamRes.json() : null;
@@ -163,7 +165,7 @@ export function ReviewProvider({
       if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load asset");
     }
-  }, [assetId, shareToken, setCurrentAsset, setCurrentVersion]);
+  }, [assetId, shareToken, shareSessionParam, setCurrentAsset, setCurrentVersion]);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -172,7 +174,7 @@ export function ReviewProvider({
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const res = await fetch(
-          `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}`,
+          `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${shareSessionParam}`,
         );
         if (res.ok) {
           const json = await res.json();
@@ -237,7 +239,7 @@ export function ReviewProvider({
             guestFields.guest_email = guest.email;
           }
         } catch {}
-        const res = await fetch(`${API_URL}/share/${shareToken}/comment`, {
+        const res = await fetch(`${API_URL}/share/${shareToken}/comment?_=1${shareSessionParam}`, {
           method: "POST",
           headers,
           body: JSON.stringify({ ...payload, ...guestFields, asset_id: assetId }),
