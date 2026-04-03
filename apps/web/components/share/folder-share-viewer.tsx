@@ -738,6 +738,42 @@ function ShareReviewInner({
   const canComment = permission === 'comment' || permission === 'approve'
   const versionReady = currentVersion?.processing_status === 'ready'
 
+  // Guest identity flow for non-authenticated users
+  const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
+  const [showGuestPrompt, setShowGuestPrompt] = React.useState(false)
+  const pendingCommentRef = React.useRef<{ body: string; timecodeStart?: number; timecodeEnd?: number; annotationData?: Record<string, unknown> } | null>(null)
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('ff_guest_identity')
+      if (stored) setGuestIdentity(JSON.parse(stored))
+    } catch {}
+  }, [])
+  const isLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem('ff_access_token')
+
+  const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
+    const payload: Record<string, unknown> = { body }
+    if (currentVersion?.id) payload.version_id = currentVersion.id
+    if (timecodeStart != null) payload.timecode_start = timecodeStart
+    if (timecodeEnd != null) payload.timecode_end = timecodeEnd
+    if (annotationData) payload.annotation = { drawing_data: annotationData }
+    await addComment(payload)
+    refetchComments().catch(() => {})
+  }, [addComment, currentVersion, refetchComments])
+
+  const handleGuestIdentitySave = React.useCallback(async (name: string, email: string) => {
+    const identity = { name, email }
+    setGuestIdentity(identity)
+    localStorage.setItem('ff_guest_identity', JSON.stringify(identity))
+    setShowGuestPrompt(false)
+
+    // Auto-submit the pending comment
+    if (pendingCommentRef.current) {
+      const { body, timecodeStart, timecodeEnd, annotationData } = pendingCommentRef.current
+      pendingCommentRef.current = null
+      setTimeout(() => submitComment(body, timecodeStart, timecodeEnd, annotationData), 50)
+    }
+  }, [submitComment])
+
   if (isLoading || !asset) {
     return <div className="flex items-center justify-center h-screen bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
   }
@@ -834,13 +870,14 @@ function ShareReviewInner({
                     projectId=""
                     assetType={asset.asset_type}
                     onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
-                      const payload: Record<string, unknown> = { body }
-                      if (currentVersion?.id) payload.version_id = currentVersion.id
-                      if (timecodeStart != null) payload.timecode_start = timecodeStart
-                      if (timecodeEnd != null) payload.timecode_end = timecodeEnd
-                      if (annotationData) payload.annotation = { drawing_data: annotationData }
-                      await addComment(payload)
-                      refetchComments().catch(() => {})
+                      const hasAuth = !!localStorage.getItem('ff_access_token')
+                      const hasGuest = !!localStorage.getItem('ff_guest_identity')
+                      if (!hasAuth && !hasGuest) {
+                        pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
+                        setShowGuestPrompt(true)
+                        return
+                      }
+                      await submitComment(body, timecodeStart, timecodeEnd, annotationData)
                     }}
                   />
                 )}
@@ -848,6 +885,59 @@ function ShareReviewInner({
             )}
           </div>
         )}
+      </div>
+
+      {/* Guest identity prompt */}
+      {showGuestPrompt && (
+        <GuestIdentityPrompt
+          onSave={handleGuestIdentitySave}
+          onCancel={() => { setShowGuestPrompt(false); pendingCommentRef.current = null }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Guest Identity Prompt ───────────────────────────────────────────────────
+
+function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, email: string) => void; onCancel: () => void }) {
+  const [name, setName] = React.useState('')
+  const [email, setEmail] = React.useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-5 shadow-xl">
+        <h3 className="text-sm font-semibold text-text-primary mb-1">Leave a comment</h3>
+        <p className="text-xs text-text-tertiary mb-4">Enter your name and email to comment on this shared asset.</p>
+        <div className="space-y-3">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+            autoFocus
+          />
+          <input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2 mt-4">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs text-text-tertiary hover:text-text-primary transition-colors">
+            Cancel
+          </button>
+          <button
+            disabled={!name.trim() || !email.trim()}
+            onClick={() => onSave(name.trim(), email.trim())}
+            className="px-4 py-1.5 rounded-md bg-accent text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+          >
+            Continue
+          </button>
+        </div>
       </div>
     </div>
   )

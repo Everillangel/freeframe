@@ -227,10 +227,20 @@ export function ReviewProvider({
           const t = localStorage.getItem("ff_access_token");
           if (t) headers["Authorization"] = `Bearer ${t}`;
         } catch {}
+        // Include guest identity if available (for non-authenticated users)
+        const guestFields: Record<string, string> = {};
+        try {
+          const stored = localStorage.getItem("ff_guest_identity");
+          if (stored) {
+            const guest = JSON.parse(stored);
+            guestFields.guest_name = guest.name;
+            guestFields.guest_email = guest.email;
+          }
+        } catch {}
         const res = await fetch(`${API_URL}/share/${shareToken}/comment`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ ...payload, asset_id: assetId }),
+          body: JSON.stringify({ ...payload, ...guestFields, asset_id: assetId }),
         });
         if (!res.ok) throw new Error("Failed to post comment");
         comment = await res.json();

@@ -658,11 +658,13 @@ def guest_comment(
     db.refresh(comment)
 
     # Log share link activity
+    actor_email = current_user.email if current_user else (body.guest_email or "anonymous")
+    actor_name = current_user.name if current_user else body.guest_name
     activity = ShareLinkActivity(
         share_link_id=link.id,
         action=ShareActivityAction.commented,
-        actor_email=guest_email,
-        actor_name=body.guest_name,
+        actor_email=actor_email,
+        actor_name=actor_name,
         asset_id=asset.id,
         asset_name=asset.name,
     )
