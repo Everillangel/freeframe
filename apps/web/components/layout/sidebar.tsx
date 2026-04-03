@@ -59,7 +59,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       className={cn(
         'fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-border',
-        'bg-bg-secondary transition-[width] duration-200',
+        'bg-bg-secondary transition-[width] duration-200 overflow-hidden',
         collapsed ? 'w-[52px]' : 'w-[220px]',
       )}
     >
@@ -102,7 +102,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-0.5">
         {navItems.map((item) => {
           const isActive =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)

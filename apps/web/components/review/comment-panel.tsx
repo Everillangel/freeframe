@@ -152,10 +152,14 @@ function Dropdown({
 function CommentMenu({
   isOwn,
   commentId,
+  assetId,
+  onEdit,
   onDelete,
 }: {
   isOwn: boolean;
   commentId: string;
+  assetId?: string;
+  onEdit: () => void;
   onDelete: (commentId: string) => Promise<void>;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -179,14 +183,24 @@ function CommentMenu({
       >
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
-          onClick={() => setOpen(false)}
+          onClick={() => { onEdit(); setOpen(false) }}
         >
           <Pencil className="h-3.5 w-3.5" />
           Edit
         </button>
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            let url: URL
+            if (assetId && window.location.pathname.match(/\/projects\/[^/]+$/)) {
+              url = new URL(`${window.location.pathname}/assets/${assetId}`, window.location.origin)
+            } else {
+              url = new URL(window.location.href)
+            }
+            url.searchParams.set('commentId', commentId)
+            navigator.clipboard.writeText(url.toString())
+            setOpen(false)
+          }}
         >
           <Link2 className="h-3.5 w-3.5" />
           Copy Link
@@ -365,6 +379,9 @@ function CommentItem({
   const [showReplies, setShowReplies] = React.useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
   const [resolving, setResolving] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [editBody, setEditBody] = React.useState(comment.body);
+  const [saving, setSaving] = React.useState(false);
 
   // Scroll into view when focused from progress bar marker click
   React.useEffect(() => {
@@ -521,9 +538,45 @@ function CommentItem({
           </div>
 
           {/* Body */}
-          <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
-            {comment.body}
-          </p>
+          {editing ? (
+            <div className="mt-1">
+              <textarea
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                autoFocus
+                rows={2}
+                className="w-full rounded-md border border-border bg-bg-tertiary px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 resize-none"
+              />
+              <div className="flex items-center gap-1.5 mt-1">
+                <button
+                  disabled={saving || !editBody.trim()}
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const { api } = await import('@/lib/api');
+                      await api.patch(`/comments/${comment.id}`, { body: editBody.trim() });
+                      comment.body = editBody.trim();
+                      setEditing(false);
+                    } catch { /* silent */ }
+                    finally { setSaving(false); }
+                  }}
+                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setEditing(false); setEditBody(comment.body); }}
+                  className="rounded-md px-2.5 py-1 text-xs text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
+              {comment.body}
+            </p>
+          )}
 
           {/* Reactions row */}
           {reactionGroups.length > 0 && (
@@ -587,6 +640,8 @@ function CommentItem({
                 <CommentMenu
                   isOwn={isOwn}
                   commentId={comment.id}
+                  assetId={comment.asset_id}
+                  onEdit={() => { setEditing(true); setEditBody(comment.body); }}
                   onDelete={onDelete}
                 />
               </div>
