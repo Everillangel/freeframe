@@ -586,19 +586,17 @@ export default function ProjectDetailPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Storage indicator */}
-        {project?.storage_bytes != null && (
-          <div className="border-t border-border shrink-0 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-text-secondary">
-                Storage
-              </span>
-              <span className="text-[10px] tabular-nums text-text-tertiary">
-                {formatBytes(project.storage_bytes)}
-              </span>
-            </div>
+        {/* Storage indicator — aligned with global sidebar bottom section */}
+        <div className="border-t border-border shrink-0 flex flex-col justify-center px-4" style={{ height: 90 }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-text-secondary">
+              Storage
+            </span>
+            <span className="text-[10px] tabular-nums text-text-tertiary">
+              {formatBytes(project?.storage_bytes ?? 0)}
+            </span>
           </div>
-        )}
+        </div>
       </div>
 
       {/* ─── Main Content ───────────────────────────────────────────────── */}

@@ -131,6 +131,18 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_us
     resp.poster_url = _resolve_poster_url(project)
     if member:
         resp.role = member.role
+    # Calculate storage, asset count, member count
+    resp.asset_count = db.query(func.count(Asset.id)).filter(
+        Asset.project_id == project_id, Asset.deleted_at.is_(None),
+    ).scalar() or 0
+    resp.storage_bytes = db.query(func.coalesce(func.sum(MediaFile.file_size_bytes), 0)).join(
+        AssetVersion, MediaFile.version_id == AssetVersion.id
+    ).join(Asset, AssetVersion.asset_id == Asset.id).filter(
+        Asset.project_id == project_id, Asset.deleted_at.is_(None),
+    ).scalar() or 0
+    resp.member_count = db.query(func.count(ProjectMember.id)).filter(
+        ProjectMember.project_id == project_id, ProjectMember.deleted_at.is_(None),
+    ).scalar() or 0
     return resp
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
