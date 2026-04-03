@@ -1088,7 +1088,7 @@ export function FolderShareViewer({
                       if (token) {
                         document.cookie = `ff_access_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
                       }
-                      window.location.href = '/'
+                      window.location.href = '/projects'
                     }
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
