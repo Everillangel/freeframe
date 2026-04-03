@@ -107,10 +107,20 @@ def initiate_upload(
 @router.post("/presign-part", response_model=PresignPartResponse)
 def presign_part(
     body: PresignPartRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if body.part_number < 1 or body.part_number > 10000:
         raise HTTPException(status_code=400, detail="Part number must be between 1 and 10000")
+
+    # Verify the s3_key belongs to an upload initiated by this user
+    media_file = db.query(MediaFile).filter(MediaFile.s3_key_raw == body.s3_key).first()
+    if not media_file:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    version = db.query(AssetVersion).filter(AssetVersion.id == media_file.version_id).first()
+    if not version or version.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this upload")
+
     url = presign_upload_part(body.s3_key, body.upload_id, body.part_number)
     return PresignPartResponse(presigned_url=url, part_number=body.part_number)
 
@@ -129,6 +139,8 @@ def complete_upload(
     ).first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
+    if version.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this upload")
 
     # Then complete S3 multipart
     complete_multipart_upload(body.s3_key, body.upload_id, [p.model_dump() for p in body.parts])
@@ -161,6 +173,8 @@ def abort_upload(
     ).first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
+    if version.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this upload")
 
     abort_multipart_upload(body.s3_key, body.upload_id)
     version.processing_status = ProcessingStatus.failed
