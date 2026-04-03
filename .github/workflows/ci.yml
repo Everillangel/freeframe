@@ -48,9 +48,8 @@ jobs:
 
       - name: Check imports resolve
         run: |
-          cd apps/api
           python -c "
-          from main import app
+          from apps.api.main import app
           print(f'FastAPI app loaded: {len(app.routes)} routes')
           "
 
