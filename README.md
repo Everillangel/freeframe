@@ -110,6 +110,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 |-------|-------------|
 | [Production Deployment](docs/deployment.md) | SSL, bring-your-own infra, scaling, troubleshooting |
 | [NAS Storage](docs/nas-storage.md) | Store media on a NAS (Synology/QNAP/TrueNAS/Unraid) via MinIO |
+| [Security & POPIA](docs/security-hardening.md) | Secret rotation, private storage, data-subject exports/erasure, POPIA (ZA) checklist |
 | [Architecture](docs/architecture.md) | System design, data flow, media pipeline, permissions |
 | [Contributing](docs/contributing.md) | Dev setup, testing, code style, PR process |
 | [Environment Variables](.env.example) | Full config reference with comments |

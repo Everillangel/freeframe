@@ -17,6 +17,7 @@ celery_app = Celery(
         "apps.api.tasks.watermark_tasks",
         "apps.api.tasks.reminder_tasks",
         "apps.api.tasks.email_tasks",
+        "apps.api.tasks.retention_tasks",
     ],
 )
 
@@ -60,6 +61,10 @@ celery_app.conf.beat_schedule = {
     "due-date-reminders": {
         "task": "send_due_date_reminders",
         "schedule": crontab(minute="0"),  # every hour
+    },
+    "purge-expired-data": {
+        "task": "purge_expired_data",
+        "schedule": crontab(minute="30", hour="3"),  # daily at 03:30 UTC
     },
 }
 
