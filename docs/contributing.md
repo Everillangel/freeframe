@@ -173,5 +173,5 @@ For feature requests, describe the use case and why it would be valuable.
 
 ## Need Help?
 
-- Check existing [issues](https://github.com/Techiebutler/freeframe/issues) for similar questions
+- Check existing [issues](https://github.com/Everillangel/freeframe/issues) for similar questions
 - Open a new issue with the "question" label
