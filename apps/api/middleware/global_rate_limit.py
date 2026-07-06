@@ -15,6 +15,7 @@ from jose import jwt, JWTError
 
 from ..config import settings
 from ..services.redis_service import get_redis
+from ..utils.client_ip import get_client_ip
 
 # Limits per window — tuned for media-review workflows where a single folder
 # page can trigger 10+ paginated asset fetches plus SWR calls for project,
@@ -76,11 +77,8 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
             except JWTError:
                 pass
 
-        # Fall back to IP
-        ip = request.headers.get("x-real-ip") or (
-            request.client.host if request.client else "unknown"
-        )
-        return f"ip:{ip}"
+        # Fall back to the real client IP (behind trusted proxies)
+        return f"ip:{get_client_ip(request)}"
 
     def _check(self, identity: str, action: str, max_requests: int) -> tuple[bool, int]:
         try:

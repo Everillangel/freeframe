@@ -97,7 +97,35 @@ function IdentityForm({ onIdentified }: IdentityFormProps) {
           Continue to comment
         </Button>
       </form>
+
+      <PrivacyNotice className="mt-3" />
     </div>
+  )
+}
+
+// ─── Privacy notice (POPIA — notice at point of collection) ────────────────────
+
+function PrivacyNotice({ className }: { className?: string }) {
+  const privacyUrl = process.env.NEXT_PUBLIC_PRIVACY_URL
+  return (
+    <p className={cn('text-2xs leading-snug text-text-tertiary', className)}>
+      Your name and email are stored to attribute your feedback and are visible to
+      the project team. They are not used for anything else.
+      {privacyUrl ? (
+        <>
+          {' '}
+          <a
+            href={privacyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-text-secondary"
+          >
+            Privacy Policy
+          </a>
+          .
+        </>
+      ) : null}
+    </p>
   )
 }
 

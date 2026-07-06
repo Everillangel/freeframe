@@ -39,6 +39,18 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     frontend_url: str = "http://localhost:3000"
     transcoder_engine: str = "ffmpeg"
+
+    # Number of trusted reverse proxies in front of the API (e.g. Traefik = 1).
+    # Used to extract the real client IP from X-Forwarded-For for rate limiting.
+    # Set to 0 if the API is exposed directly with no proxy.
+    trusted_proxy_count: int = 1
+
+    # ─── POPIA / data retention ────────────────────────────────────────────
+    # Days after a record is soft-deleted before the retention job anonymises
+    # the personal data on it. Share-link activity logs older than the activity
+    # threshold are purged outright.
+    retention_erase_after_days: int = 30
+    retention_activity_days: int = 365
     
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
