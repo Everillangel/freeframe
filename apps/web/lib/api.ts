@@ -131,6 +131,55 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   return text ? (JSON.parse(text) as T) : (undefined as unknown as T)
 }
 
+async function downloadFile(path: string): Promise<{ blob: Blob; filename: string }> {
+  const buildHeaders = (token: string | null): Record<string, string> => {
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    return headers
+  }
+
+  const execute = async (token: string | null): Promise<Response> =>
+    fetch(`${API_URL}${path}`, { headers: buildHeaders(token) })
+
+  let token = getAccessToken()
+  let response = await execute(token)
+
+  if (response.status === 401) {
+    const newToken = await refreshAccessToken()
+    if (newToken) response = await execute(newToken)
+  }
+
+  if (!response.ok) {
+    let detail = response.statusText
+    try {
+      const errorBody = await response.json()
+      if (errorBody?.detail) detail = typeof errorBody.detail === 'string' ? errorBody.detail : JSON.stringify(errorBody.detail)
+    } catch {
+      // ignore
+    }
+    throw new ApiError(response.status, detail)
+  }
+
+  const blob = await response.blob()
+  const cd = response.headers.get('content-disposition') || ''
+  const match = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+  const filename = match ? decodeURIComponent(match[1]) : 'download'
+  return { blob, filename }
+}
+
+/** Fetch an authenticated file and trigger a browser download. */
+export async function downloadToDisk(path: string, fallbackName?: string): Promise<void> {
+  const { blob, filename } = await downloadFile(path)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename || fallbackName || 'download'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>('GET', path, undefined, options),

@@ -26,8 +26,10 @@ import {
   Check,
   Send,
   Lock,
+  Download,
 } from "lucide-react";
 import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
+import { downloadToDisk } from "@/lib/api";
 import { useReviewStore } from "@/stores/review-store";
 import type { CommentWithReplies } from "@/hooks/use-comments";
 
@@ -37,6 +39,8 @@ interface CommentPanelProps {
   comments: CommentWithReplies[];
   isLoading?: boolean;
   currentUserId?: string;
+  /** When set, shows the "Export comments" button (NLE marker download). */
+  assetId?: string;
   onResolve: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onAddReaction: (commentId: string, emoji: string) => Promise<void>;
@@ -215,6 +219,87 @@ function CommentMenu({
           <Trash2 className="h-3.5 w-3.5" />
           Delete
         </button>
+      </Dropdown>
+    </div>
+  );
+}
+
+// ─── Export menu (download comments for NLE import) ──────────────────────────
+
+const EXPORT_FORMATS: { id: string; label: string; hint: string }[] = [
+  { id: "csv", label: "Spreadsheet", hint: "CSV" },
+  { id: "edl", label: "EDL", hint: "Resolve / Avid / Premiere" },
+  { id: "fcpxml", label: "Final Cut Pro", hint: "FCPXML" },
+  { id: "avid", label: "Avid markers", hint: ".txt locators" },
+];
+
+function ExportMenu({
+  assetId,
+  versionId,
+}: {
+  assetId: string;
+  versionId?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function handleExport(fmt: string) {
+    setBusy(fmt);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ format: fmt });
+      if (versionId) params.set("version_id", versionId);
+      await downloadToDisk(
+        `/assets/${assetId}/comments/export?${params.toString()}`,
+      );
+      setOpen(false);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Export failed. Please try again.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        className={cn(
+          "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+          open
+            ? "text-accent bg-accent/10"
+            : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
+        )}
+        title="Export comments"
+        onClick={() => setOpen((p) => !p)}
+      >
+        <Download className="h-4 w-4" />
+      </button>
+      <Dropdown open={open} onClose={() => setOpen(false)} align="right" className="w-60">
+        <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+          Export comments as...
+        </div>
+        {EXPORT_FORMATS.map((f) => (
+          <button
+            key={f.id}
+            disabled={busy !== null}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+            onClick={() => handleExport(f.id)}
+          >
+            <span className="font-medium text-text-primary">{f.label}</span>
+            <span className="text-[11px] text-text-tertiary">
+              {busy === f.id ? "Preparing…" : f.hint}
+            </span>
+          </button>
+        ))}
+        <div className="border-t border-border mt-1 pt-1.5 px-3 pb-1.5 text-[11px] text-text-tertiary leading-snug">
+          Frame-accurate timecoded comments for the current version.
+        </div>
+        {error && (
+          <div className="px-3 pb-2 text-[11px] text-red-400">{error}</div>
+        )}
       </Dropdown>
     </div>
   );
@@ -750,6 +835,7 @@ export function CommentPanel({
   comments,
   isLoading,
   currentUserId,
+  assetId,
   onResolve,
   onDelete,
   onAddReaction,
@@ -761,6 +847,7 @@ export function CommentPanel({
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId);
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId);
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
+  const currentVersion = useReviewStore((s) => s.currentVersion);
 
   // Toolbar state
   const [visibility, setVisibility] = React.useState<CommentVisibility>("all");
@@ -1113,6 +1200,11 @@ export function CommentPanel({
           >
             <Search className="h-4 w-4" />
           </button>
+
+          {/* Export comments for NLE import */}
+          {assetId && (
+            <ExportMenu assetId={assetId} versionId={currentVersion?.id} />
+          )}
 
         </div>
       </div>

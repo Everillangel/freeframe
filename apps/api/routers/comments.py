@@ -5,13 +5,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_user
 from ..middleware.share_auth import get_share_link
-from ..models.asset import Asset
+from ..models.asset import Asset, AssetVersion, MediaFile, ProcessingStatus
 from ..models.project import ProjectMember, ProjectRole
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
 from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
@@ -32,6 +33,7 @@ from ..schemas.comment import (
     ReactionResponse,
 )
 from ..services import s3_service
+from ..services import comment_export
 from ..services.permissions import require_asset_access, validate_share_link
 from ..tasks.email_tasks import send_mention_email, send_comment_email
 from ..tasks.celery_app import send_task_safe
@@ -214,6 +216,107 @@ def list_comments(
         query = query.filter(Comment.visibility == visibility)
     top_level = query.order_by(Comment.created_at).all()
     return [_build_comment_response(c, db, current_user_id=current_user.id) for c in top_level]
+
+
+def _resolve_export_version(db: Session, asset: Asset, version_id: Optional[uuid.UUID]) -> AssetVersion:
+    """Return the requested version, or the latest ready version for the asset."""
+    if version_id:
+        version = db.query(AssetVersion).filter(
+            AssetVersion.id == version_id,
+            AssetVersion.asset_id == asset.id,
+            AssetVersion.deleted_at.is_(None),
+        ).first()
+        if not version:
+            raise HTTPException(status_code=404, detail="Version not found")
+        return version
+    version = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset.id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).order_by(AssetVersion.version_number.desc()).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="No ready version found for this asset")
+    return version
+
+
+def _author_name(db: Session, comment: Comment) -> str:
+    if comment.author_id:
+        user = db.query(User).filter(User.id == comment.author_id).first()
+        if user:
+            return user.name
+    if comment.guest_author_id:
+        guest = db.query(GuestUser).filter(GuestUser.id == comment.guest_author_id).first()
+        if guest:
+            return guest.name
+    return "Reviewer"
+
+
+@router.get("/assets/{asset_id}/comments/export")
+def export_comments(
+    asset_id: uuid.UUID,
+    format: str = "csv",
+    version_id: Optional[uuid.UUID] = None,
+    fps: Optional[float] = None,
+    include_resolved: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export timecoded comments as an NLE marker file.
+
+    `format` is one of: csv, edl, fcpxml, avid. Timecodes are frame-accurate,
+    derived from the media's frame rate (override with `fps` if the source is
+    unknown). Only top-level comments carrying a timecode are exported.
+    """
+    fmt = format.lower()
+    if fmt not in comment_export.FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format '{format}'. Use one of: {', '.join(comment_export.FORMATS)}",
+        )
+
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+    version = _resolve_export_version(db, asset, version_id)
+
+    media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
+    effective_fps = fps or (media_file.fps if media_file and media_file.fps else None) or 30.0
+    width = (media_file.width if media_file else None) or 1920
+    height = (media_file.height if media_file else None) or 1080
+    duration = (media_file.duration_seconds if media_file else None) or 0.0
+
+    query = db.query(Comment).filter(
+        Comment.asset_id == asset_id,
+        Comment.version_id == version.id,
+        Comment.parent_id.is_(None),
+        Comment.deleted_at.is_(None),
+        Comment.timecode_start.isnot(None),
+    )
+    if not include_resolved:
+        query = query.filter(Comment.resolved.is_(False))
+    comments = query.order_by(Comment.timecode_start).all()
+
+    markers = [
+        comment_export.Marker(
+            seconds=c.timecode_start,
+            end_seconds=c.timecode_end,
+            author=_author_name(db, c),
+            body=c.body,
+            resolved=c.resolved,
+            created_at=c.created_at,
+        )
+        for c in comments
+    ]
+
+    content, media_type, filename = comment_export.export(
+        fmt, markers, asset.name, effective_fps,
+        width=width, height=height, duration_seconds=duration,
+    )
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/assets/{asset_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)

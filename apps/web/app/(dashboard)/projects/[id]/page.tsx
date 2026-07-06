@@ -997,6 +997,7 @@ export default function ProjectDetailPage() {
                       <CommentPanel
                         comments={comments as any}
                         currentUserId={user?.id}
+                        assetId={selectedAsset.id}
                         onResolve={resolveComment}
                         onDelete={deleteComment}
                         onAddReaction={addReaction}
