@@ -102,3 +102,54 @@ export function endOfDayISO(dateStr: string): string {
   d.setHours(23, 59, 59, 999)
   return d.toISOString()
 }
+
+/**
+ * Copy text to clipboard with modern API + fallback.
+ * Handles iOS Safari where execCommand('copy') requires a selected editable element.
+ * Returns true on success, false on failure.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  // Modern async clipboard API
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Fallback for older browsers (including iOS Safari < 13.4)
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.contentEditable = 'true'
+    textarea.readOnly = false
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    textarea.style.top = '-9999px'
+    document.body.appendChild(textarea)
+
+    try {
+      // iOS Safari requires selection on editable elements
+      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+        const range = document.createRange()
+        range.selectNodeContents(textarea)
+        const selection = window.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        textarea.setSelectionRange(0, text.length)
+      } else {
+        textarea.select()
+        textarea.setSelectionRange(0, text.length)
+      }
+
+      return document.execCommand('copy')
+    } finally {
+      // Always remove the off-screen node, even if selection/execCommand throws.
+      textarea.remove()
+    }
+  } catch {
+    return false
+  }
+}
