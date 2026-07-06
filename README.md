@@ -8,7 +8,7 @@
 
 FreeFrame gives production houses and creative teams a self-hosted platform for reviewing video, image, and audio assets with frame-accurate commenting, annotations, and approval workflows. Your media stays on your infrastructure.
 
-> **This is a customized fork** ([Everillangel/freeframe](https://github.com/Everillangel/freeframe), branch `feature/nas-storage-and-comment-export`). On top of upstream FreeFrame it adds **NAS-backed storage via MinIO**, **NLE comment export** (Avid / DaVinci Resolve / Premiere / Final Cut), and **POPIA (South Africa) data-subject controls + security hardening**. See the [feature docs](#documentation) below.
+> **This is a customized fork** ([Everillangel/freeframe](https://github.com/Everillangel/freeframe)). On top of upstream FreeFrame it adds **NAS-backed storage via MinIO**, **NLE comment export** (Avid / DaVinci Resolve / Premiere / Final Cut), and **POPIA (South Africa) data-subject controls + security hardening**. See the [feature docs](#documentation) below.
 
 ---
 
@@ -36,8 +36,7 @@ FreeFrame gives production houses and creative teams a self-hosted platform for 
 **Prerequisites:** Docker and Docker Compose
 
 ```bash
-# Clone this fork's feature branch
-git clone -b feature/nas-storage-and-comment-export https://github.com/Everillangel/freeframe.git
+git clone https://github.com/Everillangel/freeframe.git
 cd freeframe
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
@@ -57,7 +56,7 @@ Open [http://localhost:3000](http://localhost:3000) to access FreeFrame. The fir
 ## Production Deployment
 
 ```bash
-git clone -b feature/nas-storage-and-comment-export https://github.com/Everillangel/freeframe.git
+git clone https://github.com/Everillangel/freeframe.git
 cd freeframe
 cp .env.example .env.prod
 # Edit .env.prod — set your credentials, S3/NAS, email config
