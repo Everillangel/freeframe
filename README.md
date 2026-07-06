@@ -8,6 +8,8 @@
 
 FreeFrame gives production houses and creative teams a self-hosted platform for reviewing video, image, and audio assets with frame-accurate commenting, annotations, and approval workflows. Your media stays on your infrastructure.
 
+> **This is a customized fork** ([Everillangel/freeframe](https://github.com/Everillangel/freeframe), branch `feature/nas-storage-and-comment-export`). On top of upstream FreeFrame it adds **NAS-backed storage via MinIO**, **NLE comment export** (Avid / DaVinci Resolve / Premiere / Final Cut), and **POPIA (South Africa) data-subject controls + security hardening**. See the [feature docs](#documentation) below.
+
 ---
 
 ## Features
@@ -16,6 +18,9 @@ FreeFrame gives production houses and creative teams a self-hosted platform for 
 - **Image and audio review** with annotations and waveform visualization
 - **Drawing annotations** on any frame using canvas tools
 - **Threaded comments** with mentions, reactions, and attachments
+- **NLE comment export** — download timecoded comments as markers for Avid, DaVinci Resolve, Premiere, and Final Cut (EDL / FCPXML / Avid locator / CSV) ⟶ *this fork*
+- **NAS-backed storage** — keep media on a Synology/QNAP/TrueNAS/Unraid NAS via MinIO ⟶ *this fork*
+- **POPIA data-subject controls** — self-service data export, admin export/erasure for users and guests, and a retention job ⟶ *this fork*
 - **Approval workflows** with per-reviewer status tracking
 - **Version management** to compare iterations side-by-side
 - **Folder organization** within projects
@@ -31,7 +36,8 @@ FreeFrame gives production houses and creative teams a self-hosted platform for 
 **Prerequisites:** Docker and Docker Compose
 
 ```bash
-git clone https://github.com/Techiebutler/freeframe.git
+# Clone this fork's feature branch
+git clone -b feature/nas-storage-and-comment-export https://github.com/Everillangel/freeframe.git
 cd freeframe
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
@@ -51,8 +57,12 @@ Open [http://localhost:3000](http://localhost:3000) to access FreeFrame. The fir
 ## Production Deployment
 
 ```bash
+git clone -b feature/nas-storage-and-comment-export https://github.com/Everillangel/freeframe.git
+cd freeframe
 cp .env.example .env.prod
-# Edit .env.prod — set your credentials, S3, email config
+# Edit .env.prod — set your credentials, S3/NAS, email config
+# IMPORTANT: rotate all default secrets (JWT_SECRET, MinIO, Postgres, Redis) — see docs/security-hardening.md
+# For NAS storage: point S3_ENDPOINT/S3_PUBLIC_ENDPOINT at your MinIO — see docs/nas-storage.md
 # For SSL: also set DOMAIN and ACME_EMAIL (Traefik auto-provisions Let's Encrypt certs)
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 ```
@@ -60,6 +70,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 For the full guide including **SSL setup**, **bring-your-own infrastructure** (external database, Redis, S3, SMTP), scaling, and troubleshooting, see:
 
 **[Production Deployment Guide](docs/deployment.md)**
+
+> Running per-client instances (isolated storage per client)? See the **one-instance-per-client** pattern in [docs/nas-storage.md](docs/nas-storage.md) and [docs/security-hardening.md](docs/security-hardening.md).
 
 ## Architecture
 
@@ -109,6 +121,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 | Guide | Description |
 |-------|-------------|
 | [Production Deployment](docs/deployment.md) | SSL, bring-your-own infra, scaling, troubleshooting |
+| [NLE Comment Export](docs/comment-export.md) | Export comments as markers for Avid, Resolve, Premiere, Final Cut |
 | [NAS Storage](docs/nas-storage.md) | Store media on a NAS (Synology/QNAP/TrueNAS/Unraid) via MinIO |
 | [Security & POPIA](docs/security-hardening.md) | Secret rotation, private storage, data-subject exports/erasure, POPIA (ZA) checklist |
 | [Architecture](docs/architecture.md) | System design, data flow, media pipeline, permissions |
