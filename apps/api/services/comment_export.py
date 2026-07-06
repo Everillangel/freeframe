@@ -75,6 +75,19 @@ def _one_line(text: str) -> str:
     return " ".join((text or "").split())
 
 
+def _csv_safe(value: str) -> str:
+    """Neutralise CSV/formula injection.
+
+    A cell beginning with =, +, -, @, or a control char can be executed as a
+    formula by Excel/Sheets/Numbers. Prefix such cells with a single quote so
+    they are treated as text on import.
+    """
+    s = "" if value is None else str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 # ── CSV ─────────────────────────────────────────────────────────────────────
 
 def build_csv(markers: list[Marker], asset_name: str, fps: float) -> str:
@@ -90,8 +103,8 @@ def build_csv(markers: list[Marker], asset_name: str, fps: float) -> str:
             tc_out,
             f"{m.seconds:.3f}",
             _to_frames(m.seconds, fps),
-            m.author,
-            _one_line(m.body),
+            _csv_safe(m.author),
+            _csv_safe(_one_line(m.body)),
             "yes" if m.resolved else "no",
             m.created_at.isoformat() if m.created_at else "",
         ])

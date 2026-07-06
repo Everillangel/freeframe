@@ -102,6 +102,19 @@ def test_fcpxml_is_wellformed_and_escapes():
         assert num % 1001 == 0
 
 
+def test_csv_neutralises_formula_injection():
+    markers = [
+        ce.Marker(1.0, None, "=Evil", '=HYPERLINK("http://x")', False, None),
+        ce.Marker(2.0, None, "+cmd", "@SUM(A1)", False, None),
+    ]
+    content, _, _ = ce.export("csv", markers, "T", 30)
+    # Dangerous leading chars are prefixed with a quote so spreadsheets treat as text
+    assert "'=HYPERLINK" in content
+    assert "'@SUM" in content
+    assert "'=Evil" in content
+    assert "'+cmd" in content
+
+
 def test_unsupported_format_raises():
     try:
         ce.export("srt", _markers(), "x", 30)
