@@ -68,15 +68,16 @@ FreeFrame is fully self-contained. Install Docker on any Linux server (Ubuntu 22
 ## Quick Setup
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/Techiebutler/freeframe.git
+# 1. Clone this fork's feature branch
+git clone -b feature/nas-storage-and-comment-export https://github.com/Everillangel/freeframe.git
 cd freeframe
 
 # 2. Create your production environment file
 cp .env.example .env.prod
 
 # 3. Edit .env.prod with your actual credentials
-#    At minimum: change passwords, configure S3, email, and JWT_SECRET
+#    At minimum: rotate ALL default secrets (JWT_SECRET, MinIO, Postgres, Redis),
+#    configure S3/NAS storage and email. See docs/security-hardening.md.
 nano .env.prod
 
 # 4. Build and start all services

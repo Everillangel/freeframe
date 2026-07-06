@@ -445,6 +445,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                   <CommentPanel
                     comments={comments as any}
                     currentUserId={user?.id}
+                    assetId={asset.id}
                     onResolve={resolveComment}
                     onDelete={deleteComment}
                     onAddReaction={addReaction}
