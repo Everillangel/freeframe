@@ -31,7 +31,7 @@ FreeFrame gives production houses and creative teams a self-hosted platform for 
 **Prerequisites:** Docker and Docker Compose
 
 ```bash
-git clone https://github.com/Techiebutler/freeframe.git
+git clone git@github.com:Everillangel/freeframe.git
 cd freeframe
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
