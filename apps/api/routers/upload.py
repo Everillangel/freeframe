@@ -7,6 +7,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
+from ..models.folder import Folder
 from ..models.project import Project
 from ..services.s3_service import (
     create_multipart_upload, presign_upload_part,
@@ -51,6 +52,19 @@ def initiate_upload(
         if asset.project_id != body.project_id:
             raise HTTPException(status_code=400, detail="Asset does not belong to the specified project")
     else:
+        # Validate the target folder for a new asset: it must exist, belong to this project, and not
+        # be soft-deleted -- otherwise a live asset could be placed under a trashed folder and later
+        # hard-deleted by the retention GC's folder cascade. folder_id is only persisted here (new
+        # asset); the new-version path above ignores it, so it must not be validated there.
+        if body.folder_id is not None:
+            folder = db.query(Folder).filter(
+                Folder.id == body.folder_id,
+                Folder.project_id == body.project_id,
+                Folder.deleted_at.is_(None),
+            ).first()
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+
         asset_type = mime_to_asset_type(body.mime_type)
         asset = Asset(
             project_id=body.project_id,

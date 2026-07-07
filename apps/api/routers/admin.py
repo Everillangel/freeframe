@@ -8,6 +8,10 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User, UserStatus
 from ..schemas.auth import UserResponse, UpdateUserRoleRequest
+from .users import require_admin
+from ..tasks.celery_app import send_task_safe
+from ..tasks.cleanup_tasks import cleanup_soft_deleted
+from ..schemas.admin import PurgeStartResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -109,3 +113,19 @@ def update_user_role(
     db.commit()
     db.refresh(user)
     return user
+
+@router.post("/purge", response_model=PurgeStartResponse, status_code=status.HTTP_202_ACCEPTED)
+def purge_now(current_user: User = Depends(require_admin)):
+    """Trigger the retention-window garbage collector to run now, in the background.
+
+    Superadmin only. Enqueues the same `cleanup_soft_deleted` task the daily beat runs, so the
+    request returns immediately instead of blocking on a potentially long cascade + S3 deletes.
+    Reclaimed counts are logged by the worker. If a purge is already running (e.g. the daily beat),
+    the advisory lock serializes purges and this enqueued run is skipped rather than double-cascading,
+    so a 202 here means "enqueued", not "a fresh run happened".
+    """
+    send_task_safe(cleanup_soft_deleted)
+    return PurgeStartResponse(
+        status="started",
+        detail="Retention garbage collection is running in the background; see worker logs for reclaimed counts.",
+    )
