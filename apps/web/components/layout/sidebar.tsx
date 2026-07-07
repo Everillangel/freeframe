@@ -21,6 +21,10 @@ import { useBrandingStore } from '@/stores/branding-store'
 import { useThemeStore } from '@/stores/theme-store'
 import { Avatar } from '@/components/shared/avatar'
 import { NotificationDrawer } from './notification-drawer'
+import useSWR from 'swr'
+import { api } from '@/lib/api'
+import { StorageUsage, StorageRing } from '@/components/shared/storage-usage'
+import type { InstanceSettings } from '@/types'
 
 interface NavItem {
   href: string
@@ -50,6 +54,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     : (orgLogoDark ?? orgLogoLight)
   const [notifOpen, setNotifOpen] = React.useState(false)
   const activeUploads = uploadFiles.filter((f) => f.status === 'uploading' || f.status === 'pending' || f.status === 'processing').length
+  const { data: instance } = useSWR<InstanceSettings>(
+    '/instance/settings',
+    () => api.get<InstanceSettings>('/instance/settings'),
+  )
 
   // Fetch notifications on mount
   React.useEffect(() => { fetchNotifications() }, [fetchNotifications])
@@ -188,6 +196,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="border-t border-border p-2 space-y-1 shrink-0">
+        {/* Instance storage indicator — ring when collapsed, used/limit bar when expanded */}
+        {instance && (
+          <div className={cn(collapsed ? 'flex justify-center py-1' : 'px-2.5 py-1.5')}>
+            {collapsed ? (
+              <StorageRing
+                used={instance.storage_used_bytes}
+                limit={instance.storage_limit_bytes}
+              />
+            ) : (
+              <StorageUsage
+                used={instance.storage_used_bytes}
+                limit={instance.storage_limit_bytes}
+                variant="sidebar"
+              />
+            )}
+          </div>
+        )}
         {/* User dropdown */}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
