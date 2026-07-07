@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # Reaper: uploads stuck in `uploading`/`failed` longer than this are reclaimed. Hours.
     stale_upload_timeout_hours: int = 24
 
+    # Retention GC: rows soft-deleted (deleted_at) longer than this are hard-deleted and their
+    # S3 objects reclaimed. Days. 0 (or negative) DISABLES the sweep (matches the reaper convention).
+    soft_delete_retention_days: int = 30
+
+    # Orphan S3 sweeper (issue #65 follow-up): reclaim bucket keys under raw/ + processed/ that no
+    # MediaFile row owns. 0 = disabled. When > 0, only keys whose S3 LastModified is older than this
+    # many hours are considered, so in-flight / just-committed uploads are never mistaken for orphans.
+    orphan_sweep_grace_hours: int = 0
+    # Report-only by default: when False the sweeper only LOGS what it would delete; set True to delete.
+    orphan_sweep_delete: bool = False
+
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
     email_concurrency: int = 2  # Number of concurrent email sending jobs
