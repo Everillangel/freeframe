@@ -76,6 +76,9 @@ export function ReviewProvider({
   // In share mode, remembers which version the current stream_url corresponds to,
   // so switching versions refetches the stream but the initial load does not double-fetch.
   const streamedVersionRef = useRef<string | null>(null);
+  // Guards against a stale comments fetch (e.g. an in-flight all-versions request)
+  // overwriting a newer version-scoped one — only the latest request applies its result.
+  const commentsReqRef = useRef(0);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -203,6 +206,7 @@ export function ReviewProvider({
   }, [assetId, shareToken, shareSessionParam, setCurrentAsset, setCurrentVersion]);
 
   const fetchComments = useCallback(async () => {
+    const reqId = ++commentsReqRef.current;
     try {
       let data: Comment[];
       if (shareToken) {
@@ -225,7 +229,7 @@ export function ReviewProvider({
       } else {
         data = await api.get<Comment[]>(`/assets/${assetId}/comments`);
       }
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || reqId !== commentsReqRef.current) return;
       setComments(data ?? []);
     } catch {
       // Comments failing silently — asset is still viewable
@@ -250,15 +254,20 @@ export function ReviewProvider({
   useEffect(() => {
     setIsLoading(true);
     setError(null);
-    Promise.all([fetchAsset(), fetchComments()]).finally(() => {
+    // In share mode, comments are version-scoped and fetched by the effect below once
+    // the version is known — so the first (and only) comments request is already scoped
+    // to the viewed version, avoiding an all-versions flash on open.
+    const commentsPromise = shareToken ? Promise.resolve() : fetchComments();
+    Promise.all([fetchAsset(), commentsPromise]).finally(() => {
       if (mountedRef.current) setIsLoading(false);
     });
-  }, [fetchAsset, fetchComments]);
+  }, [fetchAsset, fetchComments, shareToken]);
 
-  // Share mode: re-scope comments to the selected version when it changes.
+  // Share mode: (re)scope comments to the selected version — but only once a version is
+  // known, so we never fetch the unfiltered all-versions list.
   const currentVersionId = currentVersion?.id;
   useEffect(() => {
-    if (!shareToken) return;
+    if (!shareToken || !currentVersionId) return;
     fetchComments();
     // fetchComments reads the current version via getState, so it is intentionally
     // not a dependency here — currentVersionId is the trigger.
