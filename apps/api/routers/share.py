@@ -184,6 +184,15 @@ def _latest_version_comment_count(db: Session, asset_id: uuid.UUID) -> int:
     ).scalar() or 0
 
 
+def _ready_version_count(db: Session, asset_id: uuid.UUID) -> int:
+    """Number of ready versions available for an asset (shown on the share preview card)."""
+    return db.query(sa_func.count(AssetVersion.id)).filter(
+        AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).scalar() or 0
+
+
 # ── Share links ───────────────────────────────────────────────────────────────
 
 @router.post("/assets/{asset_id}/share", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -1234,7 +1243,9 @@ def get_folder_share_assets(
                 asset_items.append(FolderShareAssetItem(
                     id=a.id, name=a.name, asset_type=a.asset_type.value if hasattr(a.asset_type, 'value') else str(a.asset_type),
                     thumbnail_url=thumbnail_url, created_at=a.created_at.isoformat() if a.created_at else "",
-                    file_size_bytes=mf.file_size_bytes if mf else 0, comment_count=comment_count,
+                    file_size=mf.file_size_bytes if mf else None,
+                    duration_seconds=mf.duration_seconds if mf else None,
+                    comment_count=comment_count, version_count=_ready_version_count(db, a.id),
                 ))
         else:
             total = 0
@@ -1347,6 +1358,7 @@ def get_folder_share_assets(
             file_size=file_size,
             duration_seconds=duration_seconds,
             comment_count=comment_count,
+            version_count=_ready_version_count(db, asset.id),
             created_by_name=creator.name if creator else None,
             created_at=asset.created_at,
         ))

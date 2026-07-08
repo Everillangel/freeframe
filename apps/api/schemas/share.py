@@ -138,6 +138,7 @@ class FolderShareAssetItem(BaseModel):
     file_size: Optional[int] = None
     duration_seconds: Optional[float] = None
     comment_count: int = 0
+    version_count: int = 1
     created_by_name: Optional[str] = None
     created_at: datetime
 

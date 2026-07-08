@@ -13,6 +13,7 @@ import {
   Music,
   Loader2,
   MessageSquare,
+  Layers,
   PanelRightClose,
   PanelRightOpen,
   ArrowLeft,
@@ -302,6 +303,14 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
               <TypeIcon className="h-7 w-7" />
             </div>
+          </div>
+        )}
+
+        {/* Version count badge — top left (only when multiple versions exist) */}
+        {(asset.version_count ?? 1) > 1 && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-bg-primary/80 backdrop-blur-sm rounded-md px-1.5 py-0.5" title={`${asset.version_count} versions`}>
+            <Layers className="h-3 w-3 text-text-primary" />
+            <span className="text-[10px] font-medium text-text-primary tabular-nums">{asset.version_count}</span>
           </div>
         )}
 
