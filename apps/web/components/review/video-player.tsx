@@ -171,6 +171,10 @@ export function VideoPlayer({
   // video doesn't keep playing while the new URL is being fetched.
   const versionId = currentVersion?.id;
   useEffect(() => {
+    // Guard against a superseded fetch: rapid version switching starts overlapping
+    // requests, and without this a slower earlier response could land last and leave
+    // the player on the wrong version's stream.
+    let ignore = false;
     setStreamUrl(null);
     if (initialStreamUrl) {
       const resolved = initialStreamUrl.startsWith("/")
@@ -188,6 +192,7 @@ export function VideoPlayer({
     api
       .get<StreamUrlResponse>(streamPath)
       .then((data) => {
+        if (ignore) return;
         // HLS proxy returns relative paths — prepend API URL
         const url = data.url.startsWith("/")
           ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${data.url}`
@@ -197,6 +202,9 @@ export function VideoPlayer({
       .catch(() => {
         /* stream URL errors handled by player error state */
       });
+    return () => {
+      ignore = true;
+    };
   }, [assetId, initialStreamUrl, versionId]);
 
   const player = useVideoPlayer(streamUrl);
