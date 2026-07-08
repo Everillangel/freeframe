@@ -1158,9 +1158,14 @@ def get_folder_share_assets(
     per_page: int = 50,
     share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Public endpoint — no auth required. Returns assets and subfolders for a folder or project share link."""
-    link = validate_share_link_with_session(db, token, share_session=share_session)
+    """Public endpoint — optional auth. Returns assets and subfolders for a folder or project share link.
+
+    The authenticated link creator bypasses the passphrase (e.g. the dashboard settings preview),
+    matching `/share/{token}/stream/{asset_id}`.
+    """
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
     is_project_share = link.project_id is not None
     if not link.folder_id and not is_project_share:
@@ -1420,9 +1425,13 @@ def get_share_thumbnail_url(
     asset_id: uuid.UUID,
     share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Public endpoint — no auth required. Returns presigned thumbnail URL for an asset in a share link."""
-    link = validate_share_link_with_session(db, token, share_session=share_session)
+    """Public endpoint — optional auth. Returns presigned thumbnail URL for an asset in a share link.
+
+    The authenticated link creator bypasses the passphrase, matching the other share endpoints.
+    """
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
     asset = _get_asset(db, asset_id)
 
