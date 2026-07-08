@@ -134,7 +134,7 @@ export function VideoPlayer({
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loop, setLoop] = useState(false);
 
-  const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
+  const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime, currentVersion } =
     useReviewStore();
   const { registerPauseHandler } = useReview();
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
@@ -167,8 +167,9 @@ export function VideoPlayer({
     }
   }
 
-  // Load the stream URL — reset immediately on asset change so the old video
-  // doesn't keep playing while the new URL is being fetched.
+  // Load the stream URL — reset immediately on asset OR version change so the old
+  // video doesn't keep playing while the new URL is being fetched.
+  const versionId = currentVersion?.id;
   useEffect(() => {
     setStreamUrl(null);
     if (initialStreamUrl) {
@@ -178,8 +179,14 @@ export function VideoPlayer({
       setStreamUrl(resolved);
       return;
     }
+    // Pin the stream to the selected version — without version_id the API falls
+    // back to the latest version, so the switcher never actually changes the
+    // playing stream (#66).
+    const streamPath = versionId
+      ? `/assets/${assetId}/stream?version_id=${versionId}`
+      : `/assets/${assetId}/stream`;
     api
-      .get<StreamUrlResponse>(`/assets/${assetId}/stream`)
+      .get<StreamUrlResponse>(streamPath)
       .then((data) => {
         // HLS proxy returns relative paths — prepend API URL
         const url = data.url.startsWith("/")
@@ -190,7 +197,7 @@ export function VideoPlayer({
       .catch(() => {
         /* stream URL errors handled by player error state */
       });
-  }, [assetId, initialStreamUrl]);
+  }, [assetId, initialStreamUrl, versionId]);
 
   const player = useVideoPlayer(streamUrl);
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Video version switcher now plays the selected version's stream** ([#66](https://github.com/Techiebutler/freeframe/issues/66)) — the review player fetched `/assets/{id}/stream` without a `version_id`, so switching versions updated the dropdown but the `<video>` kept playing the latest version's stream. The player now pins the stream to the selected version and re-fetches (resetting playback) when the version changes.
+- **New asset versions appear without a hard refresh, with an in-progress indicator** ([#118](https://github.com/Techiebutler/freeframe/issues/118)) — the review screen now revalidates the version list from transcode SSE events instead of a single best-effort timer, so a freshly uploaded version shows up and advances through uploading → processing → ready on its own. The version switcher trigger now surfaces a spinner/label while a new version is still uploading or processing (previously that status was only visible inside the dropdown).
+
 ## [1.3.0] - 2026-07-07
 
 ### Upgrade notes
