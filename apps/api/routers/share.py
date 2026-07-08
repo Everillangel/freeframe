@@ -1245,7 +1245,8 @@ def get_folder_share_assets(
                     thumbnail_url=thumbnail_url, created_at=a.created_at.isoformat() if a.created_at else "",
                     file_size=mf.file_size_bytes if mf else None,
                     duration_seconds=mf.duration_seconds if mf else None,
-                    comment_count=comment_count, version_count=_ready_version_count(db, a.id),
+                    comment_count=comment_count,
+                    version_count=(_ready_version_count(db, a.id) if link.show_versions else 1),
                 ))
         else:
             total = 0
@@ -1358,7 +1359,7 @@ def get_folder_share_assets(
             file_size=file_size,
             duration_seconds=duration_seconds,
             comment_count=comment_count,
-            version_count=_ready_version_count(db, asset.id),
+            version_count=(_ready_version_count(db, asset.id) if link.show_versions else 1),
             created_by_name=creator.name if creator else None,
             created_at=asset.created_at,
         ))
