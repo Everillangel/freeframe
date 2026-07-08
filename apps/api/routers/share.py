@@ -167,6 +167,23 @@ def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFi
     return db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
 
 
+def _latest_version_comment_count(db: Session, asset_id: uuid.UUID) -> int:
+    """Count comments on an asset's latest ready version — matches the version-scoped
+    folder/grid preview, which has no version picker."""
+    version = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).order_by(AssetVersion.version_number.desc()).first()
+    if not version:
+        return 0
+    return db.query(sa_func.count(Comment.id)).filter(
+        Comment.asset_id == asset_id,
+        Comment.version_id == version.id,
+        Comment.deleted_at.is_(None),
+    ).scalar() or 0
+
+
 # ── Share links ───────────────────────────────────────────────────────────────
 
 @router.post("/assets/{asset_id}/share", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -1213,9 +1230,7 @@ def get_folder_share_assets(
             for a in shared_assets:
                 mf = _get_latest_media_file(db, a.id)
                 thumbnail_url = generate_presigned_get_url(mf.s3_key_thumbnail) if mf and mf.s3_key_thumbnail else None
-                comment_count = db.query(sa_func.count(Comment.id)).filter(
-                    Comment.asset_id == a.id, Comment.deleted_at.is_(None),
-                ).scalar() or 0
+                comment_count = _latest_version_comment_count(db, a.id)
                 asset_items.append(FolderShareAssetItem(
                     id=a.id, name=a.name, asset_type=a.asset_type.value if hasattr(a.asset_type, 'value') else str(a.asset_type),
                     thumbnail_url=thumbnail_url, created_at=a.created_at.isoformat() if a.created_at else "",
@@ -1319,10 +1334,7 @@ def get_folder_share_assets(
             file_size = media_file.file_size_bytes
             duration_seconds = media_file.duration_seconds
 
-        comment_count = db.query(sa_func.count(Comment.id)).filter(
-            Comment.asset_id == asset.id,
-            Comment.deleted_at.is_(None),
-        ).scalar() or 0
+        comment_count = _latest_version_comment_count(db, asset.id)
 
         # Get creator name
         creator = db.query(User).filter(User.id == asset.created_by).first() if asset.created_by else None
