@@ -546,11 +546,14 @@ def list_share_comments(
     token: str,
     asset_id: Optional[uuid.UUID] = None,
     version_id: Optional[uuid.UUID] = None,
+    latest_only: bool = False,
     db: Session = Depends(get_db),
 ):
     """Public endpoint — list comments for a shared asset. No auth required.
     For folder/project shares, pass asset_id as query param to get comments for a specific asset.
-    Pass version_id to scope comments to a single version (matches the authenticated review view)."""
+    Pass version_id to scope comments to a single version (matches the authenticated review view).
+    Pass latest_only=true to scope to the latest ready version — used by the folder/grid preview,
+    which has no version picker."""
     link = validate_share_link(db, token)
 
     # Determine the asset_id to list comments for
@@ -558,6 +561,16 @@ def list_share_comments(
     if not target_asset_id:
         return []
     asset_id = target_asset_id
+
+    # The folder/grid preview has no version switcher, so it scopes to the latest ready version.
+    if latest_only and not version_id:
+        from ..models.asset import AssetVersion, ProcessingStatus
+        latest = db.query(AssetVersion).filter(
+            AssetVersion.asset_id == asset_id,
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        ).order_by(AssetVersion.version_number.desc()).first()
+        version_id = latest.id if latest else version_id
 
     # Get top-level comments — reuse same format as authenticated endpoint
     query = db.query(Comment).filter(
