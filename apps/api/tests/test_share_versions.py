@@ -95,3 +95,23 @@ def test_share_comments_accepts_version_id(
     assert resp.status_code == 200, resp.text
     assert resp.json() == []
     mock_build.assert_not_called()
+
+
+@patch("apps.api.routers.comments._build_comment_response")
+@patch("apps.api.routers.comments.validate_share_link")
+def test_share_comments_accepts_latest_only(
+    mock_validate_link, mock_build, client, mock_db
+):
+    """The folder/grid preview scopes to the latest ready version via latest_only=true."""
+    link = MagicMock()
+    link.asset_id = None
+    mock_validate_link.return_value = link
+
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.return_value = None  # no ready version resolved
+    mock_db.all.return_value = []
+
+    resp = client.get(f"/share/tok/comments?asset_id={uuid.uuid4()}&latest_only=true")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == []

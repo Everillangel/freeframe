@@ -413,7 +413,9 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
       return
     }
     setLoadingComments(true)
-    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`)
+    // The grid preview has no version switcher — scope to the latest ready version
+    // so it doesn't mix comments from every version.
+    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}&latest_only=true`)
       .then((r) => (r.ok ? r.json() : Promise.resolve([])))
       .then((data) => setComments(Array.isArray(data) ? data : (data.comments ?? [])))
       .catch(() => setComments([]))
