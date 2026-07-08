@@ -17,6 +17,7 @@ import { ShareDialog } from '@/components/review/share-dialog'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
+import { useSSE } from '@/hooks/use-sse'
 import { api } from '@/lib/api'
 import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
@@ -124,6 +125,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     addReaction,
     removeReaction,
   } = useComments(asset?.id || '', currentVersion?.id || '')
+
+  // Keep the version list live: when a new version transcodes, revalidate so it
+  // appears/updates in the switcher without a hard refresh (#118). The review
+  // provider's versions are plain state, not SWR, so nothing else refetches them.
+  const refetchIfThisAsset = (eventAssetId: string) => {
+    if (eventAssetId === asset?.id) refetchVersions()
+  }
+  useSSE(asset?.project_id, {
+    onTranscodeProgress: (d) => refetchIfThisAsset(d.asset_id),
+    onTranscodeComplete: (d) => refetchIfThisAsset(d.asset_id),
+    onTranscodeFailed: (d) => refetchIfThisAsset(d.asset_id),
+  })
 
   // Deep-link to a specific comment from notification (?commentId=...)
   // Runs once after comments are loaded — seeks to timecode, focuses comment, shows annotation
@@ -370,8 +383,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               if (!file || !asset) return
               startVersionUpload(file, asset.id, asset.name, asset.project_id)
               e.target.value = ''
-              // Refetch versions after a short delay to show the new uploading version
+              // Surface the newly-created version (starts as "uploading") quickly;
+              // SSE transcode events then drive it through processing → ready (#118).
               setTimeout(() => refetchVersions(), 800)
+              setTimeout(() => refetchVersions(), 2500)
             }}
           />
           <VersionSwitcher versions={versions} />
