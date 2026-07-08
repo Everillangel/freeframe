@@ -68,11 +68,14 @@ export function ReviewProvider({
   const [error, setError] = useState<string | null>(null);
   const pauseHandlerRef = useRef<(() => void) | null>(null);
 
-  const { setCurrentAsset, setCurrentVersion, setPlayheadTime } =
+  const { setCurrentAsset, setCurrentVersion, setPlayheadTime, currentVersion } =
     useReviewStore();
 
   // Track whether component is still mounted to avoid state updates after unmount
   const mountedRef = useRef(true);
+  // In share mode, remembers which version the current stream_url corresponds to,
+  // so switching versions refetches the stream but the initial load does not double-fetch.
+  const streamedVersionRef = useRef<string | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -157,8 +160,41 @@ export function ReviewProvider({
         } else if (data.latest_version) {
           setCurrentVersion(data.latest_version);
         }
-      } else if (data.latest_version) {
-        setCurrentVersion(data.latest_version);
+      } else {
+        // Share mode: fetch the versions the guest may see (the server exposes all ready
+        // versions only when the link enables "Show all versions", else just the latest).
+        // The initial stream_url above already corresponds to the latest version.
+        streamedVersionRef.current = data.latest_version?.id ?? null;
+        const API_URL =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const headers: Record<string, string> = {};
+        try {
+          const t = localStorage.getItem("ff_access_token");
+          if (t) headers["Authorization"] = `Bearer ${t}`;
+        } catch {}
+        try {
+          const vres = await fetch(
+            `${API_URL}/share/${shareToken}/assets/${assetId}/versions?_=1${shareSessionParam}`,
+            { headers },
+          );
+          const vlist = vres.ok ? await vres.json() : [];
+          if (!mountedRef.current) return;
+          const mapped = ((vlist as any[]) ?? []).map((v) => ({
+            id: v.id,
+            asset_id: assetId,
+            version_number: v.version_number,
+            processing_status: v.processing_status,
+            created_by: "",
+            created_at: v.created_at,
+            deleted_at: null,
+            files: [],
+          })) as AssetVersion[];
+          setVersions(mapped);
+          if (mapped.length > 0) setCurrentVersion(mapped[0]);
+          else if (data.latest_version) setCurrentVersion(data.latest_version);
+        } catch {
+          if (data.latest_version) setCurrentVersion(data.latest_version);
+        }
       }
     } catch (err) {
       if (!mountedRef.current) return;
@@ -172,8 +208,12 @@ export function ReviewProvider({
       if (shareToken) {
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        // Scope comments to the version currently being viewed (read non-reactively so
+        // this callback stays stable; a dedicated effect re-runs it when the version changes).
+        const versionId = useReviewStore.getState().currentVersion?.id;
+        const vParam = versionId ? `&version_id=${versionId}` : "";
         const res = await fetch(
-          `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${shareSessionParam}`,
+          `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${vParam}${shareSessionParam}`,
         );
         if (res.ok) {
           const json = await res.json();
@@ -214,6 +254,45 @@ export function ReviewProvider({
       if (mountedRef.current) setIsLoading(false);
     });
   }, [fetchAsset, fetchComments]);
+
+  // Share mode: re-scope comments to the selected version when it changes.
+  const currentVersionId = currentVersion?.id;
+  useEffect(() => {
+    if (!shareToken) return;
+    fetchComments();
+    // fetchComments reads the current version via getState, so it is intentionally
+    // not a dependency here — currentVersionId is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareToken, currentVersionId]);
+
+  // Share mode: swap the video stream to the selected version's media when it changes.
+  useEffect(() => {
+    if (!shareToken || !currentVersionId) return;
+    if (currentVersionId === streamedVersionRef.current) return; // already showing this version
+    let cancelled = false;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const headers: Record<string, string> = {};
+    try {
+      const t = localStorage.getItem("ff_access_token");
+      if (t) headers["Authorization"] = `Bearer ${t}`;
+    } catch {}
+    fetch(
+      `${API_URL}/share/${shareToken}/stream/${assetId}?version_id=${currentVersionId}${shareSessionParam}`,
+      { headers },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((streamData) => {
+        if (cancelled || !mountedRef.current || !streamData?.url) return;
+        streamedVersionRef.current = currentVersionId;
+        setAsset((prev) =>
+          prev ? ({ ...prev, stream_url: streamData.url } as AssetResponse) : prev,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [shareToken, assetId, currentVersionId, shareSessionParam]);
 
   const addComment = useCallback(
     async (payload: CreateCommentPayload): Promise<Comment> => {

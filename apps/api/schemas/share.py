@@ -157,6 +157,15 @@ class FolderShareAssetsResponse(BaseModel):
     per_page: int
 
 
+class ShareAssetVersionItem(BaseModel):
+    """A ready version of a shared asset, exposed to guests on the public share player."""
+    id: uuid.UUID
+    version_number: int
+    processing_status: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
 class DirectShareCreate(BaseModel):
     permission: SharePermission = SharePermission.view
     user_id: Optional[uuid.UUID] = None

@@ -26,6 +26,7 @@ from ..schemas.share import (
     FolderShareAssetItem,
     FolderShareAssetsResponse,
     FolderShareSubfolder,
+    ShareAssetVersionItem,
     MultiShareCreate,
     ShareLinkActivityResponse,
     ShareLinkCreate,
@@ -1351,12 +1352,17 @@ def get_folder_share_assets(
 def get_share_stream_url(
     token: str,
     asset_id: uuid.UUID,
+    version_id: Optional[uuid.UUID] = Query(default=None),
     share_session: Optional[str] = Query(None, alias="share_session"),
     download: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link."""
+    """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link.
+
+    When the share link enables "Show all versions", `version_id` selects a specific ready
+    version; otherwise (or when omitted/invalid) the latest ready version is served.
+    """
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
     # Enforce allow_download when explicit download is requested
@@ -1368,7 +1374,19 @@ def get_share_stream_url(
     # Validate asset belongs to this share
     _validate_asset_in_share(db, link, asset)
 
-    media_file = _get_latest_media_file(db, asset.id)
+    media_file = None
+    if version_id and link.show_versions:
+        version = db.query(AssetVersion).filter(
+            AssetVersion.id == version_id,
+            AssetVersion.asset_id == asset.id,
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        ).first()
+        if version:
+            media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
+    if not media_file:
+        # No (or non-visible) version requested — fall back to the latest ready version.
+        media_file = _get_latest_media_file(db, asset.id)
     if not media_file:
         raise HTTPException(status_code=404, detail="No ready media file found")
 
@@ -1435,3 +1453,34 @@ def get_share_thumbnail_url(
 
     url = generate_presigned_get_url(media_file.s3_key_thumbnail)
     return {"url": url}
+
+
+@router.get("/share/{token}/assets/{asset_id}/versions", response_model=list[ShareAssetVersionItem])
+def get_share_asset_versions(
+    token: str,
+    asset_id: uuid.UUID,
+    share_session: Optional[str] = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Public endpoint — optional auth. Lists a shared asset's ready versions for the viewer.
+
+    Only returns multiple versions when the share link enables "Show all versions"; otherwise
+    only the latest ready version is exposed to the guest.
+    """
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
+
+    asset = _get_asset(db, asset_id)
+    _validate_asset_in_share(db, link, asset)
+
+    versions = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset.id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).order_by(AssetVersion.version_number.desc()).all()
+
+    if not link.show_versions:
+        # Version history hidden — expose only the latest ready version.
+        versions = versions[:1]
+
+    return versions
