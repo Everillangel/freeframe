@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Passphrase-protected share previews no longer show "No content yet"** ([#119](https://github.com/Techiebutler/freeframe/issues/119)) — the public `/share/{token}/assets` and `/share/{token}/thumbnail/{asset_id}` endpoints now honor the authenticated link creator's passphrase bypass (matching `/share/{token}/stream/{asset_id}`), so the dashboard settings preview loads a password-protected link's assets instead of rendering an empty state.
+
 ## [1.3.0] - 2026-07-07
 
 ### Upgrade notes
