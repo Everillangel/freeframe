@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-08
+
 ### Added
 - **Version-aware public share player** ([#120](https://github.com/Techiebutler/freeframe/issues/120)) — on folder/project/multi-share links with **Show all versions** enabled, the shared asset viewer now shows a version switcher; selecting a version swaps the streamed media and scopes comments to that version. Previously only the latest version played and comments from every version were shown regardless of the selection. The folder/grid preview (which has no version picker) now scopes its comment list — and each asset card's comment count — to the latest ready version instead of counting/showing every version's comments. New guest endpoint `GET /share/{token}/assets/{asset_id}/versions` (exposes all ready versions only when the link enables version history, otherwise just the latest); `GET /share/{token}/stream/{asset_id}` and `GET /share/{token}/comments` now accept an optional `version_id` (comments also accept `latest_only`). The separate single-asset custom-player path is tracked in [#123](https://github.com/Techiebutler/freeframe/issues/123).
 - **Share preview cards show a version-count badge and duration chip** — each asset card in the folder/grid share preview now shows a "⧉ N" badge when the asset has multiple ready versions, and the multi-share preview path now passes through media duration and file size (the duration chip renders once media duration is populated — currently blocked by [#124](https://github.com/Techiebutler/freeframe/issues/124)).
