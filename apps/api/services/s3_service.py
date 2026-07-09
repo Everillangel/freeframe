@@ -1,9 +1,13 @@
 import json
+import logging
 import os
 import re
+from functools import lru_cache
 import boto3
 from botocore.exceptions import ClientError
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 # S3 Content-Type and Cache-Control mappings
 CONTENT_TYPE_MAP = {
@@ -21,6 +25,7 @@ def _is_aws_s3() -> bool:
     """Check if using AWS S3 (vs MinIO/local). Controlled by S3_STORAGE env var."""
     return settings.s3_storage.lower() == "s3"
 
+@lru_cache(maxsize=1)
 def get_s3_client():
     """
     Create the S3 client for server-side operations. Selection is driven by
@@ -46,6 +51,7 @@ def get_s3_client():
             region_name=settings.s3_region,
         )
 
+@lru_cache(maxsize=1)
 def _get_presign_client():
     """
     Client for generating presigned URLs. Uses s3_public_endpoint if set,
@@ -105,8 +111,19 @@ def ensure_bucket_exists():
                     ]
                 },
             )
-        except ClientError:
-            pass  # CORS config failed, non-critical
+        except ClientError as e:
+            # Non-fatal, but surfaced: browser multipart uploads assemble the
+            # CompleteMultipartUpload from each part's ETag response header,
+            # which the browser only exposes when the bucket's CORS
+            # ExposeHeaders includes "ETag". If we can't set CORS here, uploads
+            # may fail client-side with a generic error and no server log —
+            # so warn and point the operator at the docs (issue #131).
+            logger.warning(
+                "Could not set bucket CORS on %r (%s). Browser multipart uploads "
+                "need the bucket CORS ExposeHeaders to include 'ETag'; configure it "
+                "manually on your S3 provider — see docs/deployment.md (External S3 Storage).",
+                settings.s3_bucket, e,
+            )
 
         # Set public-read policy on processed/ prefix so HLS sub-playlists
         # and .ts segments can be fetched without presigned URLs
