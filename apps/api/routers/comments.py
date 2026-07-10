@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,7 @@ from ..schemas.comment import (
 from ..services import s3_service
 from ..services import comment_export
 from ..services.permissions import require_asset_access, validate_share_link
+from ..utils.base_url import get_public_base_url
 from ..tasks.email_tasks import send_mention_email, send_comment_email
 from ..tasks.celery_app import send_task_safe
 
@@ -624,6 +625,7 @@ def list_reactions(
 def comment_deep_link(
     asset_id: uuid.UUID,
     comment_id: uuid.UUID,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -638,7 +640,9 @@ def comment_deep_link(
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
 
-    url = f"{settings.frontend_url}/assets/{asset_id}?comment={comment_id}"
+    # Build the link against the requesting origin so it isn't tied to a host.
+    base = get_public_base_url(request)
+    url = f"{base}/assets/{asset_id}?comment={comment_id}"
     return {"url": url}
 
 

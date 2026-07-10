@@ -150,9 +150,15 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile.prod
       args:
+        # Browser calls the API at the same origin via /api (Traefik routes it).
         NEXT_PUBLIC_API_URL: /api
     env_file:
       - .env.prod
+    environment:
+      # Server-side target for the web container itself (Next middleware +
+      # the /api rewrite fallback). The browser's /api is handled by Traefik;
+      # this lets the web container reach the API directly on the compose network.
+      - API_PROXY_TARGET=http://api:8000
     depends_on:
       - api
     healthcheck:

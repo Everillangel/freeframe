@@ -94,9 +94,16 @@ FreeFrame is now running on **port 80**. The first user to sign up becomes the s
 ## Remote Access & Reverse Proxy (LAN / Tailscale / custom nginx)
 
 The browser talks to the API at the **same origin** via a relative **`/api`**
-path — so there is **no CORS to configure and no host to hardcode**. It works
-from `localhost`, over a LAN/Tailscale IP, or behind your own domain, as long as
-`/api` is routed to the API service.
+path, and in-app links use the current origin — so there is **no CORS to
+configure and no host hardcoded anywhere**. The app works from `localhost`, a
+LAN/Tailscale IP, or a domain with no reconfiguration, as long as `/api` is
+routed to the API service. If services move (new IP, new host), nothing here
+changes. MinIO's browser CORS is set to allow any origin (access is gated by
+presigned-URL signatures), so direct uploads/media work from any host too.
+
+`FRONTEND_URL` is **not** part of reaching the app — it only builds links inside
+outbound emails, so set it to a stable domain (or leave it) rather than the IP
+you happen to use.
 
 - The **production compose** already does this: Traefik routes `/api` → the API
   and `/` → the web app on one origin. Nothing to do.
@@ -133,9 +140,9 @@ server {
 }
 ```
 
-Then set `FRONTEND_URL` to that exact origin (e.g. `http://100.120.90.1`) so
-share/email links and MinIO CORS are correct. You do **not** need to expose the
-API port publicly — nginx reaches it locally.
+You do **not** need to expose the API port publicly — nginx reaches it locally,
+and the browser only ever talks to this one origin. `FRONTEND_URL` is unrelated
+to access (emails only), so it can stay a stable domain or the default.
 
 ---
 

@@ -97,7 +97,11 @@ def ensure_bucket_exists():
                         {
                             "AllowedHeaders": ["*"],
                             "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-                            "AllowedOrigins": [settings.frontend_url, "http://localhost:3000"],
+                            # Any origin: access is gated by presigned-URL signatures,
+                            # not by browser origin. This keeps direct uploads/media
+                            # working from any host (localhost, LAN/Tailscale, domain)
+                            # without pinning the bucket to a single FRONTEND_URL.
+                            "AllowedOrigins": ["*"],
                             "ExposeHeaders": ["ETag", "Content-Length", "x-amz-request-id"],
                             "MaxAgeSeconds": 3600,
                         }
