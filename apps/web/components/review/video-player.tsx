@@ -173,7 +173,7 @@ export function VideoPlayer({
     setStreamUrl(null);
     if (initialStreamUrl) {
       const resolved = initialStreamUrl.startsWith("/")
-        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${initialStreamUrl}`
+        ? `${process.env.NEXT_PUBLIC_API_URL || "/api"}${initialStreamUrl}`
         : initialStreamUrl;
       setStreamUrl(resolved);
       return;
@@ -183,7 +183,7 @@ export function VideoPlayer({
       .then((data) => {
         // HLS proxy returns relative paths — prepend API URL
         const url = data.url.startsWith("/")
-          ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${data.url}`
+          ? `${process.env.NEXT_PUBLIC_API_URL || "/api"}${data.url}`
           : data.url;
         setStreamUrl(url);
       })

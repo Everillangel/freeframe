@@ -191,7 +191,7 @@ export function ImageViewer({ asset, version, className, annotationCanvas }: Ima
       let cancelled = false
       setIsLoading(true)
       setError(null)
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
       const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
       fetch(`${API_URL}/share/${shareToken}/stream/${asset.id}?version_id=${version.id}${sp}`)
         .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image')))

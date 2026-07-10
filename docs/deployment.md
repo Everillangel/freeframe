@@ -91,6 +91,54 @@ FreeFrame is now running on **port 80**. The first user to sign up becomes the s
 
 ---
 
+## Remote Access & Reverse Proxy (LAN / Tailscale / custom nginx)
+
+The browser talks to the API at the **same origin** via a relative **`/api`**
+path — so there is **no CORS to configure and no host to hardcode**. It works
+from `localhost`, over a LAN/Tailscale IP, or behind your own domain, as long as
+`/api` is routed to the API service.
+
+- The **production compose** already does this: Traefik routes `/api` → the API
+  and `/` → the web app on one origin. Nothing to do.
+- The **dev compose** ships a Next.js rewrite that forwards `/api` to the API
+  (`NEXT_PUBLIC_API_URL=/api`, `API_PROXY_TARGET=http://api:8000`). So accessing
+  the dev stack over a LAN/Tailscale IP just works — no `localhost` baked in.
+
+### Behind your own nginx
+
+If you front FreeFrame with your own nginx (e.g. serving the dev stack on a
+Tailscale host), route both the app and `/api` on one origin. Streaming
+(SSE / HLS manifests) needs buffering **off**:
+
+```nginx
+server {
+    listen 80;
+    server_name 100.120.90.1;   # your LAN/Tailscale host
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;   # trailing slash strips /api
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Connection '';
+        proxy_buffering off;                  # required for SSE live updates
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000/;    # the web app (map to your port)
+        proxy_set_header Host $host;
+    }
+}
+```
+
+Then set `FRONTEND_URL` to that exact origin (e.g. `http://100.120.90.1`) so
+share/email links and MinIO CORS are correct. You do **not** need to expose the
+API port publicly — nginx reaches it locally.
+
+---
+
 ## SSL / TLS Setup
 
 FreeFrame uses **Traefik** as its reverse proxy, which can automatically provision and renew **Let's Encrypt** SSL certificates with zero manual setup.

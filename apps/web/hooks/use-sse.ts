@@ -74,7 +74,7 @@ export interface UseSSEReturn {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
 const BACKOFF_STEPS = [1000, 2000, 4000, 8000, 16000, 30000]
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

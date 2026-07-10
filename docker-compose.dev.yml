@@ -149,7 +149,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Browser calls the API at the same origin via "/api" (no CORS, no
+      # hardcoded host — works locally and behind a reverse proxy / Tailscale).
+      - NEXT_PUBLIC_API_URL=/api
+      # Server-side proxy target for the "/api" rewrite (Next server -> api service).
+      - API_PROXY_TARGET=http://api:8000
       - NODE_ENV=development
       - HOSTNAME=0.0.0.0
     volumes:

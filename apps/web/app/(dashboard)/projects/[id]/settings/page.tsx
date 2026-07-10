@@ -127,7 +127,7 @@ function BrandingTab({ projectId }: { projectId: string }) {
       const fd = new FormData()
       fd.append('file', logoFile)
       await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/projects/${projectId}/branding/logo`,
+        `${process.env.NEXT_PUBLIC_API_URL || '/api'}/projects/${projectId}/branding/logo`,
         {
           method: 'POST',
           body: fd,

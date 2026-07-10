@@ -4,7 +4,9 @@ import type { NextRequest } from 'next/server'
 const PUBLIC_ROUTES = ['/login', '/setup']
 const PUBLIC_PREFIXES = ['/invite/', '/share/']
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Middleware runs server-side, so it needs an absolute, server-reachable URL —
+// NOT the browser's relative "/api". In Docker this is the api service.
+const API_URL = process.env.API_PROXY_TARGET || 'http://localhost:8000'
 
 function isPublicRoute(pathname: string): boolean {
   if (PUBLIC_ROUTES.includes(pathname)) return true

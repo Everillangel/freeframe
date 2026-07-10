@@ -1,7 +1,7 @@
 const ACCESS_TOKEN_KEY = 'ff_access_token'
 const REFRESH_TOKEN_KEY = 'ff_refresh_token'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null

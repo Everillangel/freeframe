@@ -89,7 +89,7 @@ export function ReviewProvider({
       if (shareToken) {
         // Share mode: fetch stream info to build a pseudo asset
         const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          process.env.NEXT_PUBLIC_API_URL || "/api";
         const headers: Record<string, string> = {};
         try {
           const t = localStorage.getItem("ff_access_token");
@@ -171,7 +171,7 @@ export function ReviewProvider({
       let data: Comment[];
       if (shareToken) {
         const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          process.env.NEXT_PUBLIC_API_URL || "/api";
         const res = await fetch(
           `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${shareSessionParam}`,
         );
@@ -220,7 +220,7 @@ export function ReviewProvider({
       let comment: Comment;
       if (shareToken) {
         const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          process.env.NEXT_PUBLIC_API_URL || "/api";
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };

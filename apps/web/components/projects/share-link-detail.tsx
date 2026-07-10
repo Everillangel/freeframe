@@ -607,7 +607,7 @@ export function ShareLinkContent({
     } else if (folderId || isProjectShare) {
       // Folder, project root, or multi-share: use the share endpoint
       // to get only the items actually included in this share link
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
       const headers: Record<string, string> = {};
       try {
         const t = localStorage.getItem('ff_access_token');
