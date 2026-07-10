@@ -52,11 +52,23 @@ interface ShareValidateResponse {
   error?: string
 }
 
+interface CommentAuthor {
+  id: string
+  name: string
+  avatar_url?: string | null
+}
+
+interface GuestAuthor {
+  id: string
+  name: string
+  email?: string
+}
+
 interface GuestComment {
   id: string
   body: string
-  guest_name: string
-  guest_email: string
+  author?: CommentAuthor | null
+  guest_author?: GuestAuthor | null
   created_at: string
   timecode_start?: number | null
 }
@@ -184,6 +196,50 @@ function ErrorState({ expired }: ErrorStateProps) {
   )
 }
 
+// ─── Guest comment item ───────────────────────────────────────────────────────
+
+interface GuestCommentItemProps {
+  comment: GuestComment
+}
+
+function GuestCommentItem({ comment }: GuestCommentItemProps) {
+  const displayName = comment.guest_author?.name || comment.author?.name || 'Unknown'
+  const avatarUrl = comment.author?.avatar_url ?? null
+  const [imgError, setImgError] = React.useState(false)
+
+  return (
+    <div className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2.5">
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-2xs font-medium text-purple-400">
+          {avatarUrl && !imgError ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-full w-full rounded-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            displayName.charAt(0).toUpperCase()
+          )}
+        </div>
+        <span className="text-xs font-medium text-zinc-200">{displayName}</span>
+        {comment.timecode_start != null && (
+          <span className="text-2xs text-zinc-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">
+            {Math.floor(comment.timecode_start / 60)}:
+            {String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
+          </span>
+        )}
+        <span className="ml-auto text-2xs text-zinc-600">
+          {new Date(comment.created_at).toLocaleDateString()}
+        </span>
+      </div>
+      <p className="text-sm text-zinc-300 leading-relaxed">{comment.body}</p>
+    </div>
+  )
+}
+
 // ─── Guest comment list (for right panel) ────────────────────────────────────
 
 interface GuestCommentListProps {
@@ -229,27 +285,7 @@ function GuestCommentList({ token, refreshKey }: GuestCommentListProps) {
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
       {comments.map((comment) => (
-        <div
-          key={comment.id}
-          className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2.5"
-        >
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-2xs font-medium text-purple-400">
-              {comment.guest_name.charAt(0).toUpperCase()}
-            </div>
-            <span className="text-xs font-medium text-zinc-200">{comment.guest_name}</span>
-            {comment.timecode_start != null && (
-              <span className="text-2xs text-zinc-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">
-                {Math.floor(comment.timecode_start / 60)}:
-                {String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
-              </span>
-            )}
-            <span className="ml-auto text-2xs text-zinc-600">
-              {new Date(comment.created_at).toLocaleDateString()}
-            </span>
-          </div>
-          <p className="text-sm text-zinc-300 leading-relaxed">{comment.body}</p>
-        </div>
+        <GuestCommentItem key={comment.id} comment={comment} />
       ))}
     </div>
   )
@@ -466,18 +502,108 @@ interface ShareMediaViewerProps {
 }
 
 function ShareMediaViewer({ asset, token, streamUrl, streamLoading }: ShareMediaViewerProps) {
+  const videoRef = React.useRef<HTMLVideoElement>(null)
+  const audioRef = React.useRef<HTMLAudioElement>(null)
+  const [fatalError, setFatalError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!streamUrl || streamLoading) return
+
+    setFatalError(null)
+    const mediaEl = asset.asset_type === 'video' ? videoRef.current : audioRef.current
+    if (!mediaEl) return
+
+    const isHls = streamUrl.includes('.m3u8')
+
+    // Resolve relative stream URLs against API_URL (backend returns /stream/hls/master.m3u8?token=...)
+    const resolvedUrl = streamUrl.startsWith('/')
+      ? `${API_URL}${streamUrl}`
+      : streamUrl
+
+    let hls: any = null
+    let cancelled = false
+
+    function setupHls() {
+      import('hls.js').then(({ default: Hls }) => {
+        if (cancelled) return
+
+        if (isHls && Hls.isSupported()) {
+          hls = new Hls()
+          hls.loadSource(resolvedUrl)
+          hls.attachMedia(mediaEl!)
+
+          hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
+            if (data.fatal) {
+              setFatalError(
+                data.type === Hls.ErrorTypes.NETWORK_ERROR
+                  ? 'Network error loading video'
+                  : data.type === Hls.ErrorTypes.MEDIA_ERROR
+                    ? 'Media decode error'
+                    : `Playback error: ${data.details || data.type}`
+              )
+              if (hls) {
+                hls.destroy()
+                hls = null
+              }
+            }
+          })
+        } else if (mediaEl!.canPlayType && mediaEl!.canPlayType('application/vnd.apple.mpegurl')) {
+          // Safari native HLS
+          mediaEl!.src = resolvedUrl
+        } else {
+          // Browser supports neither MSE (hls.js) nor native HLS playback
+          setFatalError('HLS playback is not supported in this browser')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFatalError('Failed to load video player')
+      })
+    }
+
+    if (isHls) {
+      setupHls()
+    } else if (mediaEl) {
+      mediaEl.src = resolvedUrl
+    }
+
+    function handleMediaError() {
+      // Tear down hls.js (if it's driving playback) so it doesn't keep fetching
+      // segments into the now-detached element once the error UI replaces it.
+      if (hls) {
+        hls.destroy()
+        hls = null
+      }
+      setFatalError('Media playback failed')
+    }
+    mediaEl.addEventListener('error', handleMediaError)
+
+    return () => {
+      cancelled = true
+      mediaEl.removeEventListener('error', handleMediaError)
+      if (hls) {
+        hls.destroy()
+      }
+    }
+  }, [streamUrl, streamLoading, asset.asset_type])
+
   return (
     <div className="flex-1 flex items-center justify-center bg-black min-h-0 overflow-hidden">
       {asset.asset_type === 'video' && (
         <div className="w-full h-full flex items-center justify-center">
           {streamLoading ? (
             <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          ) : fatalError ? (
+            <div className="flex flex-col items-center gap-2">
+              <AlertTriangle className="h-10 w-10 text-red-500" />
+              <p className="text-sm text-red-400">{fatalError}</p>
+            </div>
           ) : streamUrl ? (
             <video
-              src={streamUrl}
+              ref={videoRef}
               controls
               className="max-h-full max-w-full"
               preload="metadata"
+              playsInline
             >
               Your browser does not support video playback.
             </video>
@@ -494,6 +620,11 @@ function ShareMediaViewer({ asset, token, streamUrl, streamLoading }: ShareMedia
         <div className="w-full max-w-2xl px-8">
           {streamLoading ? (
             <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mx-auto" />
+          ) : fatalError ? (
+            <div className="flex flex-col items-center gap-2">
+              <AlertTriangle className="h-10 w-10 text-red-500" />
+              <p className="text-sm text-red-400">{fatalError}</p>
+            </div>
           ) : streamUrl ? (
             <div className="space-y-6">
               <div className="flex flex-col items-center gap-3">
@@ -502,7 +633,7 @@ function ShareMediaViewer({ asset, token, streamUrl, streamLoading }: ShareMedia
                 </div>
                 <p className="text-sm font-medium text-zinc-300">{asset.name}</p>
               </div>
-              <audio src={streamUrl} controls className="w-full">
+              <audio ref={audioRef} controls className="w-full">
                 Your browser does not support audio playback.
               </audio>
             </div>

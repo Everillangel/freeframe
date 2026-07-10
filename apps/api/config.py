@@ -1,6 +1,18 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Default S3 endpoint (local MinIO). Shared between the field default and the
+# consistency validator so the two can't drift.
+DEFAULT_S3_ENDPOINT = "http://minio:9000"
+
+
+def _is_aws_endpoint(url: str) -> bool:
+    """True if `url`'s host is an AWS S3 endpoint (an ``*.amazonaws.com`` host)."""
+    host = (urlparse(url).hostname or "").lower()
+    return host == "amazonaws.com" or host.endswith(".amazonaws.com")
 
 # Find .env file - check current dir, then project root
 # __file__ = apps/api/config.py, so parent.parent = project root
@@ -28,7 +40,7 @@ class Settings(BaseSettings):
     redis_url: str
     s3_storage: str = "minio"  # "s3" for AWS S3, "minio" for local MinIO
     s3_bucket: str = "freeframe"
-    s3_endpoint: str = "http://minio:9000"
+    s3_endpoint: str = DEFAULT_S3_ENDPOINT
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_region: str = "us-east-1"
@@ -51,7 +63,25 @@ class Settings(BaseSettings):
     # threshold are purged outright.
     retention_erase_after_days: int = 30
     retention_activity_days: int = 365
-    
+
+    # Maximum size (bytes) for a single uploaded file. 0 = unlimited (no per-file cap).
+    # Note: S3 multipart still caps effective size at ~10,000 parts x chunk size.
+    max_upload_bytes: int = 0
+
+    # Reaper: uploads stuck in `uploading`/`failed` longer than this are reclaimed. Hours.
+    stale_upload_timeout_hours: int = 24
+
+    # Retention GC: rows soft-deleted (deleted_at) longer than this are hard-deleted and their
+    # S3 objects reclaimed. Days. 0 (or negative) DISABLES the sweep (matches the reaper convention).
+    soft_delete_retention_days: int = 30
+
+    # Orphan S3 sweeper (issue #65 follow-up): reclaim bucket keys under raw/ + processed/ that no
+    # MediaFile row owns. 0 = disabled. When > 0, only keys whose S3 LastModified is older than this
+    # many hours are considered, so in-flight / just-committed uploads are never mistaken for orphans.
+    orphan_sweep_grace_hours: int = 0
+    # Report-only by default: when False the sweeper only LOGS what it would delete; set True to delete.
+    orphan_sweep_delete: bool = False
+
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
     email_concurrency: int = 2  # Number of concurrent email sending jobs
@@ -74,5 +104,26 @@ class Settings(BaseSettings):
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_use_tls: bool = True
+
+    @model_validator(mode="after")
+    def _check_s3_endpoint_consistency(self):
+        """Fail loud on `S3_STORAGE=s3` + a real custom (non-AWS) `S3_ENDPOINT`.
+
+        In `s3` mode the client talks to native AWS and S3_ENDPOINT is ignored,
+        so pairing it with an R2/B2/MinIO URL would silently route to AWS. An
+        untouched default and any `*.amazonaws.com` endpoint are harmless and
+        allowed; a custom non-AWS endpoint is a misconfiguration.
+        """
+        if self.s3_storage.lower() == "s3":
+            endpoint = (self.s3_endpoint or "").strip()
+            if endpoint and endpoint != DEFAULT_S3_ENDPOINT and not _is_aws_endpoint(endpoint):
+                raise ValueError(
+                    f"S3_STORAGE=s3 selects native AWS S3 and ignores S3_ENDPOINT, but "
+                    f"S3_ENDPOINT is set to a non-AWS URL ({endpoint!r}). To use a custom "
+                    f"S3-compatible endpoint (MinIO, Cloudflare R2, Backblaze B2, "
+                    f"DigitalOcean Spaces), set S3_STORAGE=minio. To use native AWS S3, "
+                    f"leave S3_ENDPOINT unset."
+                )
+        return self
 
 settings = Settings()

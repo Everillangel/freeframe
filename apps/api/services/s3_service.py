@@ -1,9 +1,19 @@
 import json
+import logging
 import os
 import re
+import time
+from functools import lru_cache
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from ..config import settings
+
+logger = logging.getLogger(__name__)
+
+# Short timeouts for the one-off startup bucket check, so a slow or unreachable
+# store can't hang app startup for boto3's default ~60s (deploy-test finding #6).
+_STARTUP_S3_CONFIG = Config(connect_timeout=5, read_timeout=10, retries={"max_attempts": 2})
 
 # S3 Content-Type and Cache-Control mappings
 CONTENT_TYPE_MAP = {
@@ -21,30 +31,30 @@ def _is_aws_s3() -> bool:
     """Check if using AWS S3 (vs MinIO/local). Controlled by S3_STORAGE env var."""
     return settings.s3_storage.lower() == "s3"
 
-def get_s3_client():
+def _build_s3_client(config=None):
+    """Construct an S3 client. Selection is driven by S3_STORAGE (see _is_aws_s3):
+    - "s3"   -> native AWS S3 (no endpoint_url; S3_ENDPOINT is not used)
+    - other  -> S3_ENDPOINT for MinIO or another S3-compatible backend
+    Pass `config` (a botocore Config) when you need bounded timeouts (startup check).
     """
-    Create S3 client. Auto-detects AWS vs MinIO:
-    - If access_key starts with 'AKIA' -> use AWS S3 (no endpoint_url)
-    - Otherwise -> use custom endpoint (MinIO or S3-compatible)
-    """
-    if _is_aws_s3():
-        # Real AWS S3 - don't pass endpoint_url
-        return boto3.client(
-            "s3",
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
-            region_name=settings.s3_region,
-        )
-    else:
-        # MinIO or S3-compatible storage
-        return boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint,
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
-            region_name=settings.s3_region,
-        )
+    kwargs = {
+        "aws_access_key_id": settings.s3_access_key,
+        "aws_secret_access_key": settings.s3_secret_key,
+        "region_name": settings.s3_region,
+    }
+    if not _is_aws_s3():
+        kwargs["endpoint_url"] = settings.s3_endpoint
+    if config is not None:
+        kwargs["config"] = config
+    return boto3.client("s3", **kwargs)
 
+
+@lru_cache(maxsize=1)
+def get_s3_client():
+    """The shared, cached S3 client for server-side operations (see _build_s3_client)."""
+    return _build_s3_client()
+
+@lru_cache(maxsize=1)
 def _get_presign_client():
     """
     Client for generating presigned URLs. Uses s3_public_endpoint if set,
@@ -62,8 +72,13 @@ def _get_presign_client():
     return boto3.client("s3", **kwargs)
 
 def ensure_bucket_exists():
-    """Create the S3 bucket if it does not exist. Called on app startup."""
-    s3 = get_s3_client()
+    """Create the S3 bucket if it does not exist (+ configure CORS/policy on non-AWS).
+
+    Uses a short-timeout client so it fails fast rather than blocking for boto3's
+    default ~60s if the store is slow/unreachable. Run via run_startup_bucket_setup()
+    off the request path at startup — see main.py.
+    """
+    s3 = _build_s3_client(config=_STARTUP_S3_CONFIG)
     try:
         s3.head_bucket(Bucket=settings.s3_bucket)
     except ClientError as e:
@@ -108,8 +123,19 @@ def ensure_bucket_exists():
                     ]
                 },
             )
-        except ClientError:
-            pass  # CORS config failed, non-critical
+        except ClientError as e:
+            # Non-fatal, but surfaced: browser multipart uploads assemble the
+            # CompleteMultipartUpload from each part's ETag response header,
+            # which the browser only exposes when the bucket's CORS
+            # ExposeHeaders includes "ETag". If we can't set CORS here, uploads
+            # may fail client-side with a generic error and no server log —
+            # so warn and point the operator at the docs (issue #131).
+            logger.warning(
+                "Could not set bucket CORS on %r (%s). Browser multipart uploads "
+                "need the bucket CORS ExposeHeaders to include 'ETag'; configure it "
+                "manually on your S3 provider — see docs/deployment.md (External S3 Storage).",
+                settings.s3_bucket, e,
+            )
 
         # Set public-read policy on processed/ prefix so HLS sub-playlists
         # and .ts segments can be fetched without presigned URLs
@@ -132,6 +158,41 @@ def ensure_bucket_exists():
             )
         except ClientError:
             pass  # Policy config failed, non-critical
+
+
+def run_startup_bucket_setup(attempts: int = 5, base_delay: float = 3.0, _sleep=time.sleep) -> None:
+    """App-startup entrypoint for bucket setup that NEVER raises.
+
+    A slow or unreachable object store must not crash or block app startup, so this
+    swallows every error and logs a clear warning instead. It retries a transient
+    failure a few times with linear backoff, so a store that comes up shortly after
+    the app self-heals without a manual restart (that self-heal was previously a
+    side effect of the crash-loop that finding #6 intentionally removed). Call it off
+    the request path (a daemon thread from the FastAPI lifespan) — see main.py.
+
+    `_sleep` is injectable so tests can run the retry loop without real delays.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            ensure_bucket_exists()
+            return
+        except Exception as e:  # noqa: BLE001 - startup must survive any storage failure
+            where = "AWS" if _is_aws_s3() else settings.s3_endpoint
+            if attempt < attempts:
+                delay = base_delay * attempt
+                logger.warning(
+                    "S3/object-storage setup attempt %d/%d failed (S3_STORAGE=%s, endpoint=%s); "
+                    "retrying in %.0fs: %s",
+                    attempt, attempts, settings.s3_storage, where, delay, e,
+                )
+                _sleep(delay)
+            else:
+                logger.warning(
+                    "S3/object-storage setup failed after %d attempts — uploads and streaming "
+                    "will not work until storage is reachable and the app is restarted "
+                    "(S3_STORAGE=%s, endpoint=%s): %s",
+                    attempts, settings.s3_storage, where, e,
+                )
 
 
 def get_content_type(key: str) -> tuple[str, str]:
@@ -234,3 +295,63 @@ def put_object(s3_key: str, body: bytes, content_type: str | None = None, cache_
 def delete_object(s3_key: str) -> None:
     s3 = get_s3_client()
     s3.delete_object(Bucket=settings.s3_bucket, Key=s3_key)
+
+
+def list_stale_multipart_uploads(cutoff):
+    """Return (key, upload_id) for in-progress multipart uploads initiated before `cutoff`."""
+    s3 = get_s3_client()
+    stale = []
+    kwargs = {"Bucket": settings.s3_bucket}
+    while True:
+        resp = s3.list_multipart_uploads(**kwargs)
+        for up in resp.get("Uploads", []):
+            if up["Initiated"] < cutoff:
+                stale.append((up["Key"], up["UploadId"]))
+        if resp.get("IsTruncated"):
+            kwargs["KeyMarker"] = resp.get("NextKeyMarker")
+            kwargs["UploadIdMarker"] = resp.get("NextUploadIdMarker")
+        else:
+            break
+    return stale
+
+
+def list_keys(prefix: str):
+    """Yield (key, last_modified, size) for every object under `prefix`, paginated."""
+    s3 = get_s3_client()
+    kwargs = {"Bucket": settings.s3_bucket, "Prefix": prefix}
+    while True:
+        resp = s3.list_objects_v2(**kwargs)
+        for o in resp.get("Contents", []):
+            yield o["Key"], o["LastModified"], o["Size"]
+        if resp.get("IsTruncated"):
+            kwargs["ContinuationToken"] = resp.get("NextContinuationToken")
+        else:
+            break
+
+
+def delete_prefix(prefix: str) -> None:
+    """Delete every object whose key starts with `prefix` (works for a single key too —
+    a key is its own prefix). Used to reclaim HLS folders and single processed keys."""
+    s3 = get_s3_client()
+    kwargs = {"Bucket": settings.s3_bucket, "Prefix": prefix}
+    while True:
+        resp = s3.list_objects_v2(**kwargs)
+        objects = [{"Key": o["Key"]} for o in resp.get("Contents", [])]
+        if objects:
+            try:
+                s3.delete_objects(Bucket=settings.s3_bucket, Delete={"Objects": objects})
+            except ClientError as e:
+                # botocore >=1.36 sends a CRC32 data-integrity checksum on batch DeleteObjects
+                # instead of the legacy Content-MD5 header. S3-compatible backends that predate
+                # AWS flexible checksums (older MinIO/Ceph/etc.) reject it with MissingContentMD5.
+                # Fall back to per-key deletes, which require no checksum, so cleanup still works.
+                err = e.response.get("Error", {})
+                if err.get("Code") == "MissingContentMD5" or "content-md5" in err.get("Message", "").lower():
+                    for obj in objects:
+                        s3.delete_object(Bucket=settings.s3_bucket, Key=obj["Key"])
+                else:
+                    raise
+        if resp.get("IsTruncated"):
+            kwargs["ContinuationToken"] = resp.get("NextContinuationToken")
+        else:
+            break

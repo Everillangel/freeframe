@@ -17,7 +17,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, copyToClipboard } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -100,31 +100,40 @@ function PermissionSelect({
 // ─── Copy button ──────────────────────────────────────────────────────────────
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = React.useState(false);
+  const [status, setStatus] = React.useState<'idle' | 'copied' | 'failed'>('idle');
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setStatus('copied');
+      setTimeout(() => setStatus('idle'), 2000);
+    } else {
+      setStatus('failed');
+      setTimeout(() => setStatus('idle'), 3000);
     }
   }
 
   return (
-    <button
-      onClick={handleCopy}
-      className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-      title="Copy to clipboard"
-    >
-      {copied ? (
-        <Check className="h-3.5 w-3.5 text-status-success" />
-      ) : (
-        <Copy className="h-3.5 w-3.5" />
-      )}
-      {copied ? "Copied!" : "Copy"}
-    </button>
+    <>
+      {/* aria-live region for screen reader announcements */}
+      <div className="sr-only" aria-live="polite" role="status">
+        {status === 'copied' ? 'URL copied to clipboard' : status === 'failed' ? 'Copy failed' : ''}
+      </div>
+      <button
+        onClick={handleCopy}
+        className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+        title="Copy to clipboard"
+      >
+        {status === 'copied' ? (
+          <Check className="h-3.5 w-3.5 text-status-success" />
+        ) : status === 'failed' ? (
+          <X className="h-3.5 w-3.5 text-status-error" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+        {status === 'copied' ? 'Copied!' : status === 'failed' ? 'Failed' : 'Copy'}
+      </button>
+    </>
   );
 }
 

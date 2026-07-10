@@ -2,6 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.15.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -24,7 +25,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "fabric": "^7.2.0",
-    "hls.js": "^1.6.15",
+    "hls.js": "^1.6.16",
     "lucide-react": "^0.511.0",
     "next": "14.2.35",
     "react": "^18.3.1",
@@ -32,7 +33,7 @@
     "react-zoom-pan-pinch": "^3.7.0",
     "swr": "^2.3.3",
     "tailwind-merge": "^3.3.0",
-    "wavesurfer.js": "^7.12.5",
+    "wavesurfer.js": "^7.12.10",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
@@ -51,6 +52,6 @@
     "postcss": "^8.5.4",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.10"
   }
 }

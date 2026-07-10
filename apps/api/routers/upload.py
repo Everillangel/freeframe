@@ -7,6 +7,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
+from ..models.folder import Folder
 from ..models.project import Project
 from ..services.s3_service import (
     create_multipart_upload, presign_upload_part,
@@ -18,8 +19,9 @@ from ..schemas.upload import (
     InitiateUploadRequest, InitiateUploadResponse,
     PresignPartRequest, PresignPartResponse,
     CompleteUploadRequest, CompleteUploadResponse, AbortUploadRequest,
-    ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type,
+    ALLOWED_MIME_TYPES, mime_to_asset_type,
 )
+from ..services.storage import upload_guard_error
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -32,8 +34,9 @@ def initiate_upload(
     # Validate mime type
     if body.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {body.mime_type}")
-    if body.file_size_bytes > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="File exceeds 10GB limit")
+    guard_error = upload_guard_error(db, body.file_size_bytes)
+    if guard_error:
+        raise HTTPException(status_code=400, detail=guard_error)
 
     # Verify project access (editor or above)
     project = db.query(Project).filter(Project.id == body.project_id, Project.deleted_at.is_(None)).first()
@@ -49,6 +52,19 @@ def initiate_upload(
         if asset.project_id != body.project_id:
             raise HTTPException(status_code=400, detail="Asset does not belong to the specified project")
     else:
+        # Validate the target folder for a new asset: it must exist, belong to this project, and not
+        # be soft-deleted -- otherwise a live asset could be placed under a trashed folder and later
+        # hard-deleted by the retention GC's folder cascade. folder_id is only persisted here (new
+        # asset); the new-version path above ignores it, so it must not be validated there.
+        if body.folder_id is not None:
+            folder = db.query(Folder).filter(
+                Folder.id == body.folder_id,
+                Folder.project_id == body.project_id,
+                Folder.deleted_at.is_(None),
+            ).first()
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+
         asset_type = mime_to_asset_type(body.mime_type)
         asset = Asset(
             project_id=body.project_id,

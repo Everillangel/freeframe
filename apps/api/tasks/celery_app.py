@@ -18,6 +18,7 @@ celery_app = Celery(
         "apps.api.tasks.reminder_tasks",
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.retention_tasks",
+        "apps.api.tasks.cleanup_tasks",
     ],
 )
 
@@ -64,7 +65,19 @@ celery_app.conf.beat_schedule = {
     },
     "purge-expired-data": {
         "task": "purge_expired_data",
-        "schedule": crontab(minute="30", hour="3"),  # daily at 03:30 UTC
+        "schedule": crontab(minute="30", hour="3"),  # daily at 03:30 UTC (POPIA anonymisation)
+    },
+    "reap-stale-uploads": {
+        "task": "reap_stale_uploads",
+        "schedule": crontab(minute="0"),  # every hour
+    },
+    "cleanup-soft-deleted": {
+        "task": "cleanup_soft_deleted",
+        "schedule": crontab(minute=0, hour=3),  # daily at 03:00 UTC
+    },
+    "sweep-orphan-s3": {
+        "task": "sweep_orphan_s3",
+        "schedule": crontab(minute=0, hour=4, day_of_week=0),  # weekly, Sunday 04:00 UTC
     },
 }
 

@@ -57,6 +57,11 @@ export interface User {
   deleted_at: string | null;
 }
 
+export interface InstanceSettings {
+  storage_limit_bytes: number;
+  storage_used_bytes: number;
+}
+
 export interface Team {
   id: string;
   org_id: string;
@@ -324,6 +329,7 @@ export interface FolderShareAssetItem {
   file_size: number | null
   duration_seconds: number | null
   comment_count: number
+  version_count?: number
   created_by_name: string | null
   created_at: string
 }

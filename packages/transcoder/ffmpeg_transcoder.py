@@ -25,15 +25,32 @@ class FFmpegTranscoder(BaseTranscoder):
             ExpiresIn=expires_in,
         )
 
+    @staticmethod
+    def _run(cmd: list[str], timeout: int | None = None, label: str = "ffmpeg") -> str:
+        """Run a command, raising RuntimeError with stderr on failure.
+
+        Uses errors='replace' because ffmpeg often echoes input metadata
+        (Latin-1 / Shift-JIS) to stderr, which would break strict UTF-8 decode.
+        """
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, errors='replace', timeout=timeout,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            raise RuntimeError(
+                f"{label} exited {result.returncode}: {stderr or 'no stderr output'}"
+            )
+        return result.stdout
+
     async def get_video_metadata(self, s3_key: str) -> VideoMetadata:
         """Get video metadata using streaming (no full download)."""
         input_url = self._get_presigned_url(s3_key)
         cmd = [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "ffprobe", "-v", "error", "-print_format", "json",
             "-show_streams", "-select_streams", "v:0", input_url,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
-        data = json.loads(result.stdout)
+        stdout = self._run(cmd, timeout=120, label="ffprobe")
+        data = json.loads(stdout)
         stream = data["streams"][0]
         fps_parts = stream.get("r_frame_rate", "30/1").split("/")
         fps = float(fps_parts[0]) / float(fps_parts[1])
@@ -55,7 +72,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 "-q:v", "2",
                 f"{thumb_dir}/thumb_%04d.jpg",
             ]
-            subprocess.run(cmd, capture_output=True, check=True, timeout=600)
+            self._run(cmd, timeout=600, label="ffmpeg")
             return [str(p) for p in sorted(Path(thumb_dir).glob("thumb_*.jpg"))]
         finally:
             shutil.rmtree(thumb_dir, ignore_errors=True)
@@ -78,12 +95,22 @@ class FFmpegTranscoder(BaseTranscoder):
         input_url = self._get_presigned_url(job.input_s3_key, expires_in=7200)
 
         try:
-            # 1. Get metadata via streaming (no download)
+            # 1. Get video metadata via streaming (no download)
+            # Note: ffprobe result is used for metadata logging only;
+            # _run() already fail-fasts on non-zero exit.
             cmd = [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "ffprobe", "-v", "error", "-print_format", "json",
                 "-show_streams", "-select_streams", "v:0", input_url,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            vid_info = self._run(cmd, timeout=120, label="ffprobe")
+
+            # 2. Check if input has an audio stream
+            audio_cmd = [
+                "ffprobe", "-v", "error", "-print_format", "json",
+                "-show_streams", "-select_streams", "a", input_url,
+            ]
+            audio_result = self._run(audio_cmd, timeout=120, label="ffprobe")
+            has_audio = bool(json.loads(audio_result).get("streams"))
 
             # 3. Build quality ladder based on available qualities
             QUALITY_MAP = {
@@ -113,8 +140,10 @@ class FFmpegTranscoder(BaseTranscoder):
 
             for i, quality in enumerate(qualities):
                 scale, crf = QUALITY_MAP[quality]
+                ffmpeg_cmd += ["-map", f"[{quality}]"]
+                if has_audio:
+                    ffmpeg_cmd += ["-map", "a:0"]
                 ffmpeg_cmd += [
-                    "-map", f"[{quality}]", "-map", "a:0",
                     f"-c:v:{i}", "libx264", f"-crf", str(crf), "-preset", "fast",
                     "-force_key_frames", "expr:gte(t,n_forced*2)",
                 ]
@@ -127,7 +156,10 @@ class FFmpegTranscoder(BaseTranscoder):
                 "-hls_flags", "independent_segments",
                 "-hls_segment_type", "mpegts",
                 "-master_pl_name", "master.m3u8",
-                "-var_stream_map", " ".join(f"v:{i},a:{i}" for i in range(len(qualities))),
+                "-var_stream_map", " ".join(
+                    f"v:{i},a:{i}" if has_audio else f"v:{i}"
+                    for i in range(len(qualities))
+                ),
                 "-hls_segment_filename", str(hls_dir / "%v" / "seg_%03d.ts"),
                 str(hls_dir / "%v" / "playlist.m3u8"),
             ]
@@ -137,7 +169,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 (hls_dir / q).mkdir(exist_ok=True)
 
             # Timeout scales with expected duration - 4 hours for very large files
-            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=14400)
+            self._run(ffmpeg_cmd, timeout=14400, label="ffmpeg")
 
             # 4. Upload HLS files to S3
             uploaded_keys = []
@@ -159,7 +191,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 "-vf", "fps=0.1", "-q:v", "2", "-frames:v", "1",
                 str(work_dir / "thumb_%04d.jpg"),
             ]
-            subprocess.run(thumb_cmd, check=True, capture_output=True)
+            self._run(thumb_cmd, label="ffmpeg")
             thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
             if thumb_path.exists():
                 self.s3.upload_file(

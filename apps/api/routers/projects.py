@@ -7,11 +7,12 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
-from ..models.asset import Asset, AssetVersion, MediaFile
+from ..models.asset import Asset, AssetVersion, MediaFile, ProcessingStatus
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
+from ..services.storage import project_storage_used_bytes
 from ..config import settings
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -91,7 +92,12 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         db.query(Asset.project_id, func.coalesce(func.sum(MediaFile.file_size_bytes), 0))
         .join(AssetVersion, AssetVersion.asset_id == Asset.id)
         .join(MediaFile, MediaFile.version_id == AssetVersion.id)
-        .filter(Asset.project_id.in_(all_project_ids), Asset.deleted_at.is_(None))
+        # Committed-only usage — matches services.storage.instance_storage_used_bytes
+        .filter(
+            Asset.project_id.in_(all_project_ids), Asset.deleted_at.is_(None),
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status.in_([ProcessingStatus.processing, ProcessingStatus.ready]),
+        )
         .group_by(Asset.project_id)
         .all()
     )
@@ -135,11 +141,7 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_us
     resp.asset_count = db.query(func.count(Asset.id)).filter(
         Asset.project_id == project_id, Asset.deleted_at.is_(None),
     ).scalar() or 0
-    resp.storage_bytes = db.query(func.coalesce(func.sum(MediaFile.file_size_bytes), 0)).join(
-        AssetVersion, MediaFile.version_id == AssetVersion.id
-    ).join(Asset, AssetVersion.asset_id == Asset.id).filter(
-        Asset.project_id == project_id, Asset.deleted_at.is_(None),
-    ).scalar() or 0
+    resp.storage_bytes = project_storage_used_bytes(db, project_id)
     resp.member_count = db.query(func.count(ProjectMember.id)).filter(
         ProjectMember.project_id == project_id, ProjectMember.deleted_at.is_(None),
     ).scalar() or 0

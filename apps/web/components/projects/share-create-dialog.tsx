@@ -24,7 +24,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 import * as Switch from '@radix-ui/react-switch'
-import { cn, endOfDayISO } from '@/lib/utils'
+import { cn, copyToClipboard, endOfDayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import type { AssetResponse, Folder, ShareLink, ShareLinkAppearance } from '@/types'
@@ -79,32 +79,43 @@ function AssetTypeIcon({ type, className }: { type: string; className?: string }
 // ─── Copy button ─────────────────────────────────────────────────────────────
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = React.useState(false)
+  const [status, setStatus] = React.useState<'idle' | 'copied' | 'failed'>('idle')
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback
+    const ok = await copyToClipboard(text)
+    if (ok) {
+      setStatus('copied')
+      setTimeout(() => setStatus('idle'), 2000)
+    } else {
+      setStatus('failed')
+      setTimeout(() => setStatus('idle'), 3000)
     }
   }
 
   return (
-    <Button variant="secondary" size="sm" onClick={handleCopy}>
-      {copied ? (
-        <>
-          <Check className="h-3.5 w-3.5 text-status-success" />
-          {label ? 'Copied!' : ''}
-        </>
-      ) : (
-        <>
-          <Copy className="h-3.5 w-3.5" />
-          {label ?? ''}
-        </>
-      )}
-    </Button>
+    <>
+      <div className="sr-only" aria-live="polite" role="status">
+        {status === 'copied' ? 'URL copied to clipboard' : status === 'failed' ? 'Copy failed' : ''}
+      </div>
+      <Button variant="secondary" size="sm" onClick={handleCopy}>
+        {status === 'copied' ? (
+          <>
+            <Check className="h-3.5 w-3.5 text-status-success" />
+            {label ? 'Copied!' : ''}
+          </>
+        ) : status === 'failed' ? (
+          <>
+            <X className="h-3.5 w-3.5 text-status-error" />
+            {label ? 'Failed' : ''}
+          </>
+        ) : (
+          <>
+            <Copy className="h-3.5 w-3.5" />
+            {label ?? ''}
+          </>
+        )}
+      </Button>
+    </>
   )
 }
 
@@ -578,6 +589,8 @@ function LinkCreatedPhase({ result, allResults, onSelectResult, onDone, onAdvanc
     setEditingTitle(false)
     setShowSettings(false)
   }, [result.token, result.title])
+  const [urlCopied, setUrlCopied] = React.useState(false)
+  const [urlCopyFailed, setUrlCopyFailed] = React.useState(false)
   const [layout, setLayout] = React.useState<'grid' | 'list'>('grid')
   const titleInputRef = React.useRef<HTMLInputElement>(null)
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -717,11 +730,24 @@ function LinkCreatedPhase({ result, allResults, onSelectResult, onDone, onAdvanc
           <span className="flex-1 truncate font-mono text-xs text-text-primary">{shareUrl}</span>
           <button
             onClick={async () => {
-              try { await navigator.clipboard.writeText(shareUrl) } catch {}
+              if (await copyToClipboard(shareUrl)) {
+                setUrlCopied(true)
+                setTimeout(() => setUrlCopied(false), 2000)
+              } else {
+                setUrlCopyFailed(true)
+                setTimeout(() => setUrlCopyFailed(false), 3000)
+              }
             }}
             className="text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+            aria-label={urlCopyFailed ? 'Copy failed' : 'Copy share URL'}
           >
-            <Copy className="h-3.5 w-3.5" />
+            {urlCopied ? (
+              <Check className="h-3.5 w-3.5 text-status-success" />
+            ) : urlCopyFailed ? (
+              <X className="h-3.5 w-3.5 text-status-error" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
           </button>
           <select
             value={visibility}
