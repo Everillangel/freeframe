@@ -10,6 +10,7 @@ from ..schemas.auth import (
     SendMagicCodeRequest, SendMagicCodeResponse,
     VerifyMagicCodeRequest, SetPasswordRequest,
     AcceptInviteRequest, InviteInfoResponse,
+    ChangePasswordRequest,
 )
 from ..services.auth_service import (
     hash_password, verify_password,
@@ -249,3 +250,19 @@ def update_preferences(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+@router.patch("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change password for authenticated user."""
+    if current_user.password_hash is None:
+        raise HTTPException(status_code=400, detail="No password set for this account; use set-password instead")
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"message": "Password changed successfully"}
