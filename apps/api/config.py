@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     frontend_url: str = "http://localhost:3000"
     transcoder_engine: str = "ffmpeg"
+    # Hardware-accelerated video encoding. One of: none (CPU/x264), vaapi
+    # (Intel + AMD/Radeon on Linux via /dev/dri), qsv (Intel Quick Sync),
+    # nvenc (NVIDIA/CUDA). Falls back to CPU automatically if the GPU path fails.
+    # See docs/hardware-acceleration.md.
+    transcoder_hwaccel: str = "none"
 
     # Number of trusted reverse proxies in front of the API (e.g. Traefik = 1).
     # Used to extract the real client IP from X-Forwarded-For for rate limiting.

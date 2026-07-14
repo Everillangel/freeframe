@@ -11,11 +11,96 @@ from botocore.config import Config
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
 
 
+# HLS quality ladder. `crf` drives the software (x264) encoder; hardware encoders
+# have no CRF, so they use bitrate/maxrate/bufsize instead.
+QUALITY_MAP = {
+    "1080p": {"scale": "1920:1080", "crf": 20, "bitrate": "5M",  "maxrate": "6M",    "bufsize": "10M"},
+    "720p":  {"scale": "1280:720",  "crf": 22, "bitrate": "3M",  "maxrate": "4M",    "bufsize": "6M"},
+    "360p":  {"scale": "640:360",   "crf": 26, "bitrate": "1M",  "maxrate": "1500k", "bufsize": "2M"},
+}
+
+# Render node for VAAPI/QSV (override with VAAPI_DEVICE if your GPU is elsewhere).
+VAAPI_DEVICE = os.environ.get("VAAPI_DEVICE", "/dev/dri/renderD128")
+
+# Supported hardware-acceleration back-ends (selected via TRANSCODER_HWACCEL).
+#   none  -> libx264 (CPU)
+#   vaapi -> h264_vaapi  (Intel + AMD/Radeon on Linux, via /dev/dri)
+#   qsv   -> h264_qsv    (Intel Quick Sync)
+#   nvenc -> h264_nvenc  (NVIDIA / CUDA)
+HWACCELS = {"none", "vaapi", "qsv", "nvenc"}
+
+
+def build_hls_command(input_url: str, hls_dir: Path, qualities: list,
+                      hwaccel: str, has_audio: bool = True) -> list:
+    """Build the multi-rendition HLS ffmpeg command for the given accelerator.
+
+    Scaling stays on the CPU (cheap); only the encode — the expensive part — is
+    offloaded to the GPU. VAAPI needs the frames uploaded to the GPU first
+    (`format=nv12,hwupload`); NVENC/QSV accept system-memory frames directly.
+    """
+    mode = (hwaccel or "none").lower()
+    if mode not in HWACCELS:
+        mode = "none"
+
+    def branch_filter(i: int, q: str) -> str:
+        f = (f"[v{i}]scale={QUALITY_MAP[q]['scale']}:force_original_aspect_ratio=decrease,"
+             f"pad=ceil(iw/2)*2:ceil(ih/2)*2")
+        if mode == "vaapi":
+            f += ",format=nv12,hwupload"
+        return f + f"[{q}]"
+
+    split_outputs = "".join(f"[v{i}]" for i in range(len(qualities)))
+    filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
+    filter_complex += ";".join(branch_filter(i, q) for i, q in enumerate(qualities))
+
+    cmd = ["ffmpeg", "-y"]
+    if mode == "vaapi":
+        cmd += ["-vaapi_device", VAAPI_DEVICE]
+    elif mode == "qsv":
+        cmd += ["-init_hw_device", f"qsv=hw:{VAAPI_DEVICE}", "-filter_hw_device", "hw"]
+    cmd += ["-i", input_url, "-filter_complex", filter_complex]
+
+    for i, quality in enumerate(qualities):
+        m = QUALITY_MAP[quality]
+        cmd += ["-map", f"[{quality}]"]
+        if has_audio:
+            cmd += ["-map", "a:0"]
+        if mode == "vaapi":
+            cmd += [f"-c:v:{i}", "h264_vaapi", f"-b:v:{i}", m["bitrate"],
+                    f"-maxrate:v:{i}", m["maxrate"], f"-bufsize:v:{i}", m["bufsize"]]
+        elif mode == "qsv":
+            cmd += [f"-c:v:{i}", "h264_qsv", f"-b:v:{i}", m["bitrate"],
+                    f"-maxrate:v:{i}", m["maxrate"]]
+        elif mode == "nvenc":
+            cmd += [f"-c:v:{i}", "h264_nvenc", "-preset", "p5", "-rc", "vbr",
+                    f"-b:v:{i}", m["bitrate"], f"-maxrate:v:{i}", m["maxrate"],
+                    f"-bufsize:v:{i}", m["bufsize"]]
+        else:  # none / CPU
+            cmd += [f"-c:v:{i}", "libx264", "-crf", str(m["crf"]), "-preset", "fast"]
+        cmd += ["-force_key_frames", "expr:gte(t,n_forced*2)"]
+
+    cmd += [
+        "-f", "hls",
+        "-hls_time", "2",
+        "-hls_playlist_type", "vod",
+        "-hls_flags", "independent_segments",
+        "-hls_segment_type", "mpegts",
+        "-master_pl_name", "master.m3u8",
+        "-var_stream_map", " ".join(
+            (f"v:{i},a:{i}" if has_audio else f"v:{i}") for i in range(len(qualities))
+        ),
+        "-hls_segment_filename", str(hls_dir / "%v" / "seg_%03d.ts"),
+        str(hls_dir / "%v" / "playlist.m3u8"),
+    ]
+    return cmd
+
+
 class FFmpegTranscoder(BaseTranscoder):
-    def __init__(self, s3_client, bucket: str, s3_endpoint: str = None):
+    def __init__(self, s3_client, bucket: str, s3_endpoint: str = None, hwaccel: str = "none"):
         self.s3 = s3_client
         self.bucket = bucket
         self.s3_endpoint = s3_endpoint
+        self.hwaccel = (hwaccel or "none").lower()
     
     def _get_presigned_url(self, s3_key: str, expires_in: int = 7200) -> str:
         """Generate a presigned URL for streaming input to FFmpeg."""
@@ -113,63 +198,33 @@ class FFmpegTranscoder(BaseTranscoder):
             has_audio = bool(json.loads(audio_result).get("streams"))
 
             # 3. Build quality ladder based on available qualities
-            QUALITY_MAP = {
-                "1080p": ("1920:1080", 20),
-                "720p": ("1280:720", 22),
-                "360p": ("640:360", 26),
-            }
             qualities = [q for q in job.qualities if q in QUALITY_MAP]
 
             hls_dir = work_dir / "hls"
             hls_dir.mkdir()
 
-            # Build filter_complex and map args
-            # Use force_original_aspect_ratio=decrease to preserve aspect ratio,
-            # then pad to even dimensions required by libx264
-            split_outputs = "".join(f"[v{i}]" for i in range(len(qualities)))
-            filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
-            filter_complex += ";".join(
-                f"[v{i}]scale={QUALITY_MAP[q][0]}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2[{q}]"
-                for i, q in enumerate(qualities)
-            )
+            def _prep_output_dirs():
+                for q in qualities:
+                    (hls_dir / q).mkdir(exist_ok=True)
 
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", input_url,
-                "-filter_complex", filter_complex,
-            ]
+            _prep_output_dirs()
 
-            for i, quality in enumerate(qualities):
-                scale, crf = QUALITY_MAP[quality]
-                ffmpeg_cmd += ["-map", f"[{quality}]"]
-                if has_audio:
-                    ffmpeg_cmd += ["-map", "a:0"]
-                ffmpeg_cmd += [
-                    f"-c:v:{i}", "libx264", f"-crf", str(crf), "-preset", "fast",
-                    "-force_key_frames", "expr:gte(t,n_forced*2)",
-                ]
-
-            segment_dir = hls_dir / "%v"
-            ffmpeg_cmd += [
-                "-f", "hls",
-                "-hls_time", "2",
-                "-hls_playlist_type", "vod",
-                "-hls_flags", "independent_segments",
-                "-hls_segment_type", "mpegts",
-                "-master_pl_name", "master.m3u8",
-                "-var_stream_map", " ".join(
-                    f"v:{i},a:{i}" if has_audio else f"v:{i}"
-                    for i in range(len(qualities))
-                ),
-                "-hls_segment_filename", str(hls_dir / "%v" / "seg_%03d.ts"),
-                str(hls_dir / "%v" / "playlist.m3u8"),
-            ]
-
-            # Create per-quality directories
-            for q in qualities:
-                (hls_dir / q).mkdir(exist_ok=True)
-
-            # Timeout scales with expected duration - 4 hours for very large files
-            self._run(ffmpeg_cmd, timeout=14400, label="ffmpeg")
+            # Encode the ladder with the configured accelerator (CPU by default).
+            # Timeout scales with expected duration — 4 hours for very large files.
+            ffmpeg_cmd = build_hls_command(input_url, hls_dir, qualities, self.hwaccel, has_audio)
+            try:
+                self._run(ffmpeg_cmd, timeout=14400, label=f"ffmpeg[{self.hwaccel}]")
+            except Exception as hw_err:
+                if self.hwaccel == "none":
+                    raise
+                # Hardware transcode failed (driver/device/codec) — fall back to CPU
+                # so the asset never gets stuck. Reset the output dir and retry.
+                print(f"Hardware transcode ({self.hwaccel}) failed, falling back to CPU: {hw_err}")
+                shutil.rmtree(hls_dir, ignore_errors=True)
+                hls_dir.mkdir()
+                _prep_output_dirs()
+                ffmpeg_cmd = build_hls_command(input_url, hls_dir, qualities, "none", has_audio)
+                self._run(ffmpeg_cmd, timeout=14400, label="ffmpeg[cpu-fallback]")
 
             # 4. Upload HLS files to S3
             uploaded_keys = []

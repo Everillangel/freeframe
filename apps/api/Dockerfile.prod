@@ -6,7 +6,11 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     imagemagick \
     curl \
+    libva2 libva-drm2 vainfo i965-va-driver mesa-va-drivers \
     && rm -rf /var/lib/apt/lists/*
+# VAAPI drivers above enable Intel (i965) and AMD/Radeon (mesa) hardware
+# encoding when TRANSCODER_HWACCEL=vaapi and /dev/dri is passed to the worker.
+# NVIDIA (nvenc) needs no extra package here — it uses the host's NVIDIA runtime.
 
 # Install API dependencies
 COPY apps/api/requirements.txt /workspace/apps/api/requirements.txt

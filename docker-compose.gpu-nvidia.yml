@@ -1,0 +1,21 @@
+# GPU overlay: NVIDIA (nvenc / CUDA) hardware transcoding.
+#
+# Gives the transcoding worker the NVIDIA GPU. Requires the NVIDIA driver AND
+# the nvidia-container-toolkit installed on the host. Layer it on the base
+# compose and set TRANSCODER_HWACCEL=nvenc in .env:
+#
+#   dev:  docker compose -f docker-compose.dev.yml  -f docker-compose.gpu-nvidia.yml  up -d --build
+#   prod: docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.gpu-nvidia.yml up -d --build
+#
+# Verify the toolkit first:  docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+# Note: the stock ffmpeg must include nvenc — check with:  ffmpeg -hide_banner -encoders | grep nvenc
+
+services:
+  worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video]

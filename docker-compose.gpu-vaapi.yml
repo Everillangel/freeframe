@@ -1,0 +1,17 @@
+# GPU overlay: Intel (QSV/VAAPI) or AMD/Radeon (VAAPI) hardware transcoding.
+#
+# Gives the transcoding worker the render device. Requires /dev/dri on the host
+# (standard on Linux with the i915/amdgpu kernel driver). Layer it on the base
+# compose and set TRANSCODER_HWACCEL=vaapi (or qsv) in .env:
+#
+#   dev:  docker compose -f docker-compose.dev.yml  -f docker-compose.gpu-vaapi.yml  up -d --build
+#   prod: docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.gpu-vaapi.yml up -d --build
+#
+# The worker runs as root here, so it can access /dev/dri without group tweaks.
+# If you run it as a non-root user, also add the host's "render" group GID:
+#   group_add: ["<gid from: getent group render>"]
+
+services:
+  worker:
+    devices:
+      - /dev/dri:/dev/dri

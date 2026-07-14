@@ -134,6 +134,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 |-------|-------------|
 | [Production Deployment](docs/deployment.md) | SSL, bring-your-own infra, scaling, troubleshooting |
 | [NLE Comment Export](docs/comment-export.md) | Export comments as markers for Avid, Resolve, Premiere, Final Cut |
+| [Hardware Acceleration](docs/hardware-acceleration.md) | GPU transcoding via Intel/AMD (VAAPI/QSV) or NVIDIA (NVENC) |
 | [NAS Storage](docs/nas-storage.md) | Store media on a NAS (Synology/QNAP/TrueNAS/Unraid) via MinIO |
 | [Security & POPIA](docs/security-hardening.md) | Secret rotation, private storage, data-subject exports/erasure, POPIA (ZA) checklist |
 | [Architecture](docs/architecture.md) | System design, data flow, media pipeline, permissions |
