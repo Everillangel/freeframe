@@ -33,10 +33,9 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_CORS_ALLOW_ORIGIN: http://localhost:3000
-      MINIO_CORS_ALLOW_METHODS: GET,PUT,POST,DELETE,HEAD
-      MINIO_CORS_ALLOW_HEADERS: "*"
-      MINIO_CORS_EXPOSE_HEADERS: ETag,Content-Length,x-amz-request-id
+      # Allow browser uploads from any origin (host-independent). This is MinIO's
+      # actual CORS env var; access is still gated by presigned-URL signatures.
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -79,7 +78,11 @@ services:
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: freeframe
       S3_REGION: us-east-1
-      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      # Base URL baked into presigned upload/download URLs — the BROWSER must be
+      # able to reach it. Default localhost:9000 works only when the browser runs
+      # on the same host. Accessing remotely (LAN/Tailscale)? Set S3_PUBLIC_ENDPOINT
+      # in .env to the server's reachable MinIO address, e.g. http://<host-ip>:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
     depends_on:
       postgres:
         condition: service_healthy
