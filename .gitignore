@@ -225,3 +225,6 @@ CLAUDE.md
 
 .DS_Store
 .worktrees/
+
+# Local NLE marker reference/template files (may contain confidential review data)
+Marker reference files/

@@ -227,10 +227,11 @@ function CommentMenu({
 // ─── Export menu (download comments for NLE import) ──────────────────────────
 
 const EXPORT_FORMATS: { id: string; label: string; hint: string }[] = [
+  { id: "premiere", label: "Premiere Pro", hint: "XML markers" },
+  { id: "resolve", label: "DaVinci Resolve", hint: "EDL" },
+  { id: "avid", label: "Avid Media Composer", hint: "XML locators" },
+  { id: "fcp", label: "Final Cut Pro", hint: "fiojson" },
   { id: "csv", label: "Spreadsheet", hint: "CSV" },
-  { id: "edl", label: "EDL", hint: "Resolve / Avid / Premiere" },
-  { id: "fcpxml", label: "Final Cut Pro", hint: "FCPXML" },
-  { id: "avid", label: "Avid markers", hint: ".txt locators" },
 ];
 
 function ExportMenu({

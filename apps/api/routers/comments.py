@@ -262,11 +262,12 @@ def export_comments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export timecoded comments as an NLE marker file.
+    """Export timecoded comments as an NLE marker file (Frame.io-compatible).
 
-    `format` is one of: csv, edl, fcpxml, avid. Timecodes are frame-accurate,
-    derived from the media's frame rate (override with `fps` if the source is
-    unknown). Only top-level comments carrying a timecode are exported.
+    `format` is one of: resolve (EDL), premiere (xmeml), avid (StreamItems XML),
+    fcp (fiojson), csv. Frame numbers/timecodes are derived from the media's
+    frame rate (override with `fps` if unknown). Only top-level comments carrying
+    a timecode are exported.
     """
     fmt = format.lower()
     if fmt not in comment_export.FORMATS:
