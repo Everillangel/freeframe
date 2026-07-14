@@ -7,53 +7,54 @@ env var:
 
 | `TRANSCODER_HWACCEL` | Encoder | Hardware | Compose overlay |
 |---|---|---|---|
-| `none` (default) | `libx264` | CPU | — |
+| **`auto`** (default) | best available | auto-detect → CPU | matching overlay below |
+| `none` | `libx264` | CPU | — |
 | `vaapi` | `h264_vaapi` | **Intel** iGPU **and AMD/Radeon** (Linux) | `docker-compose.gpu-vaapi.yml` |
 | `qsv` | `h264_qsv` | **Intel** Quick Sync | `docker-compose.gpu-vaapi.yml` |
 | `nvenc` | `h264_nvenc` | **NVIDIA** (CUDA) | `docker-compose.gpu-nvidia.yml` |
 
-**Scaling stays on the CPU; only the encode is offloaded** — this keeps the
-pipeline simple and robust. If a hardware transcode ever fails (driver/device/
-codec quirk), the worker **automatically retries that job on the CPU**, so an
-asset can never get stuck.
+**It's automatic.** With the default `auto`, the worker probes itself at startup
+and uses the fastest encoder it actually has (**nvenc → vaapi → qsv → CPU**) — you
+don't pick one. The only manual step is attaching the GPU device to the worker
+(Docker can't safely auto-attach a device that might not exist), which you do by
+adding the matching overlay compose file. No GPU present, or no overlay? It
+quietly uses the CPU.
 
-> Intel iGPU (e.g. an i5-7500 / HD Graphics 630) → use **`vaapi`**. It's the
-> simplest and most reliable Intel path; `qsv` is an alternative that may need
-> extra runtime bits.
+**Scaling stays on the CPU; only the encode is offloaded**, which keeps it
+robust. If a hardware transcode ever fails (driver/device/codec quirk), the
+worker **automatically retries that job on the CPU**, so an asset can never get
+stuck. You'll see the detected choice in the worker log:
+`[transcoder] hardware acceleration auto-detected: vaapi`.
+
+> Intel iGPU (e.g. an i5-7500 / HD Graphics 630)? Just add the VAAPI overlay
+> below — `auto` will detect and use it.
 
 ---
 
 ## How to enable
 
-Two things: pick the encoder in `.env`, and give the **worker** the GPU via the
-matching overlay compose file.
+Leave `TRANSCODER_HWACCEL=auto` (the default) and attach the GPU to the **worker**
+with the overlay that matches your hardware.
 
-### Intel / AMD (VAAPI)
+### Intel / AMD (VAAPI or QSV)
 
-1. `.env`:
-   ```
-   TRANSCODER_HWACCEL=vaapi
-   ```
-2. Start with the VAAPI overlay (adds `/dev/dri` to the worker):
-   ```bash
-   # dev
-   docker compose -f docker-compose.dev.yml -f docker-compose.gpu-vaapi.yml up -d --build
-   # prod
-   docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.gpu-vaapi.yml up -d --build
-   ```
+Add the VAAPI overlay (grants `/dev/dri` to the worker):
+```bash
+# dev
+docker compose -f docker-compose.dev.yml -f docker-compose.gpu-vaapi.yml up -d --build
+# prod
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.gpu-vaapi.yml up -d --build
+```
+`auto` picks `vaapi` (it's the reliable Intel/AMD path). Force `qsv` only if you
+specifically want Quick Sync.
 
 ### NVIDIA (NVENC / CUDA)
 
-Requires the NVIDIA driver **and** `nvidia-container-toolkit` on the host.
-
-1. `.env`:
-   ```
-   TRANSCODER_HWACCEL=nvenc
-   ```
-2. Start with the NVIDIA overlay:
-   ```bash
-   docker compose -f docker-compose.dev.yml -f docker-compose.gpu-nvidia.yml up -d --build
-   ```
+Requires the NVIDIA driver **and** `nvidia-container-toolkit` on the host. Add the
+NVIDIA overlay:
+```bash
+docker compose -f docker-compose.dev.yml -f docker-compose.gpu-nvidia.yml up -d --build
+```
 
 The `--build` matters — the images now include the Intel/AMD VAAPI drivers.
 

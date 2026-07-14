@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
-from packages.transcoder.ffmpeg_transcoder import build_hls_command, QUALITY_MAP, HWACCELS
+from packages.transcoder.ffmpeg_transcoder import (
+    build_hls_command,
+    detect_hwaccel,
+    resolve_hwaccel,
+    QUALITY_MAP,
+    HWACCELS,
+)
 
 QUALITIES = ["1080p", "720p", "360p"]
 
@@ -61,3 +67,17 @@ def test_all_supported_modes_build():
         assert build_hls_command("IN", Path("/tmp"), ["720p"], mode, True)
     assert set(HWACCELS) == {"none", "vaapi", "qsv", "nvenc"}
     assert set(QUALITY_MAP) == {"1080p", "720p", "360p"}
+
+
+def test_resolve_hwaccel_forces_and_auto_detects():
+    # Explicit values pass through; unknown becomes CPU
+    assert resolve_hwaccel("vaapi") == "vaapi"
+    assert resolve_hwaccel("nvenc") == "nvenc"
+    assert resolve_hwaccel("bogus") == "none"
+    assert resolve_hwaccel(None) == "none"
+    # "auto" resolves to a concrete, buildable back-end (CPU on machines with no GPU)
+    detected = resolve_hwaccel("auto")
+    assert detected in HWACCELS
+    assert detect_hwaccel() in HWACCELS
+    # whatever auto picks must produce a valid command
+    assert build_hls_command("IN", Path("/tmp"), ["720p"], detected, True)

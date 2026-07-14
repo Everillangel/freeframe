@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 import os
 import shutil
@@ -28,6 +29,66 @@ VAAPI_DEVICE = os.environ.get("VAAPI_DEVICE", "/dev/dri/renderD128")
 #   qsv   -> h264_qsv    (Intel Quick Sync)
 #   nvenc -> h264_nvenc  (NVIDIA / CUDA)
 HWACCELS = {"none", "vaapi", "qsv", "nvenc"}
+
+
+@functools.lru_cache(maxsize=1)
+def _ffmpeg_encoders() -> str:
+    """Cached `ffmpeg -encoders` output (probed once per worker process)."""
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return out.stdout or ""
+    except Exception:
+        return ""
+
+
+@functools.lru_cache(maxsize=1)
+def detect_hwaccel() -> str:
+    """Probe for a usable hardware H.264 encoder, preferring the fastest.
+
+    Order: NVIDIA (nvenc) → Intel/AMD (vaapi) → Intel (qsv) → none (CPU).
+    Requires both the ffmpeg encoder AND a working device, so it returns a
+    back-end only when it's genuinely usable; otherwise "none". Cached, so the
+    probe runs once per worker process. Logged so the choice is visible.
+    """
+    encoders = _ffmpeg_encoders()
+    chosen = "none"
+
+    # NVIDIA: encoder present + a GPU visible via nvidia-smi
+    if "h264_nvenc" in encoders:
+        try:
+            r = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and r.stdout.strip():
+                chosen = "nvenc"
+        except Exception:
+            pass
+
+    # Intel/AMD VAAPI: encoder + render node + vainfo reports H.264 encode
+    if chosen == "none" and "h264_vaapi" in encoders and os.path.exists(VAAPI_DEVICE):
+        try:
+            r = subprocess.run(["vainfo"], capture_output=True, text=True, timeout=10)
+            out = (r.stdout or "") + (r.stderr or "")
+            if "H264" in out and "EncSlice" in out:
+                chosen = "vaapi"
+        except Exception:
+            pass
+
+    # Intel QSV: encoder + render node (harder to probe; CPU fallback covers misfires)
+    if chosen == "none" and "h264_qsv" in encoders and os.path.exists(VAAPI_DEVICE):
+        chosen = "qsv"
+
+    print(f"[transcoder] hardware acceleration auto-detected: {chosen}")
+    return chosen
+
+
+def resolve_hwaccel(hwaccel: str) -> str:
+    """Map the configured value to a concrete back-end ('auto' → detected)."""
+    mode = (hwaccel or "none").lower()
+    if mode == "auto":
+        return detect_hwaccel()
+    return mode if mode in HWACCELS else "none"
 
 
 def build_hls_command(input_url: str, hls_dir: Path, qualities: list,
@@ -209,17 +270,18 @@ class FFmpegTranscoder(BaseTranscoder):
 
             _prep_output_dirs()
 
-            # Encode the ladder with the configured accelerator (CPU by default).
+            # Resolve the accelerator ("auto" → whatever this worker actually has).
             # Timeout scales with expected duration — 4 hours for very large files.
-            ffmpeg_cmd = build_hls_command(input_url, hls_dir, qualities, self.hwaccel, has_audio)
+            mode = resolve_hwaccel(self.hwaccel)
+            ffmpeg_cmd = build_hls_command(input_url, hls_dir, qualities, mode, has_audio)
             try:
-                self._run(ffmpeg_cmd, timeout=14400, label=f"ffmpeg[{self.hwaccel}]")
+                self._run(ffmpeg_cmd, timeout=14400, label=f"ffmpeg[{mode}]")
             except Exception as hw_err:
-                if self.hwaccel == "none":
+                if mode == "none":
                     raise
                 # Hardware transcode failed (driver/device/codec) — fall back to CPU
                 # so the asset never gets stuck. Reset the output dir and retry.
-                print(f"Hardware transcode ({self.hwaccel}) failed, falling back to CPU: {hw_err}")
+                print(f"Hardware transcode ({mode}) failed, falling back to CPU: {hw_err}")
                 shutil.rmtree(hls_dir, ignore_errors=True)
                 hls_dir.mkdir()
                 _prep_output_dirs()
