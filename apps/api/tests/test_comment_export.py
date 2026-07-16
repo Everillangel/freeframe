@@ -24,10 +24,56 @@ def _markers():
 
 # ── Timecode / frames ────────────────────────────────────────────────────────
 
+NTSC30 = 30000 / 1001  # 29.97
+NTSC60 = 60000 / 1001  # 59.94
+
+
 def test_frames_and_tc():
     # 30.52s @ 25fps -> frame 763 -> 00:00:30:13 (matches the Resolve reference)
     assert ce.to_frames(30.52, 25) == 763
     assert ce.seconds_to_tc(30.52, 25) == "00:00:30:13"
+
+
+# ── Drop-frame timecode (NTSC) ───────────────────────────────────────────────
+
+def test_dropframe_rate_detection():
+    assert ce.is_dropframe_rate(NTSC30)
+    assert ce.is_dropframe_rate(NTSC60)
+    for rate in (24, 25, 30, 50, 60, 24000 / 1001):  # 23.976 has no DF standard
+        assert not ce.is_dropframe_rate(rate)
+
+
+def test_dropframe_known_smpte_vectors():
+    def tc(frames, fps=NTSC30, df=True):
+        return ce.seconds_to_tc(frames / fps, fps, drop_frame=df)
+
+    assert tc(0) == "00:00:00:00"
+    assert tc(1799) == "00:00:59:29"
+    assert tc(1800) == "00:01:00:02"       # frames 00,01 dropped at minute 1
+    assert tc(17982) == "00:10:00:00"      # no drop on every 10th minute
+    assert tc(107892) == "01:00:00:00"     # exactly one hour
+
+
+def test_dropframe_corrects_ndf_drift():
+    # One hour of 29.97 reads ~3.6s early in non-drop; drop-frame realigns it.
+    one_hour = 107892 / NTSC30
+    assert ce.seconds_to_tc(one_hour, NTSC30, drop_frame=False) == "00:59:56:12"
+    assert ce.seconds_to_tc(one_hour, NTSC30, drop_frame=True) == "01:00:00:00"
+
+
+def test_resolve_drop_frame_auto_and_override():
+    assert ce.resolve_drop_frame(NTSC30, None) is True    # auto: NTSC -> DF
+    assert ce.resolve_drop_frame(25, None) is False       # auto: PAL -> NDF
+    assert ce.resolve_drop_frame(NTSC30, False) is False  # forced NDF
+    assert ce.resolve_drop_frame(25, True) is True        # forced DF
+
+
+def test_edl_fcm_header_follows_dropframe():
+    m = [ce.Marker(30.52, None, "A", "x", False, None)]
+    assert "FCM: DROP FRAME" in ce.export("resolve", m, "t", NTSC30)[0]
+    assert "FCM: NON DROP FRAME" in ce.export("resolve", m, "t", 25)[0]
+    # explicit override wins over auto-detection
+    assert "FCM: NON DROP FRAME" in ce.export("resolve", m, "t", NTSC30, drop_frame=False)[0]
 
 
 # ── Resolve EDL ──────────────────────────────────────────────────────────────

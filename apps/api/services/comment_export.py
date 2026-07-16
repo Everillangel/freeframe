@@ -43,11 +43,42 @@ def to_frames(seconds: float, fps: float) -> int:
     return int(round(max(0.0, seconds) * fps))
 
 
-def seconds_to_tc(seconds: float, fps: float) -> str:
-    """Non-drop-frame SMPTE timecode HH:MM:SS:FF."""
+def is_dropframe_rate(fps: float) -> bool:
+    """True for the NTSC rates that use drop-frame timecode (29.97, 59.94).
+
+    23.976 is NTSC-fractional too but has no drop-frame standard — it's always
+    non-drop. 24/25/30/50/60 are exact rates and never drop.
+    """
+    return abs(fps - 30000 / 1001) < 0.01 or abs(fps - 60000 / 1001) < 0.01
+
+
+def seconds_to_tc(seconds: float, fps: float, drop_frame: bool = False) -> str:
+    """SMPTE timecode HH:MM:SS:FF.
+
+    Non-drop by default. With `drop_frame`, applies the NTSC drop-frame rule
+    (skip 2 frames — 4 at 59.94 — at each minute except every 10th), which keeps
+    the timecode aligned to wall-clock; without it, 29.97 material drifts ~3.6s
+    per hour against a drop-frame timeline.
+    """
     n = nominal_fps(fps)
     total = to_frames(seconds, fps)
-    return f"{total // (n*3600):02d}:{(total // (n*60)) % 60:02d}:{(total // n) % 60:02d}:{total % n:02d}"
+
+    if drop_frame:
+        drop = round(fps * 0.066666)          # 2 @ 29.97, 4 @ 59.94
+        per_10min = round(fps * 600)          # 17982 @ 29.97
+        per_min = n * 60 - drop               # 1798 @ 29.97
+        d, m = divmod(total, per_10min)
+        if m > drop:
+            total += drop * 9 * d + drop * ((m - drop) // per_min)
+        else:
+            total += drop * 9 * d
+
+    return f"{(total // (n*3600)) % 24:02d}:{(total // (n*60)) % 60:02d}:{(total // n) % 60:02d}:{total % n:02d}"
+
+
+def resolve_drop_frame(fps: float, drop_frame: Optional[bool]) -> bool:
+    """None = auto (drop-frame for NTSC rates); True/False forces it."""
+    return is_dropframe_rate(fps) if drop_frame is None else bool(drop_frame)
 
 
 def _one_line(text: str) -> str:
@@ -79,10 +110,13 @@ def _iso_z(dt: Optional[datetime]) -> Optional[str]:
 
 # ── DaVinci Resolve — EDL ────────────────────────────────────────────────────
 
-def build_resolve_edl(markers: list[Marker], asset_name: str, fps: float) -> str:
-    lines = [f"TITLE: {_one_line(asset_name)}", "FCM: NON DROP FRAME", ""]
+def build_resolve_edl(markers: list[Marker], asset_name: str, fps: float,
+                      drop_frame: Optional[bool] = None) -> str:
+    df = resolve_drop_frame(fps, drop_frame)
+    fcm = "DROP FRAME" if df else "NON DROP FRAME"
+    lines = [f"TITLE: {_one_line(asset_name)}", f"FCM: {fcm}", ""]
     for i, m in enumerate(markers, start=1):
-        tc = seconds_to_tc(m.seconds, fps)
+        tc = seconds_to_tc(m.seconds, fps, drop_frame=df)
         lines.append(f"{i:03d}  001  C  V  {tc}  {tc}  {tc}  {tc}")
         lines.append(f"@{m.author or 'Reviewer'}, {_edl_date(m.created_at)}")
         note = _one_line(m.body)
@@ -271,13 +305,14 @@ def build_fcp_fiojson(markers: list[Marker], asset_name: str, fps: float,
 
 # ── CSV ──────────────────────────────────────────────────────────────────────
 
-def build_csv(markers: list[Marker], fps: float) -> str:
+def build_csv(markers: list[Marker], fps: float, drop_frame: Optional[bool] = None) -> str:
+    df = resolve_drop_frame(fps, drop_frame)
     buf = io.StringIO()
     w = _csv.writer(buf)
     w.writerow(["Timecode", "Frame", "Seconds", "Author", "Comment", "Resolved", "Created At"])
     for m in markers:
         w.writerow([
-            seconds_to_tc(m.seconds, fps),
+            seconds_to_tc(m.seconds, fps, drop_frame=df),
             to_frames(m.seconds, fps),
             f"{m.seconds:.3f}",
             _csv_safe(m.author),
@@ -311,14 +346,20 @@ _PROGRAM_LABELS = {
 
 def export(fmt: str, markers: list[Marker], asset_name: str, fps: float,
            width: int = 1920, height: int = 1080,
-           duration_seconds: float = 0.0) -> tuple[str, str, str]:
-    """Build the export. Returns (content, media_type, filename)."""
+           duration_seconds: float = 0.0,
+           drop_frame: Optional[bool] = None) -> tuple[str, str, str]:
+    """Build the export. Returns (content, media_type, filename).
+
+    `drop_frame` only affects timecode-string formats (EDL/CSV): None = auto
+    (drop-frame for NTSC 29.97/59.94). Premiere/Avid/FCP carry absolute frame
+    numbers, so they're unaffected by the drop-frame convention.
+    """
     if fmt not in FORMATS:
         raise ValueError(f"Unsupported format: {fmt}")
     media_type, ext = FORMATS[fmt]
 
     if fmt == "resolve":
-        content = build_resolve_edl(markers, asset_name, fps)
+        content = build_resolve_edl(markers, asset_name, fps, drop_frame=drop_frame)
     elif fmt == "premiere":
         content = build_premiere_xml(markers, asset_name, fps, width, height, duration_seconds)
     elif fmt == "avid":
@@ -326,7 +367,7 @@ def export(fmt: str, markers: list[Marker], asset_name: str, fps: float,
     elif fmt == "fcp":
         content = build_fcp_fiojson(markers, asset_name, fps, duration_seconds)
     else:  # csv
-        content = build_csv(markers, fps)
+        content = build_csv(markers, fps, drop_frame=drop_frame)
 
     # Mirror Frame.io's "<Program> <asset name>.<ext>" (asset extension stripped).
     root = os.path.splitext(asset_name or "comments")[0]

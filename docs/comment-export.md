@@ -36,6 +36,7 @@ GET /assets/{asset_id}/comments/export?format=premiere|resolve|avid|fcp|csv
 | `version_id` | latest ready version | Which version's comments to export. |
 | `fps` | media's detected fps, else 30 | Frame rate used for frames/timecodes. |
 | `include_resolved` | `true` | Set `false` to omit resolved comments. |
+| `drop_frame` | auto (DF on NTSC) | Force drop-frame timecode on/off (EDL/CSV only). |
 
 Requires an authenticated user with access to the asset. Returns the file as a
 download (`Content-Disposition: attachment`).
@@ -50,6 +51,28 @@ download (`Content-Disposition: attachment`).
   Track defaults to `V1`, colour to Blue.
 - **Final Cut Pro** — the `.fiojson` is Frame.io's payload; import it with your
   Frame.io-style FCP marker workflow.
+
+## Frame rate & drop-frame
+
+The source frame rate is probed on upload and stored, so **whatever rate goes in
+comes out** — 24, 25, 29.97, 50, 60 all round-trip. The transcode doesn't force a
+rate, so the review proxy plays at the source rate too. You can see the detected
+rate in the asset inspector ("Frame rate").
+
+- **Premiere, Avid and FCP carry absolute frame numbers**, so they're immune to
+  timecode conventions entirely.
+- **The EDL (and CSV) use `HH:MM:SS:FF` strings**, so drop-frame matters. It's
+  handled automatically: **29.97 / 59.94 → drop-frame** (`FCM: DROP FRAME`),
+  everything else → non-drop. Override per export with `drop_frame=true|false`
+  if your timeline differs. Without this, an hour of 29.97 lands ~3.6 s (108
+  frames) out.
+- **Interlaced sources** report frames (not fields) — 1080i25 → 25 fps — so
+  markers are correct. Note the review proxy is **not** deinterlaced, so
+  interlaced rushes may show combing during playback.
+
+> If the inspector shows **"Frame rate: Unknown"**, the asset predates metadata
+> capture and exports will assume 30 fps. An admin can run
+> `POST /admin/backfill-media-metadata` to re-probe and fix it.
 
 ## Notes & assumptions
 

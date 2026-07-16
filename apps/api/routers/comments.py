@@ -259,6 +259,7 @@ def export_comments(
     version_id: Optional[uuid.UUID] = None,
     fps: Optional[float] = None,
     include_resolved: bool = True,
+    drop_frame: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -268,6 +269,10 @@ def export_comments(
     fcp (fiojson), csv. Frame numbers/timecodes are derived from the media's
     frame rate (override with `fps` if unknown). Only top-level comments carrying
     a timecode are exported.
+
+    `drop_frame` affects the timecode-string formats (EDL/CSV) only: omit for
+    auto (drop-frame on NTSC 29.97/59.94), or force true/false to match your
+    timeline. Premiere/Avid/FCP use absolute frame numbers and are unaffected.
     """
     fmt = format.lower()
     if fmt not in comment_export.FORMATS:
@@ -312,6 +317,7 @@ def export_comments(
     content, media_type, filename = comment_export.export(
         fmt, markers, asset.name, effective_fps,
         width=width, height=height, duration_seconds=duration,
+        drop_frame=drop_frame,
     )
 
     return Response(
