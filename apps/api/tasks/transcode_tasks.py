@@ -101,6 +101,17 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
     media_file.s3_key_processed = result.hls_prefix
     if result.thumbnail_keys:
         media_file.s3_key_thumbnail = result.thumbnail_keys[0]
+
+    # Persist probed source metadata. Without this fps stays NULL and marker
+    # exports fall back to 30 fps, silently shifting every exported timecode.
+    if result.fps:
+        media_file.fps = result.fps
+    if result.width:
+        media_file.width = result.width
+    if result.height:
+        media_file.height = result.height
+    if result.duration_seconds:
+        media_file.duration_seconds = result.duration_seconds
     db.flush()
 
 

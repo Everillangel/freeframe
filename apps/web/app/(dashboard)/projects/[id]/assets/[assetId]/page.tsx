@@ -11,6 +11,7 @@ import { AnnotationCanvas } from '@/components/review/annotation-canvas'
 import { AnnotationOverlay } from '@/components/review/annotation-overlay'
 import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
+import { MediaInfo } from '@/components/review/media-info'
 // ApprovalBar removed for now
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { ShareDialog } from '@/components/review/share-dialog'
@@ -510,6 +511,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                       </div>
                     )}
                   </div>
+
+                  <MediaInfo file={currentVersion?.files?.[0]} />
                 </div>
               )}
             </div>

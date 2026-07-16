@@ -19,6 +19,7 @@ celery_app = Celery(
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.retention_tasks",
         "apps.api.tasks.cleanup_tasks",
+        "apps.api.tasks.metadata_tasks",
     ],
 )
 

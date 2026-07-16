@@ -31,6 +31,51 @@ VAAPI_DEVICE = os.environ.get("VAAPI_DEVICE", "/dev/dri/renderD128")
 HWACCELS = {"none", "vaapi", "qsv", "nvenc"}
 
 
+def parse_probe(probe_json: str) -> dict:
+    """Extract duration/width/height/fps from `ffprobe -show_streams -show_format` JSON.
+
+    Returns a dict with any values it could determine (missing ones omitted), so a
+    weird source never breaks the transcode. Frame rate matters beyond display:
+    marker exports convert comment times to frames with it.
+    """
+    out = {}
+    try:
+        data = json.loads(probe_json or "{}")
+    except (ValueError, TypeError):
+        return out
+
+    streams = data.get("streams") or []
+    fmt = data.get("format") or {}
+
+    if streams:
+        s = streams[0]
+        if s.get("width"):
+            out["width"] = int(s["width"])
+        if s.get("height"):
+            out["height"] = int(s["height"])
+        rate = s.get("r_frame_rate") or s.get("avg_frame_rate")
+        if rate and "/" in str(rate):
+            num, den = str(rate).split("/", 1)
+            try:
+                if float(den) != 0:
+                    out["fps"] = float(num) / float(den)
+            except ValueError:
+                pass
+        if s.get("duration"):
+            try:
+                out["duration_seconds"] = float(s["duration"])
+            except ValueError:
+                pass
+
+    # Container duration is the reliable fallback (many streams omit it).
+    if "duration_seconds" not in out and fmt.get("duration"):
+        try:
+            out["duration_seconds"] = float(fmt["duration"])
+        except ValueError:
+            pass
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def _ffmpeg_encoders() -> str:
     """Cached `ffmpeg -encoders` output (probed once per worker process)."""
@@ -241,12 +286,12 @@ class FFmpegTranscoder(BaseTranscoder):
         input_url = self._get_presigned_url(job.input_s3_key, expires_in=7200)
 
         try:
-            # 1. Get video metadata via streaming (no download)
-            # Note: ffprobe result is used for metadata logging only;
-            # _run() already fail-fasts on non-zero exit.
+            # 1. Probe the source (streaming, no download). The result is parsed
+            # into the TranscodeResult and persisted onto MediaFile — the frame
+            # rate in particular drives marker-export timecodes.
             cmd = [
                 "ffprobe", "-v", "error", "-print_format", "json",
-                "-show_streams", "-select_streams", "v:0", input_url,
+                "-show_streams", "-show_format", "-select_streams", "v:0", input_url,
             ]
             vid_info = self._run(cmd, timeout=120, label="ffprobe")
 
@@ -316,10 +361,15 @@ class FFmpegTranscoder(BaseTranscoder):
                     ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
                 )
 
+            meta = parse_probe(vid_info)
             return TranscodeResult(
                 success=True,
                 hls_prefix=job.output_s3_prefix,
                 thumbnail_keys=[thumbnail_key],
+                duration_seconds=meta.get("duration_seconds"),
+                width=meta.get("width"),
+                height=meta.get("height"),
+                fps=meta.get("fps"),
             )
 
         except Exception as e:

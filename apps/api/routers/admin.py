@@ -114,6 +114,20 @@ def update_user_role(
     db.refresh(user)
     return user
 
+@router.post("/backfill-media-metadata", status_code=status.HTTP_202_ACCEPTED)
+def backfill_media_metadata_now(limit: int = 500, current_user: User = Depends(require_admin)):
+    """Re-probe videos missing a frame rate and persist fps/resolution/duration.
+
+    Existing uploads predate metadata being saved, so their fps is NULL — which
+    makes marker exports fall back to 30 fps and land on the wrong frames. Run
+    this once after upgrading; it's safe to re-run.
+    """
+    from ..tasks.metadata_tasks import backfill_media_metadata
+    from ..tasks.celery_app import send_task_safe
+    send_task_safe(backfill_media_metadata, limit)
+    return {"status": "queued", "limit": limit}
+
+
 @router.post("/purge", response_model=PurgeStartResponse, status_code=status.HTTP_202_ACCEPTED)
 def purge_now(current_user: User = Depends(require_admin)):
     """Trigger the retention-window garbage collector to run now, in the background.
