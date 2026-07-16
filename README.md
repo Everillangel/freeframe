@@ -137,6 +137,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 | [Hardware Acceleration](docs/hardware-acceleration.md) | GPU transcoding via Intel/AMD (VAAPI/QSV) or NVIDIA (NVENC) |
 | [NAS Storage](docs/nas-storage.md) | Store media on a NAS (Synology/QNAP/TrueNAS/Unraid) via MinIO |
 | [Security & POPIA](docs/security-hardening.md) | Secret rotation, private storage, data-subject exports/erasure, POPIA (ZA) checklist |
+| [Plans & Backlog](docs/plans/) | Planned work: DIT watch-folder ingest, NLE panel integrations, deferred items |
 | [Architecture](docs/architecture.md) | System design, data flow, media pipeline, permissions |
 | [Contributing](docs/contributing.md) | Dev setup, testing, code style, PR process |
 | [Environment Variables](.env.example) | Full config reference with comments |
