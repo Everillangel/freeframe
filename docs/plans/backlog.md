@@ -58,23 +58,22 @@ Raised in the security review; not urgent for a LAN/Tailscale deployment.
 ---
 
 ## 4 · FCPXML as an alternative FCP export
-**Conditional · small**
+**✅ Done** (ported from upstream v1.6.0 during the sync)
 
-FCP currently exports **`.fiojson`** to match the Frame.io reference — but that
-format is **Frame.io-proprietary** (their importer's payload), not something FCP
-ingests natively. If the FCP workflow can't take it, add back standard **FCPXML**
-(previously implemented and working) as a second FCP option. Decide after a real
-import test.
+FCP now has **two** options: `fcp` (`.fiojson`, matching the Frame.io reference)
+and `fcpxml` (FCPXML 1.9, which FCP 10.4+ ingests natively). NTSC rates are
+written as exact fractions (`1001/30000s`) since FCP conforms the sequence to
+`frameDuration`. Still worth a real import test to decide which becomes default.
 
 ---
 
 ## 5 · Media metadata for audio + images
-**Small**
+**Partly done** (upstream v1.6.0 added audio duration)
 
-The metadata fix persists fps/resolution/duration for **video** only.
-`_process_audio` / `_process_image` still don't record duration or dimensions.
-Low impact (markers only need video fps), but the inspector would be more complete.
-The `backfill_media_metadata` task is likewise video-only.
+`_process_audio` now persists `duration_seconds`. Still missing: **image**
+dimensions (`_process_image` records nothing), and the `backfill_media_metadata`
+task remains video-only. Low impact — markers only need video fps — but the
+inspector would be more complete.
 
 ---
 

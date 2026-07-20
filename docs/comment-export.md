@@ -13,7 +13,14 @@ Frame numbers/timecodes are frame-accurate, derived from the media's frame rate.
 | **DaVinci Resolve** | `.edl` | CMX3600 EDL (`@author` + `\|C:\|M:\|D:` metadata) | DaVinci Resolve |
 | **Avid Media Composer** | `.xml` | Avid StreamItems (OMFI locator attributes) | Avid Media Composer |
 | **Final Cut Pro** | `.fiojson` | Frame.io JSON marker payload | Final Cut Pro (via a Frame.io-style importer) |
+| **Final Cut Pro** | `.fcpxml` | FCPXML 1.9, markers on a media-less gap | Final Cut Pro 10.4+ natively |
 | **Spreadsheet** | `.csv` | Timecode, frame, author, comment | Excel / Sheets / generic |
+
+> **Two Final Cut options.** `fiojson` reproduces Frame.io's own payload, which
+> is **proprietary to Frame.io** and needs a compatible importer. `fcpxml` is the
+> standard interchange format FCP ingests natively — **use it if the fiojson
+> import doesn't work for you.** NTSC rates are written as exact fractions
+> (`1001/30000s`), never rounded, because FCP conforms the sequence to that value.
 
 Only **top-level, timecoded** comments for the selected version are exported.
 Timecodes are non-drop-frame SMPTE (`HH:MM:SS:FF`).
@@ -27,19 +34,33 @@ your editor. The file downloads immediately, named like Frame.io's
 ## Using it (API)
 
 ```
-GET /assets/{asset_id}/comments/export?format=premiere|resolve|avid|fcp|csv
+GET /assets/{asset_id}/comments/export?format=premiere|resolve|avid|fcp|fcpxml|csv
 ```
 
 | Param | Default | Meaning |
 |---|---|---|
-| `format` | `csv` | One of `premiere`, `resolve`, `avid`, `fcp`, `csv`. |
+| `format` | `csv` | One of `premiere`, `resolve`, `avid`, `fcp`, `fcpxml`, `csv`. |
 | `version_id` | latest ready version | Which version's comments to export. |
-| `fps` | media's detected fps, else 30 | Frame rate used for frames/timecodes. |
+| `fps` | media's detected fps | Frame rate used for frames/timecodes. **Required if the media has none** — see below. |
 | `include_resolved` | `true` | Set `false` to omit resolved comments. |
 | `drop_frame` | auto (DF on NTSC) | Force drop-frame timecode on/off (EDL/CSV only). |
 
 Requires an authenticated user with access to the asset. Returns the file as a
 download (`Content-Disposition: attachment`).
+
+### Unknown frame rate → `422`
+
+If the version has **no stored frame rate** and you don't pass `fps`, the export
+returns **422** (`fps_required`) instead of guessing. This is deliberate: every
+format here embeds frame numbers or timecode, so assuming 30 fps silently shifts
+every marker on 24/25/50 fps media — the export looks fine and is quietly wrong.
+
+The UI handles this by prompting for the rate and retrying. To fix it properly,
+run the metadata backfill so the rate is probed from the source:
+
+```
+POST /admin/backfill-media-metadata
+```
 
 ## Importing into each editor
 

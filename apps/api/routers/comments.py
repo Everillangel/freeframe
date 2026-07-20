@@ -365,9 +365,10 @@ def export_comments(
     """Export timecoded comments as an NLE marker file (Frame.io-compatible).
 
     `format` is one of: resolve (EDL), premiere (xmeml), avid (StreamItems XML),
-    fcp (fiojson), csv. Frame numbers/timecodes are derived from the media's
-    frame rate (override with `fps` if unknown). Only top-level comments carrying
-    a timecode are exported.
+    fcp (fiojson), fcpxml (FCPXML 1.9), csv. Frame numbers/timecodes are derived
+    from the media's frame rate; if it isn't known this returns 422 rather than
+    guessing, and the caller should retry with an explicit `fps`. Only top-level
+    comments carrying a timecode are exported.
 
     `drop_frame` affects the timecode-string formats (EDL/CSV) only: omit for
     auto (drop-frame on NTSC 29.97/59.94), or force true/false to match your
@@ -385,7 +386,19 @@ def export_comments(
     version = _resolve_export_version(db, asset, version_id)
 
     media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
-    effective_fps = fps or (media_file.fps if media_file and media_file.fps else None) or 30.0
+    # Never silently assume a frame rate: every format here embeds frame numbers
+    # or timecode, so guessing 30 shifts every marker on 24/25/50 fps media.
+    # 422 tells the UI to ask the user for the rate and retry with ?fps=.
+    effective_fps = fps or (media_file.fps if media_file and media_file.fps else None)
+    if not effective_fps:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "fps_required: this version has no stored frame rate, so exported "
+                "timecodes would be wrong. Supply fps, or run the media metadata "
+                "backfill to probe it from the source."
+            ),
+        )
     width = (media_file.width if media_file else None) or 1920
     height = (media_file.height if media_file else None) or 1080
     duration = (media_file.duration_seconds if media_file else None) or 0.0

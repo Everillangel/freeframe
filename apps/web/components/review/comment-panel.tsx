@@ -29,7 +29,7 @@ import {
   Download,
 } from "lucide-react";
 import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
-import { downloadToDisk } from "@/lib/api";
+import { ApiError, downloadToDisk } from "@/lib/api";
 import { useReviewStore } from "@/stores/review-store";
 import type { CommentWithReplies } from "@/hooks/use-comments";
 
@@ -236,9 +236,52 @@ const EXPORT_FORMATS: { id: string; label: string; hint: string }[] = [
   { id: "premiere", label: "Premiere Pro", hint: "XML markers" },
   { id: "resolve", label: "DaVinci Resolve", hint: "EDL" },
   { id: "avid", label: "Avid Media Composer", hint: "XML locators" },
-  { id: "fcp", label: "Final Cut Pro", hint: "fiojson" },
+  { id: "fcp", label: "Final Cut Pro", hint: "Frame.io fiojson" },
+  { id: "fcpxml", label: "Final Cut Pro", hint: "FCPXML (standard)" },
   { id: "csv", label: "Spreadsheet", hint: "CSV" },
 ];
+
+/** Rates offered when the media's frame rate isn't known (see FpsPrompt). */
+const COMMON_FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+
+/** Shown when the server returns 422 fps_required — exporting without the real
+ *  rate would silently shift every marker, so we ask rather than guess. */
+function FpsPrompt({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (fps: number) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="px-3 py-2.5 space-y-2">
+      <div className="text-[12px] text-text-primary font-medium">
+        Frame rate unknown
+      </div>
+      <p className="text-[11px] text-text-tertiary leading-snug">
+        This version has no stored frame rate. Pick the rate of the source media —
+        the wrong one shifts every exported marker.
+      </p>
+      <div className="grid grid-cols-4 gap-1">
+        {COMMON_FPS.map((f) => (
+          <button
+            key={f}
+            className="rounded-md border border-border px-1.5 py-1 text-[11px] text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+            onClick={() => onConfirm(f)}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+      <button
+        className="text-[11px] text-text-tertiary hover:text-text-secondary transition-colors"
+        onClick={onCancel}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
 
 function ExportMenu({
   assetId,
@@ -250,21 +293,34 @@ function ExportMenu({
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  // Set when the server reports the frame rate is unknown — holds the format
+  // to retry once the user picks a rate.
+  const [needsFps, setNeedsFps] = React.useState<string | null>(null);
 
-  async function handleExport(fmt: string) {
+  async function handleExport(fmt: string, fps?: number) {
     setBusy(fmt);
     setError(null);
     try {
       const params = new URLSearchParams({ format: fmt });
       if (versionId) params.set("version_id", versionId);
+      if (fps) params.set("fps", String(fps));
       await downloadToDisk(
         `/assets/${assetId}/comments/export?${params.toString()}`,
       );
+      setNeedsFps(null);
       setOpen(false);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Export failed. Please try again.",
-      );
+      const isFpsRequired =
+        e instanceof ApiError &&
+        e.status === 422 &&
+        e.detail?.includes("fps_required");
+      if (isFpsRequired) {
+        setNeedsFps(fmt);
+      } else {
+        setError(
+          e instanceof Error ? e.message : "Export failed. Please try again.",
+        );
+      }
     } finally {
       setBusy(null);
     }
@@ -284,7 +340,22 @@ function ExportMenu({
       >
         <Download className="h-4 w-4" />
       </button>
-      <Dropdown open={open} onClose={() => setOpen(false)} align="right" className="w-60">
+      <Dropdown
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setNeedsFps(null);
+        }}
+        align="right"
+        className="w-60"
+      >
+        {needsFps ? (
+          <FpsPrompt
+            onConfirm={(fps) => handleExport(needsFps, fps)}
+            onCancel={() => setNeedsFps(null)}
+          />
+        ) : (
+        <>
         <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
           Export comments as...
         </div>
@@ -306,6 +377,8 @@ function ExportMenu({
         </div>
         {error && (
           <div className="px-3 pb-2 text-[11px] text-red-400">{error}</div>
+        )}
+        </>
         )}
       </Dropdown>
     </div>

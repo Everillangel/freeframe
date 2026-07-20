@@ -6,6 +6,9 @@ One format per editor, modelled on real Frame.io exports:
 - ``premiere`` Adobe Premiere Pro FCP7 XML (xmeml) with a marker color-matte.
 - ``avid``     Avid Media Composer StreamItems XML (OMFI locator attributes).
 - ``fcp``      Final Cut Pro fiojson (Frame.io's JSON marker payload).
+- ``fcpxml``   Final Cut Pro FCPXML 1.9 (standard interchange — use when the
+               fiojson payload isn't accepted, since that format is Frame.io's
+               own and not something FCP ingests natively).
 - ``csv``      Generic spreadsheet CSV.
 
 Only top-level, timecoded comments are exported. Frame numbers/timecodes are
@@ -303,6 +306,97 @@ def build_fcp_fiojson(markers: list[Marker], asset_name: str, fps: float,
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
+# ── Final Cut Pro — FCPXML (standard interchange) ────────────────────────────
+
+def _fcpxml_frame_duration(fps: float) -> tuple[int, int]:
+    """Frame duration as (numerator, denominator) for FCPXML `frameDuration`.
+
+    NTSC-fractional rates must be expressed exactly (1001/30000s), never as a
+    rounded decimal — FCP conforms the whole sequence to this value, so a
+    rounded rate drifts every marker.
+    """
+    nominal = nominal_fps(fps)
+    if abs(fps - nominal * 1000 / 1001) < 0.01:
+        return 1001, nominal * 1000
+    return 1, nominal
+
+
+def _xml_attr(text: str) -> str:
+    return escape(text or "", {'"': "&quot;", "'": "&apos;"})
+
+
+def build_fcpxml(markers: list[Marker], asset_name: str, fps: float,
+                 width: int = 1920, height: int = 1080,
+                 duration_seconds: float = 0.0,
+                 drop_frame: Optional[bool] = None) -> str:
+    """FCPXML 1.9 — markers on a media-less gap, importable by FCP 10.4+.
+
+    This is the *standard* interchange format, unlike the `fcp` fiojson export
+    which reproduces Frame.io's proprietary payload. Marker positions are
+    absolute frame counts, so `drop_frame` only affects the displayed tcFormat.
+    """
+    num, den = _fcpxml_frame_duration(fps)
+
+    def rational(frames: int) -> str:
+        return f"{frames * num}/{den}s"
+
+    def span(m: Marker) -> tuple[int, int]:
+        start = to_frames(m.seconds, fps)
+        if m.end_seconds is not None and m.end_seconds > m.seconds:
+            return start, max(1, to_frames(m.end_seconds, fps) - start)
+        return start, 1
+
+    spans = [span(m) for m in markers]
+    last_end = max((s + d for s, d in spans), default=0)
+    # Pad the gap past the last marker so FCP never clips one at the boundary.
+    gap_frames = max(to_frames(duration_seconds or 0, fps), last_end + nominal_fps(fps) * 10)
+
+    rows = []
+    for m, (start, dur) in zip(markers, spans):
+        attrs = [
+            f'start="{rational(start)}"',
+            f'duration="{rational(dur)}"',
+            f'value="{_xml_attr(_one_line(m.body) or "Comment")}"',
+        ]
+        if m.author:
+            attrs.append(f'note="{_xml_attr(m.author)}"')
+        if m.resolved:
+            attrs.append('completed="1"')
+        rows.append(f'          <marker {" ".join(attrs)}/>')
+    markers_xml = "\n".join(rows)
+
+    title = _xml_attr(f"{os.path.splitext(asset_name or 'comments')[0]} — comments")
+    tc_format = "DF" if resolve_drop_frame(fps, drop_frame) else "NDF"
+    gap_dur = rational(gap_frames)
+
+    header = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<!DOCTYPE fcpxml>\n"
+        '<fcpxml version="1.9">\n'
+        "  <resources>\n"
+        f'    <format id="r1" frameDuration="{num}/{den}s" '
+        f'width="{int(width or 1920)}" height="{int(height or 1080)}"/>\n'
+        "  </resources>\n"
+        "  <library>\n"
+        '    <event name="FreeFrame Comments">\n'
+        f'      <project name="{title}">\n'
+        f'        <sequence format="r1" duration="{gap_dur}" '
+        f'tcStart="0s" tcFormat="{tc_format}">\n'
+        "          <spine>\n"
+        f'            <gap name="Gap" offset="0s" start="0s" duration="{gap_dur}">\n'
+    )
+    footer = (
+        "            </gap>\n"
+        "          </spine>\n"
+        "        </sequence>\n"
+        "      </project>\n"
+        "    </event>\n"
+        "  </library>\n"
+        "</fcpxml>\n"
+    )
+    return header + (markers_xml + "\n" if markers_xml else "") + footer
+
+
 # ── CSV ──────────────────────────────────────────────────────────────────────
 
 def build_csv(markers: list[Marker], fps: float, drop_frame: Optional[bool] = None) -> str:
@@ -331,6 +425,7 @@ FORMATS = {
     "premiere": ("application/xml", "xml"),
     "avid":     ("application/xml", "xml"),
     "fcp":      ("application/json", "fiojson"),
+    "fcpxml":   ("application/xml", "fcpxml"),
     "csv":      ("text/csv", "csv"),
 }
 
@@ -340,6 +435,7 @@ _PROGRAM_LABELS = {
     "premiere": "Premiere",
     "avid": "Avid MC",
     "fcp": "FCP",
+    "fcpxml": "FCPXML",
     "csv": "Comments",
 }
 
@@ -366,6 +462,9 @@ def export(fmt: str, markers: list[Marker], asset_name: str, fps: float,
         content = build_avid_xml(markers, fps)
     elif fmt == "fcp":
         content = build_fcp_fiojson(markers, asset_name, fps, duration_seconds)
+    elif fmt == "fcpxml":
+        content = build_fcpxml(markers, asset_name, fps, width, height,
+                               duration_seconds, drop_frame=drop_frame)
     else:  # csv
         content = build_csv(markers, fps, drop_frame=drop_frame)
 

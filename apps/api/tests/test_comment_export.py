@@ -145,7 +145,7 @@ def test_csv_header_and_injection_safe():
 # ── Dispatcher ───────────────────────────────────────────────────────────────
 
 def test_formats_registry():
-    assert set(ce.FORMATS) == {"resolve", "premiere", "avid", "fcp", "csv"}
+    assert set(ce.FORMATS) == {"resolve", "premiere", "avid", "fcp", "fcpxml", "csv"}
 
 
 def test_unsupported_format_raises():
@@ -158,10 +158,64 @@ def test_unsupported_format_raises():
 
 
 def test_empty_markers_stays_valid():
-    for fmt in ("resolve", "premiere", "avid", "fcp", "csv"):
+    for fmt in ("resolve", "premiere", "avid", "fcp", "fcpxml", "csv"):
         content, _, _ = ce.export(fmt, [], "Empty", 25, duration_seconds=10.0)
         assert isinstance(content, str) and content
-        if fmt in ("premiere", "avid"):
+        if fmt in ("premiere", "avid", "fcpxml"):
             minidom.parseString(content)
         if fmt == "fcp":
             assert json.loads(content)["comments"] == []
+        if fmt == "fcpxml":
+            # header must survive an empty marker list (the gap still closes)
+            assert "<fcpxml" in content and "</gap>" in content
+
+
+# ── FCPXML ───────────────────────────────────────────────────────────────────
+
+def test_fcpxml_wellformed_and_markers():
+    content, media_type, filename = ce.export(
+        "fcpxml", _markers(), "Scene 1.mov", 25, duration_seconds=60.0)
+    assert media_type == "application/xml"
+    assert filename == "FCPXML Scene 1.fcpxml"
+    doc = minidom.parseString(content)
+    fmt_el = doc.getElementsByTagName("format")[0]
+    assert fmt_el.getAttribute("frameDuration") == "1/25s"
+    seq = doc.getElementsByTagName("sequence")[0]
+    assert seq.getAttribute("tcFormat") == "NDF"
+    mk = doc.getElementsByTagName("marker")
+    assert len(mk) == len(_markers())
+    # markers must live inside the gap, or FCP ignores them
+    assert doc.getElementsByTagName("gap")[0].getElementsByTagName("marker")
+
+
+def test_fcpxml_ntsc_rates_are_exact_fractions():
+    """A rounded rate drifts every marker — NTSC must stay 1001/N000."""
+    c, _, _ = ce.export("fcpxml", _markers(), "x", 30000 / 1001, duration_seconds=10.0)
+    assert 'frameDuration="1001/30000s"' in c
+    assert 'tcFormat="DF"' in c  # 29.97 is drop-frame by default
+    c, _, _ = ce.export("fcpxml", _markers(), "x", 24000 / 1001, duration_seconds=10.0)
+    assert 'frameDuration="1001/24000s"' in c
+    assert 'tcFormat="NDF"' in c  # 23.976 has no drop-frame standard
+    c, _, _ = ce.export("fcpxml", _markers(), "x", 50, duration_seconds=10.0)
+    assert 'frameDuration="1/50s"' in c
+
+
+def test_fcpxml_escapes_attributes():
+    markers = [ce.Marker(1.0, None, 'Bob "The Cut"', 'fix <this> & "that"', False, None)]
+    content, _, _ = ce.export("fcpxml", markers, "x", 25, duration_seconds=5.0)
+    minidom.parseString(content)  # would raise if quotes/ampersands leaked
+    assert "&quot;" in content and "&amp;" in content
+
+
+def test_fcpxml_resolved_marker_marked_completed():
+    markers = [ce.Marker(1.0, None, "A", "done", True, None)]
+    content, _, _ = ce.export("fcpxml", markers, "x", 25, duration_seconds=5.0)
+    assert 'completed="1"' in content
+
+
+def test_fcpxml_range_marker_gets_duration():
+    markers = [ce.Marker(1.0, 3.0, "A", "range", False, None)]
+    content, _, _ = ce.export("fcpxml", markers, "x", 25, duration_seconds=10.0)
+    mk = minidom.parseString(content).getElementsByTagName("marker")[0]
+    assert mk.getAttribute("start") == "25/25s"       # 1.0s @25fps
+    assert mk.getAttribute("duration") == "50/25s"    # 2.0s span
