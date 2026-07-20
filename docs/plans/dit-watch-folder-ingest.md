@@ -32,6 +32,18 @@ codec, different destination, different lifecycle — one ingest, two outputs.
 | **Checksums** | **First-class, not optional.** Verify on ingest, hash the editorial proxy after writing, and re-verify on a schedule. | ⚠️ *This reverses the earlier "read a sidecar if present, don't compute our own" note.* Integrity is now a requirement. |
 | **Zero-config drop path** | **The default watch root works with no admin interaction.** Structure-on-disk is the config; the control panel is an *override*, never a prerequisite. | DITs use their own tools (ShotPut Pro, Hedge, Silverstack) and expect to offload and walk away. Requiring a web page per shoot would not survive contact with a set. |
 | **RAW decoding** | **Pluggable decoder tiers**, off by default. Prefer a **DaVinci Resolve Studio render node** over integrating vendor SDKs one by one. | It varies house to house, so we need a wide net rather than a fixed list. One $295 perpetual licence decodes every major RAW format — including the two with no Linux SDK at all. |
+| **Layout assumptions** | **Assume nothing. Detect, with a fallback that always works.** No fixed folder template, no "one file = one clip". | Structure changes project to project and house to house. Any convention we hardcode will be wrong on the next job — so an unrecognised layout must still ingest sensibly rather than fail. |
+
+## Governing principle: widest possible scope
+
+Everything about what lands in the watch folder **varies project to project**: folder
+depth and meaning, camera card layout, whether a clip is a file or a directory, whether
+proxies already exist, whether sound is dual-system. So the rule throughout this plan is:
+
+> **Detect rather than configure; degrade rather than fail.**
+> Every strategy is pluggable and auto-selected, every detection has a fallback, and the
+> final fallback — "I don't recognise this at all" — still produces a usable asset.
+> Configuration (Phase 7) only ever *overrides* a detection, never enables one.
 
 ## Architecture
 
@@ -67,6 +79,11 @@ source, so the file is read once per output, not copied first.
 
 - Add `MediaFile.source_path` (nullable, indexed); make `s3_key_raw` **nullable**.
   A media file is now *either* object-backed (upload) *or* path-backed (ingest).
+- ⚠️ **`source_path` is not always a file.** Add `source_kind`:
+  `file` · `directory` (RED `.RDC`, XDROOT clips) · `sequence` (DPX/EXR/ARRIRAW frames)
+  · `spanned` (a clip split across several files/cards). Sequences also need a pattern +
+  frame range rather than a single path. **Dedupe on clip identity, not on file path** —
+  a 10,000-frame DPX sequence is *one* asset, not 10,000.
 - Add checksum + editorial columns (see Phases 2 and 6).
 - **Service user (blocker).** `Asset.created_by` and `AssetVersion.created_by` are
   `nullable=False` FKs to `users` — an automated watcher has no logged-in user.
@@ -168,13 +185,67 @@ The default watch root is always enabled and needs no setup:
   mtime granularity can be coarse (~2s), which weakens the stability heuristic — further
   reason to prefer the manifest signal where one exists.
 
-## Phase 4 · Path → hierarchy mapping
+## Phase 4 · Detection & mapping
 
-- `<root>/<Project>/<Day>/<Cam>/<file>` → find-or-create Project, nested Folders
-  (Day → Cam), then Asset + Version + MediaFile.
-- Make the depth/segment meaning **configurable** — not every shoot is Project/Day/Cam.
-  Editable per watch root in the control panel (Phase 7).
-- Record Day/Cam as asset metadata so they're filterable in the UI.
+The widest-scope core. Four independent detectors, each with a fallback, run before
+anything is created. **None of them may block ingest on failure.**
+
+### 4a · Clip grouping — "what is one asset?"
+
+⚠️ **The plan can no longer assume one file = one clip.** Real deliveries include:
+
+| Shape | Example | Handling |
+|---|---|---|
+| **Single file** | `A001_C003.mov`, `.braw`, `.mxf` | The simple case |
+| **Directory-as-clip** | RED `A001_C001_0714XY.RDC/`, Sony `XDROOT/Clip/` | Group the directory into **one** asset |
+| **Image sequence** | `shot_0001.dpx` … `shot_9999.dpx`, EXR, ARRIRAW `.ari` | Collapse thousands of frames into **one** asset (pattern + frame range); detect gaps |
+| **Spanned / chaptered** | GoPro `GH010123`/`GH020123`, FAT32 4 GB splits, cards spanned mid-take | Group into one asset, ordered — or at minimum keep them adjacent, never silently drop |
+
+Detection order: known camera-card layouts → directory heuristics → sequence pattern
+matching → single file. **Fallback: treat it as a single file.** Getting this wrong
+creates thousands of junk assets, so grouping decisions should be visible and
+overridable in the panel.
+
+### 4b · Structure → hierarchy
+
+- `<Project>/<Day>/<Cam>` is **one convention among many** — others put camera first,
+  date first, unit/block in the path, or dump flat with everything in the filename.
+- Detect against a **library of known patterns**, plus user-supplied templates.
+- ✅ **Universal fallback (must always work):** project = top-level folder name
+  (find-or-create), and mirror the remaining relative path as nested folders at whatever
+  depth it happens to be. An unrecognised layout produces a *correct if unglamorous*
+  result — never an error.
+- Record whatever segments were identified (day/cam/unit) as asset metadata for filtering.
+
+### 4c · Sidecars & companions — "what is not an asset?"
+
+Media folders are full of files that must **not** become assets, but often carry useful data:
+
+- **Hash manifests** — MHL/ASC MHL, `.md5` → Phase 2 (integrity + completion trigger).
+- **Metadata** — ALE, Sony/ARRI/Canon XML, Silverstack CSV → enrich asset metadata
+  (scene/take/reel/lens/ISO/ND, and camera-reported timecode).
+- **Look files** — `.cube` LUTs, `.cdl`/`.ccc` CDLs → attach; optionally apply to proxies
+  so review matches the intended look rather than flat log.
+- **Junk** — `.DS_Store`, `._*`, `Thumbs.db`, ShotPut reports, `.tmp`/partials → ignore.
+- **Fallback:** an unrecognised non-media file is ignored, never ingested.
+
+### 4d · Dual-system sound
+
+Sound recorders (Sound Devices, Zaxcom) drop poly/mono WAVs in their own folder, often
+with BWF timecode and a sound report. Widest scope means: **recognise them as audio, not
+as broken video.** Ingest as audio assets at minimum; matching to picture by
+timecode/scene-take is a later enhancement, not a blocker.
+
+### 4e · Use proxies that already exist ⭐
+
+Many houses deliver **RAW *and* already-made ProRes/H.264 dailies side by side**. If a
+matching proxy is already present:
+
+- Prefer it as the transcode source (far cheaper than decoding RAW), and
+- Consider it as the **editorial deliverable directly** — potentially skipping Phase 6's
+  expensive CPU-only ProRes encode entirely.
+
+This is the single biggest performance win available, and it costs nothing but detection.
 
 ## Phase 5 · Review proxy (proxy-first transcoding)
 
@@ -246,8 +317,9 @@ this needs its own:
 | Section | Does |
 |---|---|
 | **Watch folders** | Add/edit/remove roots, enable/disable, scan interval, stability window, extensions |
-| **Project assignment** | Map a root (or subfolder) → FreeFrame project; edit the `<Project>/<Day>/<Cam>` template; set a fallback project |
-| **Editorial output** | Per root: on/off, destination path, format preset (ProRes Proxy/LT, DNxHR), resolution |
+| **Project assignment** | Map a root (or subfolder) → FreeFrame project; override the detected structure template; set a fallback project |
+| **Detection overrides** | Inspect what the detectors decided (structure, clip grouping, sidecars) and correct them — per root *and per project*, since conventions differ per job |
+| **Editorial output** | Per root **and per project**: on/off, destination path, format preset (ProRes Proxy/LT, DNxHR/MXF), resolution |
 | **Integrity dashboard** | Per-file checksum status, counts, **mismatches surfaced as alarms**, manual re-verify, sidecar-found indicator |
 | **Queue & health** | Last scan, queue depth, in-flight jobs, failures with retry |
 | **Activity** | What was ingested when, by which root |
@@ -351,6 +423,10 @@ Sony/ARRI on demand.
 A DIT offloads a card to the SMB share with their own tool (ShotPut Pro, Hedge,
 Silverstack) into `/<Project>/<Day>/<Cam>/` and, **without ever opening FreeFrame**:
 
+0. **Whatever the layout**, it ingests sensibly — a recognised convention maps cleanly, an
+   unrecognised one still lands in a correct project/folder tree, and clips that are
+   directories, image sequences or spanned files each become **one** asset rather than
+   thousands.
 1. Every file is **checksum-verified** against the DIT's manifest (or baselined if none),
    and any mismatch is raised loudly.
 2. Clips appear in the right project/folder within minutes and are **playable at proxy
