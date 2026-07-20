@@ -33,9 +33,13 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      # Allow browser uploads from any origin (host-independent). This is MinIO's
-      # actual CORS env var; access is still gated by presigned-URL signatures.
-      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+      # Allow browser uploads from any origin (host-independent), overridable.
+      # NOTE: MINIO_API_CORS_ALLOW_ORIGIN is MinIO's real env var (the `api`
+      # config subsystem). Upstream's MINIO_CORS_ALLOW_ORIGIN / _METHODS /
+      # _HEADERS / _EXPOSE_HEADERS are not recognised by MinIO and silently do
+      # nothing — deliberately not adopted. Access stays gated by presigned-URL
+      # signatures regardless.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOW_ORIGIN:-*}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -72,12 +76,12 @@ services:
       DATABASE_URL: postgresql://freeframe:freeframe@postgres:5432/freeframe
       REDIS_URL: redis://redis:6379/0
       # Storage: "minio" for local MinIO (dev), "s3" for AWS S3 (prod)
-      S3_STORAGE: minio
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
+      S3_STORAGE: ${S3_STORAGE:-minio}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       S3_ENDPOINT: http://minio:9000
-      S3_BUCKET: freeframe
-      S3_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-freeframe}
+      S3_REGION: ${S3_REGION:-us-east-1}
       # Base URL baked into presigned upload/download URLs — the BROWSER must be
       # able to reach it. Default localhost:9000 works only when the browser runs
       # on the same host. Accessing remotely (LAN/Tailscale)? Set S3_PUBLIC_ENDPOINT
@@ -105,12 +109,12 @@ services:
     environment:
       DATABASE_URL: postgresql://freeframe:freeframe@postgres:5432/freeframe
       REDIS_URL: redis://redis:6379/0
-      S3_STORAGE: minio
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
+      S3_STORAGE: ${S3_STORAGE:-minio}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       S3_ENDPOINT: http://minio:9000
-      S3_BUCKET: freeframe
-      S3_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-freeframe}
+      S3_REGION: ${S3_REGION:-us-east-1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,12 +136,12 @@ services:
     environment:
       DATABASE_URL: postgresql://freeframe:freeframe@postgres:5432/freeframe
       REDIS_URL: redis://redis:6379/0
-      S3_STORAGE: minio
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
+      S3_STORAGE: ${S3_STORAGE:-minio}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       S3_ENDPOINT: http://minio:9000
-      S3_BUCKET: freeframe
-      S3_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-freeframe}
+      S3_REGION: ${S3_REGION:-us-east-1}
     depends_on:
       redis:
         condition: service_healthy
@@ -154,9 +158,10 @@ services:
     environment:
       # Browser calls the API at the same origin via "/api" (no CORS, no
       # hardcoded host — works locally and behind a reverse proxy / Tailscale).
-      - NEXT_PUBLIC_API_URL=/api
+      # Overridable, but "/api" is the host-independent default we rely on.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
       # Server-side proxy target for the "/api" rewrite (Next server -> api service).
-      - API_PROXY_TARGET=http://api:8000
+      - API_PROXY_TARGET=${API_PROXY_TARGET:-http://api:8000}
       - NODE_ENV=development
       - HOSTNAME=0.0.0.0
     volumes:
