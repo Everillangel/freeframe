@@ -30,6 +30,8 @@ codec, different destination, different lifecycle — one ingest, two outputs.
 | **FreeFrame is not the backup** | The NAS (plus the DIT's LTO/checksum workflow) remains the backup of record. | Index-in-place means FreeFrame holds no second copy of the originals. |
 | **Editorial proxies** | **A second, independent output**: ProRes written to a configured editorial share, mirroring the source folder structure, same basename as the camera original. | Editors conform back to camera originals by filename + timecode + reel. The review proxy (HLS in object storage) is useless for that. |
 | **Checksums** | **First-class, not optional.** Verify on ingest, hash the editorial proxy after writing, and re-verify on a schedule. | ⚠️ *This reverses the earlier "read a sidecar if present, don't compute our own" note.* Integrity is now a requirement. |
+| **Zero-config drop path** | **The default watch root works with no admin interaction.** Structure-on-disk is the config; the control panel is an *override*, never a prerequisite. | DITs use their own tools (ShotPut Pro, Hedge, Silverstack) and expect to offload and walk away. Requiring a web page per shoot would not survive contact with a set. |
+| **RAW decoding** | **Pluggable decoder tiers**, off by default. Prefer a **DaVinci Resolve Studio render node** over integrating vendor SDKs one by one. | It varies house to house, so we need a wide net rather than a fixed list. One $295 perpetual licence decodes every major RAW format — including the two with no Linux SDK at all. |
 
 ## Architecture
 
@@ -132,6 +134,40 @@ panel (Phase 7), never auto-delete, never silently retry.
 - Scale: thousands of files/day — the scan must be **incremental**, not a full tree
   stat every minute.
 
+### 3a · The zero-config SMB drop path (primary workflow)
+
+**A DIT must be able to offload and walk away without ever opening FreeFrame.**
+The default watch root is always enabled and needs no setup:
+
+- **Convention over configuration.** The path *is* the config: the top-level folder
+  name becomes the project (find-or-create), the rest maps to folders per the default
+  template. A new shoot is a new folder — nothing to register.
+- **SMB is the NAS's job, not ours.** The DIT writes to an SMB share published by the
+  NAS (Synology/QNAP/TrueNAS); FreeFrame just mounts that same path **read-only**. We
+  are not implementing an SMB server — we're a second reader of a share the NAS already
+  serves. (CIFS mount options belong in the compose overlay.)
+- **The control panel is optional.** It exists to override defaults (retarget a project,
+  change the editorial preset, disable a root) — never to enable the basic flow.
+
+**ShotPut Pro / Hedge / Silverstack integration comes free via the manifest:**
+
+> 💡 **The MHL is the completion signal.** ShotPut Pro writes its hash manifest only
+> **after** a verified offload finishes. So "a manifest appeared that covers this file"
+> is a *far* stronger and faster trigger than watching size+mtime settle — it's the
+> DIT's own tool telling us the copy is done and verified.
+
+- Watch for `.mhl` / ASC MHL arrival and treat it as the ingest trigger for every file
+  it covers; fall back to the size+mtime heuristic only for files with no manifest.
+- Handle **both** layouts: a per-job manifest at the offload root covering many files,
+  and per-file sidecars.
+- ⚠️ ShotPut defaults to **xxHash64** in current versions, not MD5 — another reason the
+  algorithm must be stored per-file (Phase 2), not assumed.
+- **Ignore list matters on SMB shares:** `.DS_Store`, `._*` AppleDouble files,
+  `Thumbs.db`, plus ShotPut's own PDF/HTML reports — none are media.
+- ⚠️ **SMB caveats:** inotify is unreliable over CIFS (hence scheduled scanning), and
+  mtime granularity can be coarse (~2s), which weakens the stability heuristic — further
+  reason to prefer the manifest signal where one exists.
+
 ## Phase 4 · Path → hierarchy mapping
 
 - `<root>/<Project>/<Day>/<Cam>/<file>` → find-or-create Project, nested Folders
@@ -187,8 +223,12 @@ as **pluggable "editorial format" presets** rather than hardcoding ProRes.
 
 ## Phase 7 · DIT control panel (web)
 
-A dedicated admin page (`/admin/ingest`) so a DIT configures everything without
+A dedicated admin page (`/admin/ingest`) so a DIT can configure things without
 touching `.env` or the server.
+
+> **This page is an override layer, not a gate.** Per Phase 3a the default drop path
+> must work with zero visits here. Everything below has a working default; the panel
+> changes defaults, inspects integrity, and fixes failures.
 
 **Config lives in the DB, not env.** `InstanceSettings` is a *singleton* table, so
 this needs its own:
@@ -224,6 +264,63 @@ this needs its own:
 > - **Super-admin only**, and every config change written to the activity log.
 > - Keep the watch mount **read-only**; only the editorial root is writable.
 
+## Source formats & decoder tiers
+
+What arrives **varies edit house to edit house**, so this is designed as a wide net
+rather than a fixed list: a **pluggable decoder registry**. Probe the file → pick a
+decoder → every decoder emits the same intermediate, so the review-proxy (Phase 5) and
+editorial-ProRes (Phase 6) stages are unchanged regardless of source format.
+
+> 💡 **For review proxies we don't need reference-quality decode — just a watchable
+> picture.** That lowers the bar substantially. Reference-grade colour science only
+> matters for the editorial deliverable.
+
+### Tier 0 — free, works today (probably most of what actually arrives)
+
+Stock ffmpeg already handles **ProRes, DNxHD/DNxHR, XAVC, XF-AVC, AVC-Intra, H.264/265
+and CinemaDNG** with no SDK. In practice most houses send **ProRes/DNxHR dailies for
+review, not RAW** — the DIT has already made them. ✅ *Worth confirming per house before
+building anything below.*
+
+### Tier 1 — DaVinci Resolve Studio render node ⭐ recommended next
+
+**$295 one-time, perpetual, per machine.** Resolve already licenses every vendor SDK,
+so a single integration decodes **BRAW, R3D, ARRIRAW, X-OCN, Canon CRM and ProRes RAW** —
+including the two formats with **no Linux SDK at all**. One integration instead of five.
+As a post house you may already own licences.
+
+Driven headlessly as a "RAW render node" via Resolve's Python scripting API.
+⚠️ **Spike required before committing:** Linux support is officially Rocky/CentOS,
+headless operation typically still needs a virtual display (Xvfb), and each render node
+needs its own licence.
+
+### Tier 2 — free vendor SDKs (worth it only if that format dominates)
+
+| Format | SDK cost | Linux | Access |
+|---|---|---|---|
+| **Blackmagic RAW** (.braw) | **Free**, no ongoing fees | ✅ | Public download, no gatekeeping |
+| **REDCODE** (.r3d) | **Royalty-free** | ✅ | Register with RED + sign SDK agreement |
+
+### Tier 3 — gated or impossible on Linux
+
+| Format | Status |
+|---|---|
+| **ARRIRAW** | SDK behind the ARRI Partner Program — **but a free ARRI Reference Tool CLI exists**, which may be enough to shell out to |
+| **X-OCN** (Sony Venice) | Apply to Sony's third-party licence programme |
+| **Cinema RAW Light** (.crm) | ❌ **No Linux** — Windows/macOS only. Resolve node or a Mac/Win worker |
+| **ProRes RAW** | ❌ **No Linux** — Resolve node or a Mac/Win worker |
+
+### The real costs aren't licence fees
+
+1. **Distribution licensing** — proprietary SDKs **cannot be bundled** into a public MIT
+   repo or Docker image. The operator downloads and mounts them → forces the plugin
+   design, and is why RAW support ships **off by default**.
+2. **Engineering time** — each SDK is a separate C++ integration. This dominates.
+3. **Hardware** — R3D 8K decode wants a real GPU; the **i5-7500 iGPU will not cope**.
+
+**Sequencing:** Tier 0 now → Resolve node → BRAW/R3D SDKs only if those dominate →
+Sony/ARRI on demand.
+
 ## Phase 8 · Asset-level UI
 
 - Ingest state on the asset (queued / verifying / proxying / ready), source path, Day/Cam.
@@ -233,11 +330,11 @@ this needs its own:
 
 ## ⚠️ Open questions / risks
 
-- **RAW is a hard blocker, not a setting.** Stock ffmpeg **cannot decode BRAW, R3D or
-  ARRIRAW** — those need vendor SDKs (Blackmagic RAW SDK, REDline, ARRI SDK), each with
-  its own licensing and Linux support story. **ProRes and H.264/265 are fine.**
-  *Confirm what the DITs actually hand over* — if it's RAW, that's a separate spike
-  before this plan is viable. (This affects the editorial proxy too: no decode = no ProRes out.)
+- **What do the edit houses actually deliver for review — RAW, or dailies?** This is the
+  single highest-value question to ask, and it's *unanswered*. If they send ProRes/DNxHR
+  dailies (common), Tier 0 covers everything and the whole decoder question is moot.
+  See [Source formats & decoder tiers](#source-formats--decoder-tiers). Note this gates
+  the editorial proxy too: no decode = no ProRes out.
 - **Deletion policy:** if a DIT deletes/moves a file on the NAS, does the asset
   disappear, go "offline", or stay with a broken source? (Recommend: mark offline,
   never auto-delete review data/comments. Note this will also read as a checksum
@@ -251,7 +348,8 @@ this needs its own:
 
 ## Definition of done
 
-A DIT copies a card into `/<Project>/<Day>/<Cam>/` and, without touching FreeFrame:
+A DIT offloads a card to the SMB share with their own tool (ShotPut Pro, Hedge,
+Silverstack) into `/<Project>/<Day>/<Cam>/` and, **without ever opening FreeFrame**:
 
 1. Every file is **checksum-verified** against the DIT's manifest (or baselined if none),
    and any mismatch is raised loudly.
@@ -259,5 +357,6 @@ A DIT copies a card into `/<Project>/<Day>/<Cam>/` and, without touching FreeFra
    quality** in the browser, full ladder finishing in the background.
 3. A **ProRes proxy** with correct timecode and matching filename lands in the editorial
    folder, ready for the cutting room to relink.
-4. **No original was copied, moved or modified**, and all of it was configured from the
-   DIT control panel rather than the server.
+4. **No original was copied, moved or modified** — and none of the above required a
+   visit to the control panel. The panel is there to *override* and to investigate
+   failures, not to make the workflow run.
