@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-14
+
+### Added
+- **Version compare** — a fullscreen split view for any two versions of an asset: synced side-by-side playback with per-side frame-accurate offset trim for video, wipe slider + side-by-side with shared zoom/pan for images, and a version-scoped comment panel on each side (comments land on the correct version at the correct frame). Deep-linkable via URL. Per-side audio control keeps one side audible at a time; each side's comments appear as markers with hover previews on the shared scrubber, and clicking one seeks to the frame, opens that side's panel with the comment focused, and shows the comment's drawing over that pane (video, side-by-side, and wipe). You can also **draw new annotations** while comparing — the pencil in either side's composer draws over that pane (video and image side-by-side; one side at a time), and the markup attaches to that version's comment.
+
+### Fixed
+- **Faster comment saving** — posting a comment no longer blocks on a full re-fetch of every comment on the asset; the new comment appears immediately (optimistic insert) while the list reconciles in the background. The comment-list endpoints (both the signed-in review view and public share links) also no longer issue a per-comment query cascade (N+1) — each now builds the whole thread in a fixed handful of queries — so loading and saving stay fast as a thread grows.
+- **Settings is now reachable for non-admin users** — the sidebar "Settings" menu item and the `/settings` index both routed everyone to the admin-only `/settings/admin`, which bounced normal users back to the home page. Non-admins now land on Appearance (their first accessible settings page); superadmins still land on the admin dashboard.
+- **Comments made at 0:00 keep their timecode** — the composer silently dropped the timecode when the playhead sat at the very start of a video/audio file (the badge showed `00:00:00:00` but the comment saved without it, sinking to the bottom of the timeline-ordered panel); drawings on video now always carry the frame's timecode, even with the clock toggle detached. Comment sort labels are now honest: the default is labeled "Timecode" (behavior unchanged) and "Oldest" now genuinely sorts by creation time.
+
+## [1.5.0] - 2026-07-13
+
+### Upgrade notes
+- **Run the media-metadata backfill once after upgrading** — `docker exec freeframe-api-1 python -m apps.api.scripts.backfill_media_metadata` populates duration/resolution/fps for files uploaded before this release. Without it, older videos will ask for a frame rate when exporting comments to the NLE formats (the export still works — you just pick the fps by hand).
+
+### Added
+- **Export comments as NLE timeline markers** ([#84](https://github.com/Techiebutler/freeframe/issues/84)) — `GET /assets/{id}/comments/export?format=edl|fcpxml|premiere_xml|csv` turns a version's timecoded comments into importable markers for DaVinci Resolve (marker EDL — import via Timelines → Import → Timeline Markers from EDL, matching the timeline start TC, default 01:00:00:00), Final Cut Pro (FCPXML), and Premiere Pro (FCP7 XML — Premiere cannot import FCPXML), plus CSV. Uses the stored frame rate (see #124) with a `?fps=` override. Note: variable-frame-rate sources may land markers ±1 frame.
+- **Export comments menu in the review panel** ([#84](https://github.com/Techiebutler/freeframe/issues/84)) — download markers for Resolve/Final Cut/Premiere/CSV from the comment panel toolbar; prompts for frame rate when the video predates the metadata backfill.
+
+### Fixed
+- **Transcode pipeline now persists media metadata** ([#124](https://github.com/Techiebutler/freeframe/issues/124)) — `duration_seconds`, `width`, `height`, and `fps` are stored on every new video/audio transcode (previously always NULL, breaking duration display). Existing files: run the one-off backfill — `docker exec freeframe-api-1 python -m apps.api.scripts.backfill_media_metadata`.
+
 ## [1.4.1] - 2026-07-09
 
 ### Fixed

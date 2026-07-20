@@ -14,7 +14,7 @@ type Step = 'email' | 'code' | 'password' | 'classic'
 
 export function LoginForm() {
   const router = useRouter()
-  const [step, setStep] = useState<Step>('email')
+  const [step, setStep] = useState<Step>('classic')
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState('')
   const [code, setCode] = useState(['', '', '', '', '', ''])
