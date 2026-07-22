@@ -2,6 +2,10 @@
 
 **Status:** designed, not started · **Priority:** high (core workflow)
 
+> **New to film/DIT?** Read [film-dit-primer.md](film-dit-primer.md) first — it
+> explains the production workflow this plan reaches into, so the choices below
+> read as consequences of how film data handling actually works.
+
 ## Goal
 
 DITs drop rushes onto a NAS share in their normal structure. FreeFrame then does
