@@ -152,7 +152,14 @@ def build_hls_command(input_url: str, hls_dir: Path, qualities: list,
         f = (f"[v{i}]scale={QUALITY_MAP[q]['scale']}:force_original_aspect_ratio=decrease,"
              f"pad=ceil(iw/2)*2:ceil(ih/2)*2")
         if mode == "vaapi":
+            # nv12 is 8-bit 4:2:0; hwupload moves frames to the GPU for encode.
             f += ",format=nv12,hwupload"
+        else:
+            # Browsers only decode 8-bit 4:2:0 H.264. Pro sources are often 10-bit
+            # or 4:2:2 (ProRes/log), which libx264 would otherwise preserve as
+            # High 10 / High 4:2:2 — segments download fine but the browser can't
+            # decode them (hls.js "mediaError"). Force yuv420p so output is playable.
+            f += ",format=yuv420p"
         return f + f"[{q}]"
 
     split_outputs = "".join(f"[v{i}]" for i in range(len(qualities)))
@@ -184,6 +191,12 @@ def build_hls_command(input_url: str, hls_dir: Path, qualities: list,
         else:  # none / CPU
             cmd += [f"-c:v:{i}", "libx264", "-crf", str(m["crf"]), "-preset", "fast"]
         cmd += ["-force_key_frames", "expr:gte(t,n_forced*2)"]
+
+    if has_audio:
+        # Re-encode audio to stereo AAC. Source audio is often PCM or multichannel
+        # (pro footage), neither of which plays in a browser via HLS/MPEG-TS — a
+        # copied codec is another cause of hls.js "mediaError". Downmix to stereo.
+        cmd += ["-c:a", "aac", "-b:a", "128k", "-ac", "2"]
 
     cmd += [
         "-f", "hls",

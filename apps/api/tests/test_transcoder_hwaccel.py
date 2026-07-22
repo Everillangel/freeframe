@@ -57,6 +57,34 @@ def test_no_audio_maps_video_only():
     assert cmd[cmd.index("-var_stream_map") + 1] == "v:0 v:1 v:2"
 
 
+def test_cpu_output_is_browser_decodable():
+    """Regression: 10-bit/4:2:2 sources must be forced to 8-bit 4:2:0, and audio
+    to AAC, or the browser can't decode the segments (hls.js mediaError)."""
+    cmd = _cmd("none", has_audio=True)
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "format=yuv420p" in fc          # 8-bit 4:2:0, browser-decodable
+    assert "-c:a" in cmd and "aac" in cmd  # re-encode audio (source may be PCM)
+    assert "-ac" in cmd                    # downmix multichannel to stereo
+
+
+def test_nvenc_and_qsv_also_force_yuv420p():
+    for mode in ("nvenc", "qsv"):
+        fc = _cmd(mode)[_cmd(mode).index("-filter_complex") + 1]
+        assert "format=yuv420p" in fc, mode
+
+
+def test_vaapi_keeps_nv12_not_yuv420p():
+    # VAAPI uploads nv12 to the GPU; it must NOT also force the CPU yuv420p path.
+    fc = _cmd("vaapi")[_cmd("vaapi").index("-filter_complex") + 1]
+    assert "format=nv12" in fc and "hwupload" in fc
+    assert "format=yuv420p" not in fc
+
+
+def test_no_audio_skips_audio_codec():
+    cmd = _cmd("none", has_audio=False)
+    assert "-c:a" not in cmd
+
+
 def test_var_stream_map_pairs_audio_when_present():
     cmd = _cmd("vaapi", has_audio=True)
     assert cmd[cmd.index("-var_stream_map") + 1] == "v:0,a:0 v:1,a:1 v:2,a:2"
