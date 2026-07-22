@@ -28,9 +28,17 @@ async def event_stream(project_id: str) -> AsyncGenerator[str, None]:
     pubsub = r.pubsub()
     await pubsub.subscribe(f"project:{project_id}")
     try:
+        # Flush a byte immediately on connect. Without a first byte the browser's
+        # EventSource never fires `onopen`, and buffering proxies (Cloudflare, and
+        # any nginx in front) hold or drop a stream that is silent on connect —
+        # the browser then reports "can't establish a connection". `retry` also
+        # sets the client's reconnect backoff.
+        yield "retry: 3000\n: connected\n\n"
         while True:
             try:
-                message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=30.0)
+                # Heartbeat well under proxy idle-timeouts (Cloudflare ~100s) so a
+                # quiet channel keeps the connection alive instead of being reaped.
+                message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=15.0)
                 if message and message["type"] == "message":
                     try:
                         parsed = json.loads(message["data"])

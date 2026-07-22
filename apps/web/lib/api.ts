@@ -7,7 +7,10 @@ export class ApiError extends Error {
   detail: string
 
   constructor(status: number, detail: string) {
-    super(detail)
+    // HTTP/2 has no status text, so `detail` is often empty for error responses
+    // with no JSON body — which rendered as a blank "ApiError:". Always surface
+    // the status code so the error is legible.
+    super(detail || `HTTP ${status}`)
     this.name = 'ApiError'
     this.status = status
     this.detail = detail
